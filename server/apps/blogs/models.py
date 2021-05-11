@@ -9,3 +9,6 @@ class Post(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     head = models.CharField(max_length=255)
     body = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.head
