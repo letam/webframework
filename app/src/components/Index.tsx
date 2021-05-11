@@ -5,7 +5,7 @@ import React, { ReactElement } from "react";
 export default function Index(): ReactElement {
   return (
     <>
-      <Head title="Vitamin" />
+      <Head title="wut up" />
       <PostList />
     </>
   );

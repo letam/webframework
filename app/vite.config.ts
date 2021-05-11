@@ -22,8 +22,8 @@ export default defineConfig({
         navigateFallback: undefined,
       },
       manifest: {
-        name: "Vitamin",
-        short_name: "Vitamin",
+        name: "wut.sh",
+        short_name: "wut.sh",
         theme_color: "#BD34FE",
         icons: [
           {
