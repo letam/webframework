@@ -38,7 +38,10 @@ function prettyDate(dateValue: string) {
   const monthName = months[monthIndex];
   const year = date.getFullYear();
   const dateNumber = date.getDate();
-  const time = date.toLocaleTimeString();
+  // const time = date.toLocaleTimeString();
+  const hours = `${date.getHours() < 10 ? "0" : ""}${date.getHours()}`;
+  const minutes = `${date.getMinutes() < 10 ? "0" : ""}${date.getMinutes()}`;
+  const time = `${hours}:${minutes}`;
   return `${dayName}, ${dateNumber} ${monthName} ${year} ${time}`;
   // return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
