@@ -38,6 +38,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+    'rest_framework',
+
     'apps.users.apps.UsersConfig',
 
     'apps.blogs',
@@ -131,3 +133,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # User Model
 # https://docs.djangoproject.com/en/3.2/topics/auth/customizing/
 AUTH_USER_MODEL = 'users.User'
+
+# REST Framework
+# https://www.django-rest-framework.org/#example
+REST_FRAMEWORK = {
+    # Use Django's standard `django.contrib.auth` permissions,
+    # or allow read-only access for unauthenticated users.
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly'
+    ]
+}
