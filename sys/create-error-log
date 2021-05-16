@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+# Create error log file for app
+
+[[ $(id -u) != 0 ]] && 2>&1 echo "Error: Must be run as sudo/root." && exit 1
+
+app_name=wut.sh
+
+
+## Create directory to log errors
+error_log_dir=/var/log/app-errors
+if [[ ! -d "$error_log_dir" ]]; then
+	mkdir -v "$error_log_dir"
+	chown "$SUDO_USER":adm "$error_log_dir"
+	### Set new files created in directory to inherit the group of its parent directory
+	chmod -v g+s "$error_log_dir"
+fi
+
+## Create error log file with appropriate permission
+error_log="$error_log_dir/$app_name.log"
+[[ ! -f "$error_log" ]] && touch "$error_log"
+if [[ $(stat -c '%U' "$error_log") != "$SUDO_USER" ]]; then
+	chown -v "$SUDO_USER" "$error_log"
+fi

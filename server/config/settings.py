@@ -136,13 +136,14 @@ import copy
 from django.utils.log import DEFAULT_LOGGING
 LOGGING = copy.deepcopy(DEFAULT_LOGGING)
 LOGGING['handlers'].update({
-    'console_errors': {
+    'file_errors': {
         'level': 'ERROR',
         'filters': ['require_debug_false'],
-        'class': 'logging.StreamHandler',
+        'class': 'logging.FileHandler',
+        'filename': '/var/log/app-errors/wut.sh.log',
     },
 })
-LOGGING['loggers']['django']['handlers'].append('console_errors')
+LOGGING['loggers']['django']['handlers'].append('file_errors')
 
 # User Model
 # https://docs.djangoproject.com/en/3.2/topics/auth/customizing/
