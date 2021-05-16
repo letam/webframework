@@ -130,6 +130,20 @@ STATIC_URL = '/static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# Logging
+# https://docs.djangoproject.com/en/3.2/topics/logging/
+import copy
+from django.utils.log import DEFAULT_LOGGING
+LOGGING = copy.deepcopy(DEFAULT_LOGGING)
+LOGGING['handlers'].update({
+    'console_errors': {
+        'level': 'ERROR',
+        'filters': ['require_debug_false'],
+        'class': 'logging.StreamHandler',
+    },
+})
+LOGGING['loggers']['django']['handlers'].append('console_errors')
+
 # User Model
 # https://docs.djangoproject.com/en/3.2/topics/auth/customizing/
 AUTH_USER_MODEL = 'users.User'
