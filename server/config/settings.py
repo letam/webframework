@@ -139,6 +139,7 @@ LOGGING['handlers'].update({
     'file_errors': {
         'level': 'ERROR',
         'filters': ['require_debug_false'],
+        'formatter': 'django.server',
         'class': 'logging.FileHandler',
         'filename': '/var/log/app-errors/wut.sh.log',
     },
