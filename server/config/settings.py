@@ -132,6 +132,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Logging
 # https://docs.djangoproject.com/en/3.2/topics/logging/
+log_dir = BASE_DIR / '..' / 'log'
+if not Path(log_dir).exists():
+    import os
+    os.mkdir(log_dir)
 import copy
 from django.utils.log import DEFAULT_LOGGING
 LOGGING = copy.deepcopy(DEFAULT_LOGGING)
@@ -141,7 +145,7 @@ LOGGING['handlers'].update({
         'filters': ['require_debug_false'],
         'formatter': 'django.server',
         'class': 'logging.FileHandler',
-        'filename': '/var/log/app-errors/wut.sh.log',
+        'filename': log_dir / 'server-errors.log',
     },
 })
 LOGGING['loggers']['django']['handlers'].append('file_errors')
