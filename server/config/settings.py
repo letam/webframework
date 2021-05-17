@@ -132,10 +132,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Logging
 # https://docs.djangoproject.com/en/3.2/topics/logging/
+import os
 log_dir = BASE_DIR / '..' / 'log'
+log_filepath = log_dir / 'server-errors.log'
+log_symlinkpath = f'/var/log/app-errors/{BASE_DIR.parent.name}.log'
 if not Path(log_dir).exists():
-    import os
     os.mkdir(log_dir)
+if not Path(log_filepath).exists():
+    os.mknod(log_filepath)
+if not Path(log_symlinkpath).is_symlink():
+    os.symlink(log_filepath, log_symlinkpath)
 import copy
 from django.utils.log import DEFAULT_LOGGING
 LOGGING = copy.deepcopy(DEFAULT_LOGGING)
@@ -145,7 +151,7 @@ LOGGING['handlers'].update({
         'filters': ['require_debug_false'],
         'formatter': 'django.server',
         'class': 'logging.FileHandler',
-        'filename': log_dir / 'server-errors.log',
+        'filename': log_filepath,
     },
 })
 LOGGING['loggers']['django']['handlers'].append('file_errors')
