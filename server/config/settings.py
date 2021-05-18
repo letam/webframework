@@ -133,9 +133,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Logging
 # https://docs.djangoproject.com/en/3.2/topics/logging/
 import os
-log_dir = BASE_DIR / '..' / 'log'
-log_filepath = log_dir / 'server-errors.log'
-log_symlinkpath = f'/var/log/app-errors/{BASE_DIR.parent.name}.log'
+log_dir: Path = BASE_DIR / '..' / 'log'
+log_filepath: Path = log_dir / 'server-errors.log'
+log_symlinkpath: str = f'/var/log/app-errors/{BASE_DIR.parent.name}.log'
 if not log_dir.exists():
     os.mkdir(log_dir)
 if not log_filepath.exists():
