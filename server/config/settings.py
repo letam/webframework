@@ -140,6 +140,10 @@ if not log_dir.exists():
     os.mkdir(log_dir)
 if not log_filepath.exists():
     os.mknod(log_filepath)
+if not Path(log_symlinkpath).parent.exists():
+    import subprocess
+    subprocess.call('./sys/mkdir-error-log')
+    #subprocess.call(BASE_DIR / '..' / 'sys/mkdir-error-log')
 if not Path(log_symlinkpath).is_symlink():
     os.symlink(log_filepath, log_symlinkpath)
 import copy
