@@ -17,7 +17,9 @@ export interface IFruit {
 }
 
 export interface IPost {
-  id: number;
-  head: string;
+  url: string;
   created: string;
+  author_id: number;
+  head: string;
+  body: string;
 }
