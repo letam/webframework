@@ -136,9 +136,9 @@ import os
 log_dir = BASE_DIR / '..' / 'log'
 log_filepath = log_dir / 'server-errors.log'
 log_symlinkpath = f'/var/log/app-errors/{BASE_DIR.parent.name}.log'
-if not Path(log_dir).exists():
+if not log_dir.exists():
     os.mkdir(log_dir)
-if not Path(log_filepath).exists():
+if not log_filepath.exists():
     os.mknod(log_filepath)
 if not Path(log_symlinkpath).is_symlink():
     os.symlink(log_filepath, log_symlinkpath)
