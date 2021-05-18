@@ -3,7 +3,7 @@
 # Run django-admin manage command using production settings
 [[ $# = 0 ]] && echo "Error: Argument required." && exit 1
 
-./sys/create-error-log
+./sys/mkdir-error-log
 
 cd /var/www/wut.sh
 venv/bin/python server/manage.py $@ --settings=config.settings_production

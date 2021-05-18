@@ -10,7 +10,7 @@ manage() {
 	cd - >/dev/null
 }
 
-./sys/create-error-log
+./sys/mkdir-error-log
 
 manage migrate
 manage collectstatic --noinput
