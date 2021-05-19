@@ -10,6 +10,9 @@ export default function PostForm(): ReactElement {
   const handleSubmit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
+      if (form.head.trim() === "") {
+        return;
+      }
       createPost(form)
         .then(() => {
           window.location.reload();
