@@ -34,6 +34,7 @@ export default function PostForm(): ReactElement {
               <label htmlFor="head">Wut up</label>
               <br />
               <textarea
+                className="dark:bg-gray-900"
                 id="head"
                 value={form.head}
                 onChange={(event) =>
@@ -46,6 +47,7 @@ export default function PostForm(): ReactElement {
               <label htmlFor="body">More details</label>
               <br />
               <textarea
+                className="dark:bg-gray-900"
                 id="body"
                 value={form.body}
                 onChange={(event) =>
