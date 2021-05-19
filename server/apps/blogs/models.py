@@ -10,5 +10,8 @@ class Post(models.Model):
     head = models.CharField(max_length=255)
     body = models.TextField(blank=True)
 
+    class Meta:
+        ordering = ['-created']
+
     def __str__(self):
         return self.head
