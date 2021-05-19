@@ -56,7 +56,12 @@ export default function PostForm(): ReactElement {
               />
             </p>
             <p>
-              <button type="submit">Send</button>
+              <button
+                type="submit"
+                className="px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 md:px-5 md:text-lg "
+              >
+                Send
+              </button>
             </p>
           </form>
         </div>
