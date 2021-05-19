@@ -41,7 +41,7 @@ export default function PostForm(): ReactElement {
                 }
               />
             </p>
-            <p>
+            <p style={{ display: "none" }}>
               {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
               <label htmlFor="body">More details</label>
               <br />
