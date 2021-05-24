@@ -32,6 +32,7 @@ urlpatterns = [
 
     path('auth/csrf/', auth_views.csrf),
     path('auth/login/', auth_views.login),
+    path('auth/status/', auth_views.status),
 
     path('api-auth/', include('rest_framework.urls')),
 

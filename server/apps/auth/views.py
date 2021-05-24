@@ -27,3 +27,7 @@ def login(request):
 
     return JsonResponse(form.get_user().id, safe=False)
 
+
+def status(request):
+    return JsonResponse({'is_authenticated': request.user.is_authenticated})
+
