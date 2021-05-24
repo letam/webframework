@@ -16,7 +16,7 @@ def csrf(request):
 
 @require_POST
 def login(request):
-    data = json.loads(request.body)
+    data = json.loads(request.body) if request.body else {}
     form = AuthenticationForm(request, data=data)
 
     if not form.is_valid():
