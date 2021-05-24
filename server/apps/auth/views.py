@@ -3,7 +3,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.middleware.csrf import get_token
 
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, login as auth_login
 from django.contrib.auth.forms import AuthenticationForm
 
 
@@ -16,6 +16,7 @@ def csrf(request):
 
 @require_POST
 def login(request):
+    '''Reference: https://docs.djangoproject.com/en/3.2/topics/auth/default/#django.contrib.auth.login'''
     data = json.loads(request.body) if request.body else {}
     form = AuthenticationForm(request, data=data)
 
@@ -24,6 +25,8 @@ def login(request):
         if '__all__' in errors:
             errors['form'] = errors.pop('__all__')
         return JsonResponse(errors, status=400)
+
+    auth_login(request, form.get_user())
 
     return JsonResponse(form.get_user().id, safe=False)
 
