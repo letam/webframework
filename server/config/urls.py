@@ -18,6 +18,8 @@ from django.urls import path, include
 
 from rest_framework import routers
 
+from apps.auth import views as auth_views
+
 from apps.blogs.views import PostViewSet
 
 
@@ -27,6 +29,9 @@ router.register(r'posts', PostViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    path('auth/csrf/', auth_views.csrf),
+    path('auth/login/', auth_views.login),
 
     path('api-auth/', include('rest_framework.urls')),
 
