@@ -1,4 +1,5 @@
 import React, { ReactElement, useState, useCallback } from "react";
+import { store } from "store";
 
 interface ICSRFToken {
   token: string;
@@ -30,7 +31,12 @@ export default function Login(): ReactElement {
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       // TODO: Form validation
-      await login(event.target as HTMLFormElement, username, password);
+      const userId = await login(
+        event.target as HTMLFormElement,
+        username,
+        password
+      );
+      store.set("userId", userId);
     },
     [username, password]
   );
@@ -46,6 +52,7 @@ export default function Login(): ReactElement {
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleSubmit} method="POST">
             <div>
+              {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
               <label
                 htmlFor="username"
                 className="block text-sm font-medium text-gray-700"
@@ -67,6 +74,7 @@ export default function Login(): ReactElement {
             </div>
 
             <div>
+              {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
               <label
                 htmlFor="password"
                 className="block text-sm font-medium text-gray-700"
@@ -95,6 +103,7 @@ export default function Login(): ReactElement {
                   type="checkbox"
                   className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                 />
+                {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
                 <label
                   htmlFor="remember_me"
                   className="ml-2 block text-sm text-gray-900"
