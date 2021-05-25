@@ -4,6 +4,20 @@ interface ICSRFToken {
   token: string;
 }
 
+async function login(
+  eventTarget: HTMLFormElement,
+  username: string,
+  password: string
+) {
+  const data = (await (await fetch("/auth/csrf/")).json()) as ICSRFToken;
+  const csrftoken = data.token;
+  return fetch("/auth/login/", {
+    method: eventTarget.method,
+    headers: { "X-CSRFToken": csrftoken },
+    body: JSON.stringify({ username, password }),
+  });
+}
+
 export default function Login(): ReactElement {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -11,13 +25,8 @@ export default function Login(): ReactElement {
   const handleSubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      const data = (await (await fetch("/auth/csrf/")).json()) as ICSRFToken;
-      const csrftoken = data.token;
-      await fetch("/auth/login/", {
-        method: (event.target as HTMLFormElement).method,
-        headers: { "X-CSRFToken": csrftoken },
-        body: JSON.stringify({ username, password }),
-      });
+      // TODO: Form validation
+      await login(event.target as HTMLFormElement, username, password);
     },
     [username, password]
   );
