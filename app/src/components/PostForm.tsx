@@ -27,47 +27,43 @@ export default function PostForm(): ReactElement {
 
   return (
     <>
-      <div>
-        <h1 style={{ margin: "16px" }}>Wut?</h1>
-        <hr />
-        <div style={{ margin: "16px" }}>
-          <form onSubmit={handleSubmit}>
-            <p>
-              {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-              <label htmlFor="head">Wut up</label>
-              <br />
-              <textarea
-                className="dark:bg-gray-900"
-                id="head"
-                value={form.head}
-                onChange={(event) =>
-                  setForm((state) => ({ ...state, head: event.target.value }))
-                }
-              />
-            </p>
-            <p style={{ display: "none" }}>
-              {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-              <label htmlFor="body">More details</label>
-              <br />
-              <textarea
-                className="dark:bg-gray-900"
-                id="body"
-                value={form.body}
-                onChange={(event) =>
-                  setForm((state) => ({ ...state, body: event.target.value }))
-                }
-              />
-            </p>
-            <p>
-              <button
-                type="submit"
-                className="px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 md:px-5 md:text-lg "
-              >
-                Send
-              </button>
-            </p>
-          </form>
-        </div>
+      <div style={{ margin: "16px" }}>
+        <form onSubmit={handleSubmit}>
+          <p>
+            {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+            <label htmlFor="head">Wut up</label>
+            <br />
+            <textarea
+              className="dark:bg-gray-900"
+              id="head"
+              value={form.head}
+              onChange={(event) =>
+                setForm((state) => ({ ...state, head: event.target.value }))
+              }
+            />
+          </p>
+          <p style={{ display: "none" }}>
+            {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
+            <label htmlFor="body">More details</label>
+            <br />
+            <textarea
+              className="dark:bg-gray-900"
+              id="body"
+              value={form.body}
+              onChange={(event) =>
+                setForm((state) => ({ ...state, body: event.target.value }))
+              }
+            />
+          </p>
+          <p>
+            <button
+              type="submit"
+              className="px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 md:px-5 md:text-lg "
+            >
+              Send
+            </button>
+          </p>
+        </form>
       </div>
     </>
   );
