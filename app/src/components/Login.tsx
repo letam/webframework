@@ -1,4 +1,6 @@
 import React, { ReactElement, useState, useCallback } from "react";
+import { useHistory } from "react-router-dom";
+
 import { store } from "store";
 
 interface ICSRFToken {
@@ -24,6 +26,7 @@ async function login(
 }
 
 export default function Login(): ReactElement {
+  const history = useHistory();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
@@ -36,9 +39,13 @@ export default function Login(): ReactElement {
         username,
         password
       );
-      store.set("userId", userId);
+      if (userId) {
+        store.set("userId", userId);
+        store.set("username", username);
+        history.push("/");
+      }
     },
-    [username, password]
+    [history, username, password]
   );
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
