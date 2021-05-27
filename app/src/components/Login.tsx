@@ -53,21 +53,21 @@ export default function Login(): ReactElement {
     <>
       <Head title="Login | wut.sh" />
       <Header />
-      <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8 dark:bg-gray-800">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-current">
             Sign in to your account
           </h2>
         </div>
 
         <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-          <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+          <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 dark:bg-gray-900">
             <form className="space-y-6" onSubmit={handleSubmit} method="POST">
               <div>
                 {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
                 <label
                   htmlFor="username"
-                  className="block text-sm font-medium text-gray-700"
+                  className="block text-sm font-medium text-gray-700 dark:text-current"
                 >
                   Username
                 </label>
@@ -78,7 +78,7 @@ export default function Login(): ReactElement {
                     type="text"
                     autoComplete="username"
                     required
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800"
                     onChange={(event) => setUsername(event.target.value)}
                     value={username}
                   />
@@ -89,7 +89,7 @@ export default function Login(): ReactElement {
                 {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
                 <label
                   htmlFor="password"
-                  className="block text-sm font-medium text-gray-700"
+                  className="block text-sm font-medium text-gray-700 dark:text-current"
                 >
                   Password
                 </label>
@@ -100,7 +100,7 @@ export default function Login(): ReactElement {
                     type="password"
                     autoComplete="current-password"
                     required
-                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800"
                     onChange={(event) => setPassword(event.target.value)}
                     value={password}
                   />
@@ -118,7 +118,7 @@ export default function Login(): ReactElement {
                   {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
                   <label
                     htmlFor="remember_me"
-                    className="ml-2 block text-sm text-gray-900"
+                    className="ml-2 block text-sm text-gray-900 dark:text-current"
                   >
                     Remember me
                   </label>
