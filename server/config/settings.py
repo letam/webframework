@@ -189,4 +189,8 @@ CORS_ALLOWED_ORIGINS = [
     #"http://127.0.0.1:9000"
     "https://dev.wut.sh",
 ]
+if DEBUG:
+    CORS_ALLOWED_ORIGINS.extend([
+        "http://localhost:3000",
+    ])
 
