@@ -3,6 +3,8 @@ import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 import tsconfigPaths from "vite-tsconfig-paths";
 
+const HMR_PORT = +(process.env.HMR_PORT || "");
+
 export default defineConfig({
   build: {
     brotliSize: false,
@@ -42,6 +44,6 @@ export default defineConfig({
     }),
   ],
   server: {
-    hmr: { port: 443 },
+    hmr: { ...(HMR_PORT ? { port: HMR_PORT } : {}) },
   },
 });
