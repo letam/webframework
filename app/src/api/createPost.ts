@@ -7,7 +7,7 @@ export default async function createPost(data: {
   body: string;
 }): Promise<IPost> {
   return (
-    await fetch(BACKEND_HOST + "/api/posts/", {
+    await fetch(`${BACKEND_HOST}/api/posts/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json; charset=utf-8",
