@@ -145,15 +145,18 @@ if not log_filepath.exists():
         os.mknod(log_filepath)
     except PermissionError:
         with open(log_filepath, 'w'): pass
-try:
+def symlink_error_log_in_system_logs():
     if not Path(log_symlinkpath).parent.exists():
         import subprocess
         subprocess.call('./sys/mkdir-error-log')
         #subprocess.call(BASE_DIR / '..' / 'sys/mkdir-error-log')
     if not Path(log_symlinkpath).is_symlink():
         os.symlink(log_filepath, log_symlinkpath)
-except FileNotFoundError as e:
-    print(e)
+if not DEBUG:
+    try:
+        symlink_error_log_in_system_logs()
+    except FileNotFoundError as e:
+        print(e)
 import copy
 from django.utils.log import DEFAULT_LOGGING
 LOGGING = copy.deepcopy(DEFAULT_LOGGING)
