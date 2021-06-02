@@ -6,8 +6,8 @@ function FormatText({ children }: { children: ReactNode }): ReactElement {
   // TODO: If contains <script>, then do not set dangerously, and instead display button asking for permission.
   const markup = {
     __html: (children as string).replace(
-      /(https?:[^ ]+) ?/g,
-      '<a href="$1" target="_blank" style="text-decoration: underline; word-break: break-all;">$1</a>'
+      /(https?:[^ ]+)( ?)/g,
+      '<a href="$1" target="_blank" style="text-decoration: underline; word-break: break-all;">$1</a>$2'
     ),
   };
   // eslint-disable-next-line react/no-danger
