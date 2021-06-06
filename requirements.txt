@@ -6,4 +6,5 @@ psycopg2-binary==2.8.6
 
 djangorestframework==3.12.4
 django-cors-headers==3.7.0
+django-extensions==3.1.3
 
