@@ -4,8 +4,10 @@ import { IPost } from "types";
 function FormatText({ children }: { children: ReactNode }): ReactElement {
   // TODO: Handle unsafe post content / investigate hacks
   // TODO: If contains <script>, then do not set dangerously, and instead display button asking for permission.
+  let content = children as string;
+  content = content.replace(/\n/g, "<br/>");
   const markup = {
-    __html: (children as string).replace(
+    __html: content.replace(
       /(https?:[^ ]+)( ?)/g,
       '<a href="$1" target="_blank" style="text-decoration: underline; word-break: break-all;">$1</a>$2'
     ),
