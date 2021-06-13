@@ -20,6 +20,7 @@ from rest_framework import routers
 
 from apps.auth import views as auth_views
 
+from apps.website.views import index
 from apps.blogs.views import PostViewSet
 
 
@@ -37,4 +38,6 @@ urlpatterns = [
     path('api-auth/', include('rest_framework.urls')),
 
     path('api/', include(router.urls)),
+
+    path('', index),
 ]

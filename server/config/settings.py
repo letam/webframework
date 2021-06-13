@@ -44,6 +44,7 @@ INSTALLED_APPS = [
 
     'apps.users.apps.UsersConfig',
 
+    'apps.website',
     'apps.blogs',
 ]
 
@@ -196,4 +197,10 @@ if DEBUG:
     CORS_ALLOWED_ORIGINS.extend([
         "http://localhost:3000",
     ])
+
+
+# Set debug value in templates
+# https://stackoverflow.com/questions/1271631/how-to-check-the-template-debug-flag-in-a-django-template
+if DEBUG:
+    INTERNAL_IPS = ['127.0.0.1']
 

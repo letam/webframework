@@ -4,10 +4,19 @@ import { VitePWA } from "vite-plugin-pwa";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 const HMR_PORT = +(process.env.HMR_PORT || "");
+const MODE = process.env.MODE || "";
 
 export default defineConfig({
   build: {
     brotliSize: false,
+    ...(MODE === "development"
+      ? {
+          manifest: true,
+          rollupOptions: {
+            input: "app/src/main.tsx",
+          },
+        }
+      : {}),
   },
   plugins: [
     tsconfigPaths(),
