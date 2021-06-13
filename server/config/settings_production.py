@@ -11,7 +11,14 @@ STATIC_URL = "/static/"
 MEDIA_ROOT = "/var/www/wut.sh/uploads"
 MEDIA_URL = "/uploads/"
 
-ALLOWED_HOSTS = ["wut.sh"]
+ALLOWED_HOSTS = [
+	"wut.sh",
+	"dev.wut.sh",
+]
+
+CORS_ALLOWED_ORIGINS.extend([
+	"https://dev.wut.sh",
+])
 
 
 import dj_database_url
