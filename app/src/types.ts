@@ -16,6 +16,10 @@ export interface IFruit {
   ];
 }
 
+export interface IDetailResponse {
+  detail: string;
+}
+
 export interface IPost {
   url: string;
   created: string;
