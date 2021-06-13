@@ -14,6 +14,6 @@ class PostViewSet(viewsets.ModelViewSet):
     serializer_class = PostSerializer
 
     def perform_create(self, serializer):
-        user_id = 2
+        user_id = self.request.user.id if self.request.user.is_authenticated else 2
         serializer.save(author_id=user_id)
 
