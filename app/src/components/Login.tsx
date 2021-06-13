@@ -1,6 +1,7 @@
 import React, { ReactElement, useState, useCallback } from "react";
 import { useHistory } from "react-router-dom";
 
+import { BACKEND_HOST } from "api/constants";
 import { store } from "store";
 import Head from "components/Head";
 import Header from "components/Header";
@@ -16,10 +17,12 @@ async function login(
   username: string,
   password: string
 ) {
-  const data = (await (await fetch("/auth/csrf/")).json()) as ICSRFToken;
+  const data = (await (
+    await fetch(`${BACKEND_HOST}/auth/csrf/`)
+  ).json()) as ICSRFToken;
   const csrftoken = data.token;
   return (
-    await fetch("/auth/login/", {
+    await fetch(`${BACKEND_HOST}/auth/login/`, {
       method: eventTarget.method,
       headers: { "X-CSRFToken": csrftoken },
       body: JSON.stringify({ username, password }),
