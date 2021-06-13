@@ -1,5 +1,6 @@
 import { IDetailResponse, IPost } from "types";
 import { BACKEND_HOST } from "api/constants";
+import { csrfToken } from "api/csrf";
 
 export default async function createPost(data: {
   head: string;
@@ -9,6 +10,7 @@ export default async function createPost(data: {
     method: "POST",
     headers: {
       "Content-Type": "application/json; charset=utf-8",
+      "X-CSRFToken": csrfToken.token,
     },
     body: JSON.stringify(data),
   });

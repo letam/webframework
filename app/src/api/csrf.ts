@@ -1,22 +1,30 @@
-import { store } from "store";
 import { BACKEND_HOST } from "./constants";
 
 interface ICSRFToken {
   token: string;
 }
 
-let csrftoken = store.get("csrftoken") as string;
-
-async function getCsrfToken(): Promise<string> {
-  if (csrftoken) {
-    return csrftoken;
-  }
+async function fetchCsrfToken(): Promise<string> {
   const data = (await (
     await fetch(`${BACKEND_HOST}/auth/csrf/`)
   ).json()) as ICSRFToken;
-  store.set("csrftoken", data.token);
-  csrftoken = data.token;
-  return csrftoken;
+  return data.token;
 }
 
-export { getCsrfToken };
+class CSRFToken {
+  token: string;
+
+  constructor() {
+    this.token = "";
+  }
+
+  async fetchCsrfToken(): Promise<string> {
+    this.token = await fetchCsrfToken();
+    return this.token;
+  }
+}
+
+const csrfToken = new CSRFToken();
+csrfToken.fetchCsrfToken(); // eslint-disable-line @typescript-eslint/no-floating-promises
+
+export { csrfToken }; // eslint-disable-line import/prefer-default-export

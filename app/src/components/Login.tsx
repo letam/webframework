@@ -2,7 +2,7 @@ import React, { ReactElement, useState, useCallback } from "react";
 import { useHistory } from "react-router-dom";
 
 import { BACKEND_HOST } from "api/constants";
-import { getCsrfToken } from "api/csrf";
+import { csrfToken } from "api/csrf";
 import { store } from "store";
 import Head from "components/Head";
 import Header from "components/Header";
@@ -14,11 +14,10 @@ async function login(
   username: string,
   password: string
 ) {
-  const csrftoken = await getCsrfToken();
   return (
     await fetch(`${BACKEND_HOST}/auth/login/`, {
       method: eventTarget.method,
-      headers: { "X-CSRFToken": csrftoken },
+      headers: { "X-CSRFToken": csrfToken.token },
       body: JSON.stringify({ username, password }),
     })
   ).json() as Promise<ILogin>;
