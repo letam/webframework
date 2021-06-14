@@ -40,5 +40,6 @@ urlpatterns = [
 
     path('api/', include(router.urls)),
 
+    # https://docs.djangoproject.com/en/3.2/topics/http/urls/#using-regular-expressions
     re_path('', index),
 ]
