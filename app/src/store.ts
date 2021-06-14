@@ -12,6 +12,11 @@ export class Store {
     return this.store[key];
   }
 
+  remove(key: string): void {
+    delete this.store[key];
+    this.storeInLocalStorage();
+  }
+
   storeInLocalStorage(): void {
     localStorage.setItem("store", JSON.stringify(this.store));
   }

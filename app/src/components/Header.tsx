@@ -2,6 +2,7 @@ import React, { ReactElement, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { store } from "store";
+import Logout from "components/Logout";
 
 export default function Header(): ReactElement {
   const [authStatus, setAuthStatus] = useState({
@@ -34,9 +35,9 @@ export default function Header(): ReactElement {
           <h1>Wut?</h1>
         </Link>
         {!authStatus.isInitialized ? undefined : authStatus.isAuthenticated ? (
-          <button type="button" className="m-4">
-            Logout
-          </button>
+          <div className="m-4">
+            <Logout />
+          </div>
         ) : (
           <Link className="m-4" to="/login">
             Login

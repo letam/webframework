@@ -1,9 +1,9 @@
 import json
 from django.http import JsonResponse
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 from django.middleware.csrf import get_token
 
-from django.contrib.auth import get_user_model, login as auth_login
+from django.contrib.auth import get_user_model, login as auth_login, logout as auth_logout
 from django.contrib.auth.forms import AuthenticationForm
 
 
@@ -29,6 +29,14 @@ def login(request):
     auth_login(request, form.get_user())
 
     return JsonResponse(form.get_user().id, safe=False)
+
+
+@require_http_methods(["GET", "POST", "DELETE"])
+def logout(request):
+    '''Reference: https://docs.djangoproject.com/en/3.2/topics/auth/default/#django.contrib.auth.logout'''
+    auth_logout(request)
+
+    return JsonResponse({})
 
 
 def status(request):
