@@ -19,6 +19,11 @@ export default function Header(): ReactElement {
         isAuthenticated: true,
         username,
       }));
+    } else {
+      setAuthStatus((state) => ({
+        ...state,
+        isInitialized: true,
+      }));
     }
   }, []);
 
