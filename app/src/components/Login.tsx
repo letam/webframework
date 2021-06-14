@@ -40,6 +40,7 @@ export default function Login(): ReactElement {
       if (userId) {
         store.set("userId", userId);
         store.set("username", username);
+        csrfToken.fetchCsrfToken(); // eslint-disable-line @typescript-eslint/no-floating-promises
         history.push("/");
       }
     },
