@@ -29,7 +29,32 @@ const routes = [
   },
 ];
 
+function goHome() {
+  window.location.href = "/";
+}
+
+function PageNotFound() {
+  return (
+    <div>
+      <h3>Page not found ☹️.</h3>
+      <button type="button" onClick={goHome}>
+        Go home
+      </button>
+    </div>
+  );
+}
+
+function isPathSupported() {
+  const { pathname } = window.location;
+  const isPathFoundInRoutes = routes.some((route) => route.path === pathname);
+  // TODO: Check to match paths containing variable values
+  return isPathFoundInRoutes;
+}
+
 export default function App(): ReactElement {
+  if (!isPathSupported()) {
+    return <PageNotFound />;
+  }
   return (
     <BrowserRouter>
       <Suspense fallback={<LoadingOrError />}>
