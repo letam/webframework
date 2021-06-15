@@ -1,5 +1,7 @@
 import React, { lazy, ReactElement, Suspense } from "react";
 import { BrowserRouter, Route, Switch } from "react-router-dom";
+
+import { AuthContextProvider } from "contexts/auth";
 import LoadingOrError from "./LoadingOrError";
 
 const Index = lazy(() => import("./Index"));
@@ -56,14 +58,16 @@ export default function App(): ReactElement {
     return <PageNotFound />;
   }
   return (
-    <BrowserRouter>
-      <Suspense fallback={<LoadingOrError />}>
-        <Switch>
-          {routes.map(({ path, component, exact }) => (
-            <Route key="path" {...{ path, component, exact }} />
-          ))}
-        </Switch>
-      </Suspense>
-    </BrowserRouter>
+    <AuthContextProvider>
+      <BrowserRouter>
+        <Suspense fallback={<LoadingOrError />}>
+          <Switch>
+            {routes.map(({ path, component, exact }) => (
+              <Route key="path" {...{ path, component, exact }} />
+            ))}
+          </Switch>
+        </Suspense>
+      </BrowserRouter>
+    </AuthContextProvider>
   );
 }

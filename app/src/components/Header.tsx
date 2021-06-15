@@ -1,32 +1,11 @@
-import React, { ReactElement, useEffect, useState } from "react";
+import React, { ReactElement } from "react";
 import { Link } from "react-router-dom";
 
-import { store } from "store";
 import Logout from "components/Logout";
+import { useAuthContext } from "contexts/auth";
 
 export default function Header(): ReactElement {
-  const [authStatus, setAuthStatus] = useState({
-    isInitialized: false,
-    isAuthenticated: false,
-    username: "",
-  });
-  useEffect(() => {
-    const username = store.get("username") as string;
-    if (username) {
-      console.log("auth as:", username);
-      setAuthStatus((state) => ({
-        ...state,
-        isInitialized: true,
-        isAuthenticated: true,
-        username,
-      }));
-    } else {
-      setAuthStatus((state) => ({
-        ...state,
-        isInitialized: true,
-      }));
-    }
-  }, []);
+  const auth = useAuthContext();
 
   return (
     <>
@@ -34,7 +13,7 @@ export default function Header(): ReactElement {
         <Link className="m-4" to="/">
           <h1>Wut?</h1>
         </Link>
-        {!authStatus.isInitialized ? undefined : authStatus.isAuthenticated ? (
+        {!auth.isInitialized ? undefined : auth.isAuthenticated ? (
           <div className="m-4">
             <Logout />
           </div>

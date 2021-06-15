@@ -6,6 +6,7 @@ import { csrfToken } from "api/csrf";
 import { store } from "store";
 import Head from "components/Head";
 import Header from "components/Header";
+import { useAuthContext } from "contexts/auth";
 
 type ILogin = string;
 
@@ -27,6 +28,7 @@ export default function Login(): ReactElement {
   const history = useHistory();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const auth = useAuthContext();
 
   const handleSubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
@@ -40,11 +42,13 @@ export default function Login(): ReactElement {
       if (userId) {
         store.set("userId", userId);
         store.set("username", username);
+        auth.setIsAuthenticated(true);
+        auth.setUsername(username);
         csrfToken.fetchCsrfToken(); // eslint-disable-line @typescript-eslint/no-floating-promises
         history.push("/");
       }
     },
-    [history, username, password]
+    [history, auth, username, password]
   );
   return (
     <div className="min-h-screen flex flex-col">

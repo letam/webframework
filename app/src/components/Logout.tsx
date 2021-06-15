@@ -4,6 +4,7 @@ import { useHistory } from "react-router-dom";
 import { BACKEND_HOST } from "api/constants";
 import { csrfToken } from "api/csrf";
 import { store } from "store";
+import { useAuthContext } from "contexts/auth";
 
 async function logout(eventTarget: HTMLFormElement) {
   return (
@@ -16,6 +17,7 @@ async function logout(eventTarget: HTMLFormElement) {
 
 export default function Logout(): ReactElement {
   const history = useHistory();
+  const auth = useAuthContext();
 
   const handleSubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
@@ -24,14 +26,14 @@ export default function Logout(): ReactElement {
         await logout(event.target as HTMLFormElement);
         store.remove("userId");
         store.remove("username");
+        auth.setIsAuthenticated(false);
+        auth.setUsername("");
         history.push("/");
-        // TODO: Use mechanism (i.e. context) to update app state instead of doing hard reload
-        window.location.reload();
       } catch {
         console.error("Failed to logout on server.");
       }
     },
-    [history]
+    [history, auth]
   );
   return (
     <form className="space-y-6" onSubmit={handleSubmit} method="POST">
