@@ -7,6 +7,7 @@ import { store } from "store";
 import Head from "components/Head";
 import Header from "components/Header";
 import { useAuthContext } from "contexts/auth";
+import { IFormResponse } from "types";
 
 type ILogin = string;
 
@@ -15,13 +16,16 @@ async function login(
   username: string,
   password: string
 ) {
-  return (
-    await fetch(`${BACKEND_HOST}/auth/login/`, {
-      method: eventTarget.method,
-      headers: { "X-CSRFToken": csrfToken.token },
-      body: JSON.stringify({ username, password }),
-    })
-  ).json() as Promise<ILogin>;
+  const response = await fetch(`${BACKEND_HOST}/auth/login/`, {
+    method: eventTarget.method,
+    headers: { "X-CSRFToken": csrfToken.token },
+    body: JSON.stringify({ username, password }),
+  });
+  if (response.status !== 200) {
+    const responseBody = (await response.json()) as IFormResponse;
+    throw new Error(responseBody.form[0]);
+  }
+  return response.json() as Promise<ILogin>;
 }
 
 export default function Login(): ReactElement {
@@ -34,11 +38,16 @@ export default function Login(): ReactElement {
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       // TODO: Form validation
-      const userId = await login(
-        event.target as HTMLFormElement,
-        username,
-        password
-      );
+      let userId;
+      try {
+        userId = await login(
+          event.target as HTMLFormElement,
+          username,
+          password
+        );
+      } catch (error) {
+        console.error(error);
+      }
       if (userId) {
         store.set("userId", userId);
         store.set("username", username);

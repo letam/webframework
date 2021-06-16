@@ -16,6 +16,10 @@ export interface IFruit {
   ];
 }
 
+export interface IFormResponse {
+  form: [string];
+}
+
 export interface IDetailResponse {
   detail: string;
 }
