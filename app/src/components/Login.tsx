@@ -32,6 +32,7 @@ export default function Login(): ReactElement {
   const history = useHistory();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const auth = useAuthContext();
 
   const handleSubmit = useCallback(
@@ -45,8 +46,8 @@ export default function Login(): ReactElement {
           username,
           password
         );
-      } catch (error) {
-        console.error(error);
+      } catch (error_) {
+        setError((error_ as Error).message);
       }
       if (userId) {
         store.set("userId", userId);
@@ -152,6 +153,7 @@ export default function Login(): ReactElement {
                   Sign in
                 </button>
               </div>
+              {error && <div>{error}</div>}
             </form>
           </div>
         </div>
