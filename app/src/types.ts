@@ -24,10 +24,17 @@ export interface IDetailResponse {
   detail: string;
 }
 
+export interface IAuthor {
+  id: number;
+  username: string;
+  first_name: string;
+  last_name: string;
+}
+
 export interface IPost {
   url: string;
   created: string;
-  author_id: number;
+  author: IAuthor;
   head: string;
   body: string;
 }

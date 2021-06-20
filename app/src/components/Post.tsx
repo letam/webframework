@@ -1,5 +1,5 @@
 import React, { ReactElement, ReactNode } from "react";
-import { IPost } from "types";
+import { IPost, IAuthor } from "types";
 
 function FormatText({ children }: { children: ReactNode }): ReactElement {
   // TODO: Handle unsafe post content / investigate hacks
@@ -16,6 +16,10 @@ function FormatText({ children }: { children: ReactNode }): ReactElement {
   return <div dangerouslySetInnerHTML={markup} />;
 }
 
+function AuthorNameDisplay({ author }: { author: IAuthor }): ReactElement {
+  return <>{author.username} ·</>;
+}
+
 interface Properties {
   post: IPost;
 }
@@ -23,7 +27,9 @@ export default function Post({ post }: Properties): ReactElement {
   return (
     <div data-cy="PostCard" tabIndex={0}>
       <h3 data-cy="PostCardHeadline" className="p-6 font-bold text-xl">
-        {prettyDate(post.created)} <br /> <FormatText>{post.head}</FormatText>
+        <AuthorNameDisplay author={post.author} /> {prettyDate(post.created)}
+        <br />
+        <FormatText>{post.head}</FormatText>
       </h3>
     </div>
   );
