@@ -15,6 +15,14 @@ export default function Header(): ReactElement {
         </Link>
         {!auth.isInitialized ? undefined : auth.isAuthenticated ? (
           <div className="m-4">
+            <div
+              style={{
+                display: "inline-block",
+                marginRight: "1em",
+              }}
+            >
+              Hello <span style={{ fontWeight: "bold" }}>{auth.username}</span>!
+            </div>
             <Logout />
           </div>
         ) : (

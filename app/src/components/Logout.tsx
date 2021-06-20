@@ -36,7 +36,12 @@ export default function Logout(): ReactElement {
     [history, auth]
   );
   return (
-    <form className="space-y-6" onSubmit={handleSubmit} method="POST">
+    <form
+      className="space-y-6"
+      style={{ display: "inline-block" }}
+      onSubmit={handleSubmit}
+      method="POST"
+    >
       <button type="submit">Logout</button>
     </form>
   );
