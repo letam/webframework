@@ -1,6 +1,8 @@
 import React, { ReactElement, ReactNode } from "react";
 import { IPost, IAuthor } from "types";
 
+import { useAuthContext } from "contexts/auth";
+
 function FormatText({ children }: { children: ReactNode }): ReactElement {
   // TODO: Handle unsafe post content / investigate hacks
   // TODO: If contains <script>, then do not set dangerously, and instead display button asking for permission.
@@ -17,6 +19,10 @@ function FormatText({ children }: { children: ReactNode }): ReactElement {
 }
 
 function AuthorNameDisplay({ author }: { author: IAuthor }): ReactElement {
+  const auth = useAuthContext();
+  if (auth.user && auth.user.id === author.id) {
+    return <>You ·</>;
+  }
   return <>{author.username} ·</>;
 }
 
