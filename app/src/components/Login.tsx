@@ -50,10 +50,11 @@ export default function Login(): ReactElement {
         setError((error_ as Error).message);
       }
       if (userId) {
+        const id = Number(userId);
         store.set("userId", userId);
         store.set("username", username);
         auth.setIsAuthenticated(true);
-        auth.setUsername(username);
+        auth.setUser({ id, username });
         csrfToken.fetchCsrfToken(); // eslint-disable-line @typescript-eslint/no-floating-promises
         history.push("/");
       }

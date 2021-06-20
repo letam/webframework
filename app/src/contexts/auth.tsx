@@ -11,20 +11,27 @@ import React, {
 
 import { store } from "store";
 
+interface IUser {
+  id: number;
+  username: string;
+}
+
 interface IAuthContext {
   isInitialized: boolean;
   isAuthenticated: boolean;
-  username: string;
+  user: IUser;
   setIsAuthenticated: Dispatch<SetStateAction<boolean>>;
-  setUsername: Dispatch<SetStateAction<string>>;
+  setUser: Dispatch<SetStateAction<IUser>>;
 }
+
+export const userUninitialized = { id: 0, username: "" };
 
 const AuthContext = createContext({
   isInitialized: false,
   isAuthenticated: false,
-  username: "",
+  user: userUninitialized,
   setIsAuthenticated: () => {},
-  setUsername: () => {},
+  setUser: () => {},
 } as IAuthContext);
 
 export function useAuthContext(): IAuthContext {
@@ -34,15 +41,16 @@ export function useAuthContext(): IAuthContext {
 function useAuthContextManager(): IAuthContext {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [username, setUsername] = useState("");
+  const [user, setUser] = useState(userUninitialized);
 
   useEffect(() => {
-    const usernameFromStore = store.get("username") as string;
-    if (usernameFromStore) {
+    const userIdFromStore = store.get("userId") as number;
+    if (userIdFromStore) {
+      const usernameFromStore = store.get("username") as string;
       console.log("auth as:", usernameFromStore);
       setIsInitialized(true);
       setIsAuthenticated(true);
-      setUsername(usernameFromStore);
+      setUser({ id: userIdFromStore, username: usernameFromStore });
     } else {
       setIsInitialized(true);
     }
@@ -51,9 +59,9 @@ function useAuthContextManager(): IAuthContext {
   return {
     isInitialized,
     isAuthenticated,
-    username,
+    user,
     setIsAuthenticated,
-    setUsername,
+    setUser,
   };
 }
 

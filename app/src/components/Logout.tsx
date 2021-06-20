@@ -4,7 +4,7 @@ import { useHistory } from "react-router-dom";
 import { BACKEND_HOST } from "api/constants";
 import { csrfToken } from "api/csrf";
 import { store } from "store";
-import { useAuthContext } from "contexts/auth";
+import { useAuthContext, userUninitialized } from "contexts/auth";
 
 async function logout(eventTarget: HTMLFormElement) {
   return (
@@ -27,7 +27,7 @@ export default function Logout(): ReactElement {
         store.remove("userId");
         store.remove("username");
         auth.setIsAuthenticated(false);
-        auth.setUsername("");
+        auth.setUser(userUninitialized);
         history.push("/");
       } catch {
         console.error("Failed to logout on server.");

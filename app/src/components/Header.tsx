@@ -21,7 +21,8 @@ export default function Header(): ReactElement {
                 marginRight: "1em",
               }}
             >
-              Hello <span style={{ fontWeight: "bold" }}>{auth.username}</span>!
+              Hello{" "}
+              <span style={{ fontWeight: "bold" }}>{auth.user.username}</span>!
             </div>
             <Logout />
           </div>
