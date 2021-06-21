@@ -44,13 +44,12 @@ function useAuthContextManager(): IAuthContext {
   const [user, setUser] = useState(userUninitialized);
 
   useEffect(() => {
-    const userIdFromStore = store.get("userId") as number;
-    if (userIdFromStore) {
-      const usernameFromStore = store.get("username") as string;
-      console.log("auth as:", usernameFromStore);
+    const userFromStore = store.get("user") as IUser;
+    if (userFromStore) {
+      console.log("auth as:", userFromStore);
       setIsInitialized(true);
       setIsAuthenticated(true);
-      setUser({ id: userIdFromStore, username: usernameFromStore });
+      setUser({ id: userFromStore.id, username: userFromStore.username });
     } else {
       setIsInitialized(true);
     }

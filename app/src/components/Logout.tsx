@@ -24,8 +24,7 @@ export default function Logout(): ReactElement {
       event.preventDefault();
       try {
         await logout(event.target as HTMLFormElement);
-        store.remove("userId");
-        store.remove("username");
+        store.remove("user");
         auth.setIsAuthenticated(false);
         auth.setUser(userUninitialized);
         history.push("/");

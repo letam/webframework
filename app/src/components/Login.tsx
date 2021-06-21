@@ -51,8 +51,7 @@ export default function Login(): ReactElement {
       }
       if (userId) {
         const id = Number(userId);
-        store.set("userId", userId);
-        store.set("username", username);
+        store.set("user", { id, username });
         auth.setIsAuthenticated(true);
         auth.setUser({ id, username });
         csrfToken.fetchCsrfToken(); // eslint-disable-line @typescript-eslint/no-floating-promises
