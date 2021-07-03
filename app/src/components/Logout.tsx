@@ -1,19 +1,10 @@
 import React, { ReactElement, useCallback } from "react";
 import { useHistory } from "react-router-dom";
 
-import { BACKEND_HOST } from "api/constants";
-import { csrfToken } from "api/csrf";
 import { store } from "store";
-import { useAuthContext, userUninitialized } from "contexts/auth";
+import { logout } from "api/auth";
 
-async function logout(eventTarget: HTMLFormElement) {
-  return (
-    await fetch(`${BACKEND_HOST}/auth/logout/`, {
-      method: eventTarget.method,
-      headers: { "X-CSRFToken": csrfToken.token },
-    })
-  ).json() as Promise<void>;
-}
+import { useAuthContext, userUninitialized } from "contexts/auth";
 
 export default function Logout(): ReactElement {
   const history = useHistory();
@@ -23,7 +14,7 @@ export default function Logout(): ReactElement {
     async (event: React.FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       try {
-        await logout(event.target as HTMLFormElement);
+        await logout();
         store.remove("user");
         auth.setIsAuthenticated(false);
         auth.setUser(userUninitialized);

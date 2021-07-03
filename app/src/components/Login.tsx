@@ -1,32 +1,13 @@
 import React, { ReactElement, useState, useCallback } from "react";
 import { useHistory } from "react-router-dom";
 
-import { BACKEND_HOST } from "api/constants";
-import { csrfToken } from "api/csrf";
 import { store } from "store";
+import { csrfToken } from "api/csrf";
+import { login } from "api/auth";
+
+import { useAuthContext } from "contexts/auth";
 import Head from "components/Head";
 import Header from "components/Header";
-import { useAuthContext } from "contexts/auth";
-import { IFormResponse } from "types";
-
-type ILogin = string;
-
-async function login(
-  eventTarget: HTMLFormElement,
-  username: string,
-  password: string
-) {
-  const response = await fetch(`${BACKEND_HOST}/auth/login/`, {
-    method: eventTarget.method,
-    headers: { "X-CSRFToken": csrfToken.token },
-    body: JSON.stringify({ username, password }),
-  });
-  if (response.status !== 200) {
-    const responseBody = (await response.json()) as IFormResponse;
-    throw new Error(responseBody.form[0]);
-  }
-  return response.json() as Promise<ILogin>;
-}
 
 export default function Login(): ReactElement {
   const history = useHistory();
@@ -41,11 +22,7 @@ export default function Login(): ReactElement {
       // TODO: Form validation
       let userId;
       try {
-        userId = await login(
-          event.target as HTMLFormElement,
-          username,
-          password
-        );
+        userId = await login(username, password);
       } catch (error_) {
         setError((error_ as Error).message);
       }
