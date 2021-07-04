@@ -4,6 +4,9 @@ import { csrfToken } from "api/csrf";
 import { IFormResponse } from "types";
 
 type ILogin = string;
+type IAuthStatus = {
+  is_authenticated: boolean;
+};
 
 async function login(username: string, password: string): Promise<ILogin> {
   const response = await fetch(`${BACKEND_HOST}/auth/login/`, {
@@ -27,5 +30,16 @@ async function logout(): Promise<void> {
   ).json() as Promise<void>;
 }
 
+async function checkAuthStatus(): Promise<IAuthStatus> {
+  return (
+    await fetch(`${BACKEND_HOST}/auth/status/`, {
+      method: "GET",
+    })
+  ).json() as Promise<IAuthStatus>;
+}
+
+// Set global window variables for easy debugging
+(window as any).checkAuthStatus = checkAuthStatus; // eslint-disable-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-member-access,no-underscore-dangle
+
 // eslint-disable-next-line import/prefer-default-export
-export { login, logout };
+export { login, logout, checkAuthStatus };
