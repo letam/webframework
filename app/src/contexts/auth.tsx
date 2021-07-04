@@ -10,6 +10,7 @@ import React, {
 } from "react";
 
 import { store } from "store";
+import { fetchAuthStatus } from "api/auth";
 
 interface IUser {
   id: number;
@@ -43,16 +44,33 @@ function useAuthContextManager(): IAuthContext {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(userUninitialized);
 
-  useEffect(() => {
+  async function checkAuthStatus(): Promise<void> {
+    // TODO: If app is PWA with extensive offine capabilities, then
+    //       check if user is online or not before automatically removing
+    //       user data from localStorage, in case we want to enable
+    //       offline mode that saves data when user reconnects online
+    //       (i.e. to the network/internet)
+    const authStatus = await fetchAuthStatus();
     const userFromStore = store.get("user") as IUser;
+    if (!authStatus.is_authenticated) {
+      if (userFromStore) store.remove("user");
+      setIsInitialized(true);
+      return;
+    }
     if (userFromStore) {
       console.log("auth as:", userFromStore);
       setIsInitialized(true);
       setIsAuthenticated(true);
+      // TODO: get user id and user name from `fetchAuthStatus` request/response
       setUser({ id: userFromStore.id, username: userFromStore.username });
     } else {
       setIsInitialized(true);
     }
+  }
+
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    checkAuthStatus();
   }, []);
 
   return {
