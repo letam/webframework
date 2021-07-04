@@ -30,7 +30,7 @@ async function logout(): Promise<void> {
   ).json() as Promise<void>;
 }
 
-async function checkAuthStatus(): Promise<IAuthStatus> {
+async function fetchAuthStatus(): Promise<IAuthStatus> {
   return (
     await fetch(`${BACKEND_HOST}/auth/status/`, {
       method: "GET",
@@ -39,7 +39,7 @@ async function checkAuthStatus(): Promise<IAuthStatus> {
 }
 
 // Set global window variables for easy debugging
-(window as any).checkAuthStatus = checkAuthStatus; // eslint-disable-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-member-access,no-underscore-dangle
+(window as any).fetchAuthStatus = fetchAuthStatus; // eslint-disable-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-member-access,no-underscore-dangle
 
 // eslint-disable-next-line import/prefer-default-export
-export { login, logout, checkAuthStatus };
+export { login, logout, fetchAuthStatus };
