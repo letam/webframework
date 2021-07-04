@@ -32,4 +32,4 @@ export class Store {
 export const store = new Store();
 store.restoreFromLocalStorage();
 
-(window as any)._store = store; // eslint-disable-line
+(window as any)._store = store; // eslint-disable-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-member-access,no-underscore-dangle
