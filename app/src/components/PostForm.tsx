@@ -40,6 +40,14 @@ export default function PostForm(): ReactElement {
               onChange={(event) =>
                 setForm((state) => ({ ...state, head: event.target.value }))
               }
+              onKeyDown={(event) => {
+                if (
+                  event.code === "Enter" &&
+                  (event.ctrlKey || event.metaKey)
+                ) {
+                  handleSubmit(event);
+                }
+              }}
             />
           </p>
           <p style={{ display: "none" }}>
