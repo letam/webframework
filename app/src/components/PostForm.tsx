@@ -7,9 +7,8 @@ export default function PostForm(): ReactElement {
     body: "",
   });
 
-  const handleSubmit = useCallback(
-    (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
+  const submitForm = useCallback(
+    function () {
       if (form.head.trim() === "") {
         return;
       }
@@ -21,6 +20,14 @@ export default function PostForm(): ReactElement {
           console.error(error); // eslint-disable-line no-console
           // TODO: Display error message to user
         });
+    },
+    [form]
+  );
+
+  const handleSubmit = useCallback(
+    (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      submitForm();
     },
     [form]
   );
@@ -45,7 +52,8 @@ export default function PostForm(): ReactElement {
                   event.code === "Enter" &&
                   (event.ctrlKey || event.metaKey)
                 ) {
-                  handleSubmit(event);
+                  event.preventDefault();
+                  submitForm();
                 }
               }}
             />
