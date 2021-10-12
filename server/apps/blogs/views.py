@@ -11,6 +11,7 @@ class PostViewSet(viewsets.ModelViewSet):
 
     permission_classes = [AllowAny]
     queryset = Post.objects.all()
+    # TODO: Confirm that we should optimize with `.prefetch_related('post_set')`
     serializer_class = PostSerializer
 
     def perform_create(self, serializer):

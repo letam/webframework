@@ -19,4 +19,4 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['url', 'created', 'author', 'head', 'body',]
+        fields = ['url', 'created', 'author', 'head', 'body', 'post_set',]
