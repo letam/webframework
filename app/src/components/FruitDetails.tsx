@@ -1,23 +1,21 @@
 import getFruits from "api/getFruits";
 import React, { ReactElement } from "react";
 import { useQuery } from "react-query";
-import { Link, Redirect, RouteComponentProps } from "react-router-dom";
+import { Link, Redirect, useParams } from "react-router-dom";
 import BackIcon from "./BackIcon";
 import Head from "./Head";
 import ImageAttribution from "./ImageAttribution";
 import LoadingOrError from "./LoadingOrError";
 
-export default function FruitDetails({
-  match,
-}: RouteComponentProps<{ fruitName: string }>): ReactElement {
+export default function FruitDetails(): ReactElement {
+  const { fruitName } = useParams<{ fruitName: string }>();
   const { isLoading, isError, error, data } = useQuery("fruits", getFruits);
   if (isLoading || isError) {
     return <LoadingOrError error={error as Error} />;
   }
 
-  const { fruitName } = match.params;
   const fruit = data?.find(
-    (f) => f.name.toLowerCase() === fruitName.toLowerCase()
+    (f) => f.name.toLowerCase() === fruitName?.toLowerCase()
   );
   if (!fruit) {
     return <Redirect to="/" />;

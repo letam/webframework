@@ -62,8 +62,8 @@ export default function App(): ReactElement {
       <BrowserRouter>
         <Suspense fallback={<LoadingOrError />}>
           <Switch>
-            {routes.map(({ path, component, exact }) => (
-              <Route key={path} {...{ path, component, exact }} />
+            {routes.map(({ path, component: Component, exact }) => (
+              <Route key={path} {...{ path, exact }} children={<Component />} />
             ))}
           </Switch>
         </Suspense>
