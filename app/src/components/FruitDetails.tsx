@@ -1,24 +1,33 @@
 import getFruits from "api/getFruits";
-import React, { ReactElement } from "react";
+import React, { ReactElement, useEffect } from "react";
 import { useQuery } from "react-query";
-import { Link, Redirect, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import BackIcon from "./BackIcon";
 import Head from "./Head";
 import ImageAttribution from "./ImageAttribution";
 import LoadingOrError from "./LoadingOrError";
 
 export default function FruitDetails(): ReactElement {
+  const navigate = useNavigate();
   const { fruitName } = useParams<{ fruitName: string }>();
   const { isLoading, isError, error, data } = useQuery("fruits", getFruits);
-  if (isLoading || isError) {
-    return <LoadingOrError error={error as Error} />;
-  }
-
+  const isLoadingOrError = isLoading || isError;
   const fruit = data?.find(
     (f) => f.name.toLowerCase() === fruitName?.toLowerCase()
   );
+
+  useEffect(() => {
+    if (!isLoadingOrError && !fruit) {
+      navigate("/");
+    }
+  }, [isLoadingOrError, fruit]);
+
+  if (isLoadingOrError) {
+    return <LoadingOrError error={error as Error} />;
+  }
+
   if (!fruit) {
-    return <Redirect to="/" />;
+    return <div />;
   }
 
   const isMobile = window.matchMedia("(min-width: 640px)").matches;

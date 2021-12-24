@@ -1,5 +1,5 @@
 import React, { ReactElement, useState, useCallback } from "react";
-import { useHistory } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { store } from "store";
 import { csrfToken } from "api/csrf";
@@ -10,7 +10,7 @@ import Head from "components/Head";
 import Header from "components/Header";
 
 export default function Login(): ReactElement {
-  const history = useHistory();
+  const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -32,10 +32,10 @@ export default function Login(): ReactElement {
         auth.setIsAuthenticated(true);
         auth.setUser({ id, username });
         csrfToken.fetchCsrfToken(); // eslint-disable-line @typescript-eslint/no-floating-promises
-        history.push("/");
+        navigate("/");
       }
     },
-    [history, auth, username, password]
+    [navigate, auth, username, password]
   );
   return (
     <div className="min-h-screen flex flex-col">

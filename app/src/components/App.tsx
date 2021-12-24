@@ -1,5 +1,5 @@
 import React, { lazy, ReactElement, Suspense } from "react";
-import { BrowserRouter, Route, Switch } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { AuthContextProvider } from "contexts/auth";
 import LoadingOrError from "./LoadingOrError";
@@ -36,11 +36,11 @@ export default function App(): ReactElement {
     <AuthContextProvider>
       <BrowserRouter>
         <Suspense fallback={<LoadingOrError />}>
-          <Switch>
+          <Routes>
             {routes.map(({ path, component: Component, exact }) => (
-              <Route key={path} {...{ path, exact }} children={<Component />} />
+              <Route key={path} {...{ path, exact }} element={<Component />} />
             ))}
-          </Switch>
+          </Routes>
         </Suspense>
       </BrowserRouter>
     </AuthContextProvider>

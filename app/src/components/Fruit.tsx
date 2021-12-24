@@ -1,5 +1,5 @@
 import React, { ReactElement, useCallback } from "react";
-import { useHistory } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { IFruit } from "types";
 import ImageAttribution from "./ImageAttribution";
 
@@ -7,7 +7,7 @@ interface Properties {
   fruit: IFruit;
 }
 export default function Fruit({ fruit }: Properties): ReactElement {
-  const history = useHistory();
+  const navigate = useNavigate();
   const onClick = useCallback(
     (event: React.SyntheticEvent<HTMLElement, Event>) => {
       if ((event.target as HTMLElement).nodeName === "A") {
@@ -15,9 +15,9 @@ export default function Fruit({ fruit }: Properties): ReactElement {
       }
 
       window.scrollTo(0, 0);
-      history.push(fruit.name.toLowerCase());
+      navigate("/" + fruit.name.toLowerCase());
     },
-    [fruit.name, history]
+    [fruit.name, navigate]
   );
 
   const onKeyDown = useCallback(

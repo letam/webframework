@@ -1,5 +1,5 @@
 import React, { ReactElement, useCallback } from "react";
-import { useHistory } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import { store } from "store";
 import { logout } from "api/auth";
@@ -7,7 +7,7 @@ import { logout } from "api/auth";
 import { useAuthContext, userUninitialized } from "contexts/auth";
 
 export default function Logout(): ReactElement {
-  const history = useHistory();
+  const navigate = useNavigate();
   const auth = useAuthContext();
 
   const handleSubmit = useCallback(
@@ -18,12 +18,12 @@ export default function Logout(): ReactElement {
         store.remove("user");
         auth.setIsAuthenticated(false);
         auth.setUser(userUninitialized);
-        history.push("/");
+        navigate("/");
       } catch {
         console.error("Failed to logout on server.");
       }
     },
-    [history, auth]
+    [navigate, auth]
   );
   return (
     <form
