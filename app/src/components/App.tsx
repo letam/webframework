@@ -63,7 +63,7 @@ export default function App(): ReactElement {
         <Suspense fallback={<LoadingOrError />}>
           <Switch>
             {routes.map(({ path, component, exact }) => (
-              <Route key="path" {...{ path, component, exact }} />
+              <Route key={path} {...{ path, component, exact }} />
             ))}
           </Switch>
         </Suspense>
