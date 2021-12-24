@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { AuthContextProvider } from "contexts/auth";
 import LoadingOrError from "./LoadingOrError";
+import PageNotFound from "./PageNotFound";
 
 const Index = lazy(() => import("./Index"));
 const Login = lazy(() => import("./Login"));
@@ -14,6 +15,10 @@ const routes = [
     path: "/",
     component: Index,
     exact: true,
+  },
+  {
+    path: "*",
+    component: PageNotFound,
   },
   {
     path: "/login",
