@@ -17,12 +17,10 @@ export default function PostList(): ReactElement {
   }
 
   return (
-    <>
-      <div>
+    <div>
         {data?.map((post) => (
           <Post key={`PostCard-${getIdFromRecord(post)}`} post={post} />
         ))}
       </div>
-    </>
   );
 }

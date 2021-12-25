@@ -8,7 +8,7 @@ export default function PostForm(): ReactElement {
   });
 
   const submitForm = useCallback(
-    function () {
+    () => {
       if (form.head.trim() === "") {
         return;
       }
@@ -33,8 +33,7 @@ export default function PostForm(): ReactElement {
   );
 
   return (
-    <>
-      <div style={{ margin: "16px" }}>
+    <div style={{ margin: "16px" }}>
         <form onSubmit={handleSubmit}>
           <p>
             {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
@@ -81,6 +80,5 @@ export default function PostForm(): ReactElement {
           </p>
         </form>
       </div>
-    </>
   );
 }

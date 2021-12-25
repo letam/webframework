@@ -9,7 +9,7 @@ function PageNotFound({ children }: { children?: ReactElement }): ReactElement {
 
   return (
     <div>
-      <h3>{children ? children : "Page not found ☹️."}</h3>
+      <h3>{children || "Page not found ☹️."}</h3>
       <button type="button" onClick={goHome}>
         Go home
       </button>
