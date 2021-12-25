@@ -15,7 +15,7 @@ export default function Fruit({ fruit }: Properties): ReactElement {
       }
 
       window.scrollTo(0, 0);
-      navigate("/" + fruit.name.toLowerCase());
+      navigate("/" + fruit.name.toLowerCase()); // eslint-disable-line prefer-template
     },
     [fruit.name, navigate]
   );

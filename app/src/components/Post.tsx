@@ -1,7 +1,9 @@
 import React, { ReactElement, ReactNode } from "react";
-import { IPost, IAuthor } from "types";
 
 import { useAuthContext } from "contexts/auth";
+import { prettyDate } from "utils/date";
+
+import { IPost, IAuthor } from "types";
 
 function FormatText({ children }: { children: ReactNode }): ReactElement {
   // TODO: Handle unsafe post content / investigate hacks
@@ -31,7 +33,7 @@ interface Properties {
 }
 export default function Post({ post }: Properties): ReactElement {
   return (
-    <div data-cy="PostCard" tabIndex={0}>
+    <div data-cy="PostCard">
       <h3 data-cy="PostCardHeadline" className="p-6 font-bold text-xl">
         <AuthorNameDisplay author={post.author} /> {prettyDate(post.created)}
         <br />
@@ -39,36 +41,4 @@ export default function Post({ post }: Properties): ReactElement {
       </h3>
     </div>
   );
-}
-
-const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const months = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-function prettyDate(dateValue: string) {
-  const date = new Date(dateValue);
-  const dayIndex = date.getDay();
-  const dayName = days[dayIndex];
-  const monthIndex = date.getMonth();
-  const monthName = months[monthIndex];
-  const year = date.getFullYear();
-  const dateNumber = date.getDate();
-  // const time = date.toLocaleTimeString();
-  const hours = `${date.getHours() < 10 ? "0" : ""}${date.getHours()}`;
-  const minutes = `${date.getMinutes() < 10 ? "0" : ""}${date.getMinutes()}`;
-  const time = `${hours}:${minutes}`;
-  return `${dayName}, ${dateNumber} ${monthName} ${year} ${time}`;
-  // return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }

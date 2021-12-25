@@ -24,7 +24,7 @@ export default function FruitDetails(): ReactElement {
   if (!fruit) {
     return (
       <PageNotFound>
-        <div>Data for fruit '{fruitName}' not found.</div>
+        <div>Data for fruit &apos;{fruitName}&apos; not found.</div>
       </PageNotFound>
     );
   }
@@ -56,6 +56,7 @@ export default function FruitDetails(): ReactElement {
         </div>
         <div className="my-8 sm:my-0 sm:ml-16">
           <button
+            type="button"
             data-cy="BackLink"
             onClick={() => navigate(-1)}
             className="flex items-center"

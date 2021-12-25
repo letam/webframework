@@ -29,7 +29,7 @@ export default function PostForm(): ReactElement {
       event.preventDefault();
       submitForm();
     },
-    [form]
+    [submitForm]
   );
 
   return (
