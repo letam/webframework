@@ -1,7 +1,7 @@
 import getFruits from "api/getFruits";
 import React, { ReactElement } from "react";
 import { useQuery } from "react-query";
-import { Link, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import BackIcon from "./BackIcon";
 import Head from "./Head";
 import ImageAttribution from "./ImageAttribution";
@@ -9,6 +9,7 @@ import LoadingOrError from "./LoadingOrError";
 import PageNotFound from "./PageNotFound";
 
 export default function FruitDetails(): ReactElement {
+  const navigate = useNavigate();
   const { fruitName } = useParams<{ fruitName: string }>();
   const { isLoading, isError, error, data } = useQuery("fruits", getFruits);
   const isLoadingOrError = isLoading || isError;
@@ -54,10 +55,14 @@ export default function FruitDetails(): ReactElement {
           <ImageAttribution author={fruit.image.author} />
         </div>
         <div className="my-8 sm:my-0 sm:ml-16">
-          <Link data-cy="BackLink" to="/" className="flex items-center">
+          <button
+            data-cy="BackLink"
+            onClick={() => navigate(-1)}
+            className="flex items-center"
+          >
             <BackIcon />
             <span className="ml-4 text-xl">Back</span>
-          </Link>
+          </button>
 
           <h1
             data-cy="FruitName"
