@@ -4,7 +4,7 @@
     "eslint:recommended",
     "plugin:import/warnings",
     "plugin:import/errors",
-    "eslint-config-airbnb-base",
+    "airbnb",
     "plugin:unicorn/recommended",
     "prettier"
   ],
