@@ -5,9 +5,8 @@ interface ICSRFToken {
 }
 
 async function fetchCsrfToken(): Promise<string> {
-  const data = (await (
-    await fetch(`${BACKEND_HOST}/auth/csrf/`)
-  ).json()) as ICSRFToken;
+  const response = await fetch(`${BACKEND_HOST}/auth/csrf/`);
+  const data = (await response.json()) as ICSRFToken;
   return data.token;
 }
 

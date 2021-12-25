@@ -22,20 +22,18 @@ async function login(username: string, password: string): Promise<ILogin> {
 }
 
 async function logout(): Promise<void> {
-  return (
-    await fetch(`${BACKEND_HOST}/auth/logout/`, {
-      method: "POST",
-      headers: { "X-CSRFToken": csrfToken.token },
-    })
-  ).json() as Promise<void>;
+  const response = await fetch(`${BACKEND_HOST}/auth/logout/`, {
+    method: "POST",
+    headers: { "X-CSRFToken": csrfToken.token },
+  });
+  return response.json() as Promise<void>;
 }
 
 async function fetchAuthStatus(): Promise<IAuthStatus> {
-  return (
-    await fetch(`${BACKEND_HOST}/auth/status/`, {
-      method: "GET",
-    })
-  ).json() as Promise<IAuthStatus>;
+  const response = await fetch(`${BACKEND_HOST}/auth/status/`, {
+    method: "GET",
+  });
+  return response.json() as Promise<IAuthStatus>;
 }
 
 // Set global window variables for easy debugging

@@ -1,5 +1,6 @@
 import { IFruit } from "types";
 
 export default async function getFruits(): Promise<IFruit[]> {
-  return (await fetch("/fruits.json")).json() as Promise<IFruit[]>;
+  const response = await fetch("/fruits.json");
+  return response.json() as Promise<IFruit[]>;
 }
