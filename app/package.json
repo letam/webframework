@@ -9,7 +9,7 @@
     "test:headless": "cypress run",
     "build": "tsc --project tsconfig.json && vite build",
     "serve": "vite preview",
-    "prepare": "cd .. && husky install"
+    "prepare": "cd .. && husky install ./app/.husky"
   },
   "dependencies": {
     "react": "17.0.2",
