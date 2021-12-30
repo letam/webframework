@@ -22,6 +22,14 @@ export default defineConfig({
     tsconfigPaths(),
     react(),
     VitePWA({
+      // registerType: "autoUpdate",
+      includeAssets: [
+        // 'favicon.png',
+        // 'robots.txt',
+        // 'apple-touch-icon.png',
+        // 'icons/*.svg',
+        "fonts/*.woff2",
+      ],
       manifest: {
         name: "wut.sh",
         short_name: "wut.sh",
