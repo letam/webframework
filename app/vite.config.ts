@@ -1,4 +1,4 @@
-import reactRefresh from "@vitejs/plugin-react-refresh";
+import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 import tsconfigPaths from "vite-tsconfig-paths";
@@ -20,18 +20,8 @@ export default defineConfig({
   },
   plugins: [
     tsconfigPaths(),
-    reactRefresh(),
+    react(),
     VitePWA({
-      workbox: {
-        additionalManifestEntries: [
-          // eslint-disable-next-line unicorn/no-null
-          { url: "https://rsms.me/inter/inter.css", revision: null },
-        ],
-        cleanupOutdatedCaches: true,
-        clientsClaim: true,
-        skipWaiting: true,
-        navigateFallback: undefined,
-      },
       manifest: {
         name: "wut.sh",
         short_name: "wut.sh",
