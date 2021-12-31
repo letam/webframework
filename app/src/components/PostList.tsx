@@ -18,9 +18,9 @@ export default function PostList(): ReactElement {
 
   return (
     <div>
-        {data?.map((post) => (
-          <Post key={`PostCard-${getIdFromRecord(post)}`} post={post} />
-        ))}
-      </div>
+      {data?.map((post) => (
+        <Post key={`PostCard-${getIdFromRecord(post)}`} post={post} />
+      ))}
+    </div>
   );
 }
