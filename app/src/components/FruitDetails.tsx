@@ -43,7 +43,7 @@ export default function FruitDetails(): ReactElement {
       <div className="min-h-screen flex flex-col sm:flex-row items-center">
         <div className="relative">
           <img
-            data-cy="FruitImage"
+            data-testid="FruitImage"
             width={imageWidth}
             height={imageHeight}
             style={{
@@ -57,7 +57,7 @@ export default function FruitDetails(): ReactElement {
         <div className="my-8 sm:my-0 sm:ml-16">
           <button
             type="button"
-            data-cy="BackLink"
+            data-testid="BackLink"
             onClick={() => navigate(-1)}
             className="flex items-center"
           >
@@ -66,7 +66,7 @@ export default function FruitDetails(): ReactElement {
           </button>
 
           <h1
-            data-cy="FruitName"
+            data-testid="FruitName"
             className="mt-2 sm:mt-8 text-6xl font-extrabold"
           >
             {fruit.name}

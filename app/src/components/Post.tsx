@@ -33,8 +33,8 @@ interface Properties {
 }
 export default function Post({ post }: Properties): ReactElement {
   return (
-    <div data-cy="PostCard">
-      <h3 data-cy="PostCardHeadline" className="p-6 font-bold text-xl">
+    <div data-testid="PostCard">
+      <h3 data-testid="PostCardHeadline" className="p-6 font-bold text-xl">
         <AuthorNameDisplay author={post.author} /> {prettyDate(post.created)}
         <br />
         <FormatText>{post.head}</FormatText>
