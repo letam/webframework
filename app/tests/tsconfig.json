@@ -9,8 +9,7 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,
-    "target": "ESNext",
-    "types": ["cypress"]
+    "target": "ESNext"
   },
   "include": ["."]
 }
