@@ -1,7 +1,8 @@
-import getFruits from "api/getFruits";
-import React, { ReactElement } from "react";
+import type { ReactElement } from "react";
 import { useQuery } from "react-query";
 import { useNavigate, useParams } from "react-router-dom";
+
+import getFruits from "api/getFruits";
 import BackIcon from "./BackIcon";
 import Head from "./Head";
 import ImageAttribution from "./ImageAttribution";

@@ -1,4 +1,4 @@
-import React, { ReactElement, ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { useAuthContext } from "contexts/auth";
 import { prettyDate } from "utils/date";

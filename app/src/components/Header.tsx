@@ -1,4 +1,4 @@
-import React, { ReactElement } from "react";
+import type { ReactElement } from "react";
 import { Link } from "react-router-dom";
 
 import Logout from "components/Logout";

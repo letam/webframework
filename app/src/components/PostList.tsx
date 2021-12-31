@@ -1,8 +1,9 @@
+import type { ReactElement } from "react";
+import { useQuery } from "react-query";
+
 import getPosts from "api/getPosts";
 import Post from "components/Post";
 import LoadingOrError from "components/LoadingOrError";
-import React, { ReactElement } from "react";
-import { useQuery } from "react-query";
 
 import { IPost } from "types";
 

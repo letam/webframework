@@ -1,4 +1,4 @@
-import React, { ReactElement } from "react";
+import type { ReactElement } from "react";
 import { useNavigate } from "react-router-dom";
 
 function PageNotFound({ children }: { children?: ReactElement }): ReactElement {

@@ -1,4 +1,5 @@
-import React, { ReactElement, useState, useCallback } from "react";
+import type { ReactElement } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { store } from "store";

@@ -1,10 +1,9 @@
-import React, {
+import type { ReactElement, ReactNode } from "react";
+import {
   createContext,
   useContext,
   useEffect,
   useState,
-  ReactElement,
-  ReactNode,
   Dispatch,
   SetStateAction,
 } from "react";

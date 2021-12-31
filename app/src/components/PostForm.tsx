@@ -1,5 +1,7 @@
+import type { ReactElement } from "react";
+import { useState, useCallback } from "react";
+
 import createPost from "api/createPost";
-import React, { ReactElement, useState, useCallback } from "react";
 
 export default function PostForm(): ReactElement {
   const [form, setForm] = useState({

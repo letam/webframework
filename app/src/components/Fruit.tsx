@@ -1,5 +1,7 @@
-import React, { ReactElement, useCallback } from "react";
+import type { ReactElement } from "react";
+import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+
 import { IFruit } from "types";
 import ImageAttribution from "./ImageAttribution";
 
