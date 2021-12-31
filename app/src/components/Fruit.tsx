@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { IFruit } from "types";
+import type { IFruit } from "types";
 import ImageAttribution from "./ImageAttribution";
 
 interface Properties {

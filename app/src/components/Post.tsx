@@ -3,7 +3,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useAuthContext } from "contexts/auth";
 import { prettyDate } from "utils/date";
 
-import { IPost, IAuthor } from "types";
+import type { IPost, IAuthor } from "types";
 
 function FormatText({ children }: { children: ReactNode }): ReactElement {
   // TODO: Handle unsafe post content / investigate hacks

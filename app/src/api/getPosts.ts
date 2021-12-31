@@ -1,4 +1,4 @@
-import { IPost } from "types";
+import type { IPost } from "types";
 import { BACKEND_HOST } from "api/constants";
 
 export default async function getPosts(): Promise<IPost[]> {

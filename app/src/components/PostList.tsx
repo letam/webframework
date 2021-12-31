@@ -5,7 +5,7 @@ import getPosts from "api/getPosts";
 import Post from "components/Post";
 import LoadingOrError from "components/LoadingOrError";
 
-import { IPost } from "types";
+import type { IPost } from "types";
 
 function getIdFromRecord(record: IPost): string {
   return record.url.split("/").reverse()[1];

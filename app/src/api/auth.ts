@@ -1,7 +1,7 @@
 import { BACKEND_HOST } from "api/constants";
 import { csrfToken } from "api/csrf";
 
-import { IFormResponse } from "types";
+import type { IFormResponse } from "types";
 
 type ILogin = string;
 type IAuthStatus = {

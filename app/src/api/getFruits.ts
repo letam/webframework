@@ -1,4 +1,4 @@
-import { IFruit } from "types";
+import type { IFruit } from "types";
 
 export default async function getFruits(): Promise<IFruit[]> {
   const response = await fetch("/fruits.json");

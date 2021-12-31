@@ -1,4 +1,4 @@
-import { IDetailResponse, IPost } from "types";
+import type { IDetailResponse, IPost } from "types";
 import { BACKEND_HOST } from "api/constants";
 import { csrfToken } from "api/csrf";
 
