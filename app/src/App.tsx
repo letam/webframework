@@ -5,7 +5,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthContextProvider } from "contexts/auth";
 import routes from "routes";
 
-import LoadingOrError from "./LoadingOrError";
+import LoadingOrError from "components/LoadingOrError";
 
 export default function App(): ReactElement {
   return (
