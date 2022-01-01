@@ -32,6 +32,7 @@ export default function Login(): ReactElement {
         store.set("user", { id, username });
         auth.setIsAuthenticated(true);
         auth.setUser({ id, username });
+        // Note: Not waiting here since we want to navigate to the home page immediately
         csrfToken.fetchCsrfToken(); // eslint-disable-line @typescript-eslint/no-floating-promises
         navigate("/");
       }
