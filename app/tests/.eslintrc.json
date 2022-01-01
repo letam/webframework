@@ -16,12 +16,7 @@
   ],
   "rules": {
     "import/namespace": "off",
-    "import/no-extraneous-dependencies": [
-      "error",
-      {
-        "devDependencies": ["./**/*.ts"]
-      }
-    ],
+    "import/no-extraneous-dependencies": "off",
     "@typescript-eslint/no-unused-expressions": "off",
     "no-void": "off"
   }
