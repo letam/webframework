@@ -3,10 +3,10 @@ import { useQuery } from "react-query";
 import { useNavigate, useParams } from "react-router-dom";
 
 import getFruits from "api/getFruits";
-import BackIcon from "./BackIcon";
-import Head from "./Head";
-import ImageAttribution from "./ImageAttribution";
-import LoadingOrError from "./LoadingOrError";
+import BackIcon from "components/BackIcon";
+import Head from "components/Head";
+import ImageAttribution from "components/ImageAttribution";
+import LoadingOrError from "components/LoadingOrError";
 import PageNotFound from "./PageNotFound";
 
 export default function FruitDetails(): ReactElement {

@@ -1,11 +1,11 @@
 import { lazy } from "react";
 
-import PageNotFound from "components/PageNotFound";
+import PageNotFound from "pages/PageNotFound";
 
-const Index = lazy(async () => import("components/Index"));
-const Login = lazy(async () => import("components/Login"));
-const FruitDetails = lazy(async () => import("components/FruitDetails"));
-const FruitGallery = lazy(async () => import("components/FruitGallery"));
+const Index = lazy(async () => import("pages/Index"));
+const Login = lazy(async () => import("pages/Login"));
+const FruitDetails = lazy(async () => import("pages/FruitDetails"));
+const FruitGallery = lazy(async () => import("pages/FruitGallery"));
 
 const routes = [
   {
