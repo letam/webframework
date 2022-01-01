@@ -1,5 +1,4 @@
 import type { ReactElement } from "react";
-import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { IFruit } from "types";
@@ -10,26 +9,19 @@ interface Properties {
 }
 export default function Fruit({ fruit }: Properties): ReactElement {
   const navigate = useNavigate();
-  const onClick = useCallback(
-    (event: React.SyntheticEvent<HTMLElement>) => {
-      if ((event.target as HTMLElement).nodeName === "A") {
-        return;
-      }
 
-      window.scrollTo(0, 0);
-      navigate("/" + fruit.name.toLowerCase()); // eslint-disable-line prefer-template
-    },
-    [fruit.name, navigate]
-  );
-
-  const onKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLElement>) => {
-      if (event.key === "Enter") {
-        onClick(event);
-      }
-    },
-    [onClick]
-  );
+  function onClick(event: React.SyntheticEvent<HTMLElement>): void {
+    if ((event.target as HTMLElement).nodeName === "A") {
+      return;
+    }
+    window.scrollTo(0, 0);
+    navigate("/" + fruit.name.toLowerCase()); // eslint-disable-line prefer-template
+  }
+  function onKeyDown(event: React.KeyboardEvent<HTMLElement>): void {
+    if (event.key === "Enter") {
+      onClick(event);
+    }
+  }
 
   const imageWidth = Math.min(384, window.innerWidth - 16);
   const imageHeight = imageWidth / (16 / 9);

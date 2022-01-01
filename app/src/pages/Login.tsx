@@ -1,5 +1,5 @@
-import type { ReactElement } from "react";
-import { useState, useCallback } from "react";
+import type { ReactElement, FormEvent } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { store } from "store";
@@ -17,28 +17,28 @@ export default function Login(): ReactElement {
   const [error, setError] = useState("");
   const auth = useAuthContext();
 
-  const handleSubmit = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      // TODO: Form validation
-      let userId; // eslint-disable-line @typescript-eslint/init-declarations
-      try {
-        userId = await login(username, password);
-      } catch (error_) {
-        setError((error_ as Error).message);
-      }
-      if (userId !== undefined) {
-        const id = Number(userId);
-        store.set("user", { id, username });
-        auth.setIsAuthenticated(true);
-        auth.setUser({ id, username });
-        // Note: Not waiting here since we want to navigate to the home page immediately
-        csrfToken.fetchCsrfToken(); // eslint-disable-line @typescript-eslint/no-floating-promises
-        navigate("/");
-      }
-    },
-    [navigate, auth, username, password]
-  );
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ): Promise<void> {
+    event.preventDefault();
+    // TODO: Form validation
+    let userId; // eslint-disable-line @typescript-eslint/init-declarations
+    try {
+      userId = await login(username, password);
+    } catch (error_) {
+      setError((error_ as Error).message);
+    }
+    if (userId !== undefined) {
+      const id = Number(userId);
+      store.set("user", { id, username });
+      auth.setIsAuthenticated(true);
+      auth.setUser({ id, username });
+      // Note: Not waiting here since we want to navigate to the home page immediately
+      csrfToken.fetchCsrfToken(); // eslint-disable-line @typescript-eslint/no-floating-promises
+      navigate("/");
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       <Head title="Login | wut.sh" />

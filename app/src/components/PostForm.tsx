@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { useState, useCallback } from "react";
+import { useState } from "react";
 
 import createPost from "api/createPost";
 
@@ -9,7 +9,7 @@ export default function PostForm(): ReactElement {
     body: "",
   });
 
-  const submitForm = useCallback(() => {
+  function submitForm(): void {
     if (form.head.trim() === "") {
       return;
     }
@@ -21,15 +21,12 @@ export default function PostForm(): ReactElement {
         console.error(error); // eslint-disable-line no-console
         // TODO: Display error message to user
       });
-  }, [form]);
+  }
 
-  const handleSubmit = useCallback(
-    (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      submitForm();
-    },
-    [submitForm]
-  );
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>): void {
+    event.preventDefault();
+    submitForm();
+  }
 
   return (
     <div style={{ margin: "16px" }}>

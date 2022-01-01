@@ -1,5 +1,4 @@
-import type { ReactElement } from "react";
-import { useCallback } from "react";
+import type { ReactElement, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { store } from "store";
@@ -11,21 +10,21 @@ export default function Logout(): ReactElement {
   const navigate = useNavigate();
   const auth = useAuthContext();
 
-  const handleSubmit = useCallback(
-    async (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      try {
-        await logout();
-        store.remove("user");
-        auth.setIsAuthenticated(false);
-        auth.setUser(userUninitialized);
-        navigate("/");
-      } catch {
-        console.error("Failed to logout on server.");
-      }
-    },
-    [navigate, auth]
-  );
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>
+  ): Promise<void> {
+    event.preventDefault();
+    try {
+      await logout();
+      store.remove("user");
+      auth.setIsAuthenticated(false);
+      auth.setUser(userUninitialized);
+      navigate("/");
+    } catch {
+      console.error("Failed to logout on server.");
+    }
+  }
+
   return (
     <form
       className="space-y-6"
