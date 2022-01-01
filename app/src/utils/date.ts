@@ -14,7 +14,7 @@ const months = [
   "Dec",
 ];
 
-function prettyDate(dateValue: string) {
+function prettyDate(dateValue: string): string {
   const date = new Date(dateValue);
   const dayIndex = date.getDay();
   const dayName = days[dayIndex];

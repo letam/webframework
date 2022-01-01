@@ -22,7 +22,7 @@ function FormatText({ children }: { children: ReactNode }): ReactElement {
 
 function AuthorNameDisplay({ author }: { author: IAuthor }): ReactElement {
   const auth = useAuthContext();
-  if (auth.user && auth.user.id === author.id) {
+  if (auth.user.id === author.id) {
     return <>You ·</>;
   }
   return <>{author.username} ·</>;

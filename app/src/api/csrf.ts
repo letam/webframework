@@ -11,13 +11,13 @@ async function fetchCsrfToken(): Promise<string> {
 }
 
 class CSRFToken {
-  token: string;
+  public token: string;
 
-  constructor() {
+  public constructor() {
     this.token = "";
   }
 
-  async fetchCsrfToken(): Promise<string> {
+  public async fetchCsrfToken(): Promise<string> {
     this.token = await fetchCsrfToken();
     return this.token;
   }

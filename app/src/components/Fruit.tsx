@@ -11,7 +11,7 @@ interface Properties {
 export default function Fruit({ fruit }: Properties): ReactElement {
   const navigate = useNavigate();
   const onClick = useCallback(
-    (event: React.SyntheticEvent<HTMLElement, Event>) => {
+    (event: React.SyntheticEvent<HTMLElement>) => {
       if ((event.target as HTMLElement).nodeName === "A") {
         return;
       }

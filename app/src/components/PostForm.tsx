@@ -42,10 +42,10 @@ export default function PostForm(): ReactElement {
             className="dark:bg-gray-900"
             id="head"
             value={form.head}
-            onChange={(event) =>
-              setForm((state) => ({ ...state, head: event.target.value }))
-            }
-            onKeyDown={(event) => {
+            onChange={(event): void => {
+              setForm((state) => ({ ...state, head: event.target.value }));
+            }}
+            onKeyDown={(event): void => {
               if (event.code === "Enter" && (event.ctrlKey || event.metaKey)) {
                 event.preventDefault();
                 submitForm();
@@ -61,9 +61,9 @@ export default function PostForm(): ReactElement {
             className="dark:bg-gray-900"
             id="body"
             value={form.body}
-            onChange={(event) =>
-              setForm((state) => ({ ...state, body: event.target.value }))
-            }
+            onChange={(event): void => {
+              setForm((state) => ({ ...state, body: event.target.value }));
+            }}
           />
         </p>
         <p>

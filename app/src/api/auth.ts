@@ -3,12 +3,11 @@ import { csrfToken } from "api/csrf";
 
 import type { IFormResponse } from "types";
 
-type ILogin = string;
-type IAuthStatus = {
+interface IAuthStatus {
   is_authenticated: boolean;
-};
+}
 
-async function login(username: string, password: string): Promise<ILogin> {
+async function login(username: string, password: string): Promise<string> {
   const response = await fetch(`${BACKEND_HOST}/auth/login/`, {
     method: "POST",
     headers: { "X-CSRFToken": csrfToken.token },
@@ -18,7 +17,7 @@ async function login(username: string, password: string): Promise<ILogin> {
     const responseBody = (await response.json()) as IFormResponse;
     throw new Error(responseBody.form[0]);
   }
-  return response.json() as Promise<ILogin>;
+  return response.json() as Promise<string>;
 }
 
 async function logout(): Promise<void> {

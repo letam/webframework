@@ -59,7 +59,9 @@ export default function FruitDetails(): ReactElement {
           <button
             type="button"
             data-testid="BackLink"
-            onClick={() => navigate(-1)}
+            onClick={(): void => {
+              navigate(-1);
+            }}
             className="flex items-center"
           >
             <BackIcon />

@@ -1,12 +1,5 @@
-import type { ReactElement, ReactNode } from "react";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  Dispatch,
-  SetStateAction,
-} from "react";
+import type { ReactElement, ReactNode, Dispatch, SetStateAction } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 import { store } from "store";
 import { fetchAuthStatus } from "api/auth";
@@ -50,13 +43,13 @@ function useAuthContextManager(): IAuthContext {
     //       offline mode that saves data when user reconnects online
     //       (i.e. to the network/internet)
     const authStatus = await fetchAuthStatus();
-    const userFromStore = store.get("user") as IUser;
+    const userFromStore = store.get("user") as IUser | null;
     if (!authStatus.is_authenticated) {
-      if (userFromStore) store.remove("user");
+      if (userFromStore !== null) store.remove("user");
       setIsInitialized(true);
       return;
     }
-    if (userFromStore) {
+    if (userFromStore !== null) {
       console.log("auth as:", userFromStore);
       setIsInitialized(true);
       setIsAuthenticated(true);

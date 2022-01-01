@@ -1,31 +1,31 @@
 /* Simple Application Store */
 
 export class Store {
-  store: Record<string, unknown> = {};
+  private store: Record<string, unknown> = {};
 
-  set(key: string, value: unknown): void {
+  public set(key: string, value: unknown): void {
     this.store[key] = value;
     this.storeInLocalStorage();
   }
 
-  get(key: string): unknown {
+  public get(key: string): unknown {
     return this.store[key];
   }
 
-  remove(key: string): void {
-    delete this.store[key];
+  public remove(key: string): void {
+    delete this.store[key]; // eslint-disable-line @typescript-eslint/no-dynamic-delete
     this.storeInLocalStorage();
   }
 
-  storeInLocalStorage(): void {
-    localStorage.setItem("store", JSON.stringify(this.store));
-  }
-
-  restoreFromLocalStorage(): void {
+  public restoreFromLocalStorage(): void {
     const storeFromLocalStorage = localStorage.getItem("store");
-    if (storeFromLocalStorage) {
+    if (storeFromLocalStorage !== null) {
       this.store = JSON.parse(storeFromLocalStorage) as Record<string, unknown>;
     }
+  }
+
+  private storeInLocalStorage(): void {
+    localStorage.setItem("store", JSON.stringify(this.store));
   }
 }
 
