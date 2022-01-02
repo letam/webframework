@@ -3,11 +3,13 @@ import { useQuery } from "react-query";
 import { useNavigate, useParams } from "react-router-dom";
 
 import getFruits from "api/getFruits";
-import BackIcon from "components/BackIcon";
 import Head from "components/Head";
 import ImageAttribution from "components/ImageAttribution";
 import LoadingOrError from "components/LoadingOrError";
 import PageNotFound from "./PageNotFound";
+
+const DESKTOP_IMAGE_WIDTH_PERCENTAGE = 0.4;
+const MOBILE_IMAGE_HEIGHT_PERCENTAGE = 0.3;
 
 export default function FruitDetails(): ReactElement {
   const navigate = useNavigate();
@@ -30,12 +32,15 @@ export default function FruitDetails(): ReactElement {
     );
   }
 
-  const isMobile = window.matchMedia("(min-width: 640px)").matches;
+  const isTabletAndUp = window.matchMedia("(min-width: 600px)").matches;
   const imageWidth =
-    (isMobile ? window.innerWidth * 0.4 : window.innerWidth) *
-    window.devicePixelRatio;
+    (isTabletAndUp
+      ? window.innerWidth * DESKTOP_IMAGE_WIDTH_PERCENTAGE
+      : window.innerWidth) * window.devicePixelRatio;
   const imageHeight =
-    (isMobile ? window.innerHeight : window.innerHeight * 0.3) *
+    (isTabletAndUp
+      ? window.innerHeight
+      : window.innerHeight * MOBILE_IMAGE_HEIGHT_PERCENTAGE) *
     window.devicePixelRatio;
 
   return (
@@ -62,13 +67,13 @@ export default function FruitDetails(): ReactElement {
             onClick={() => navigate(-1)}
             className="flex items-center"
           >
-            <BackIcon />
+            <img src="/icons/arrow-left.svg" alt="" className="h-5 w-5" />
             <span className="ml-4 text-xl">Back</span>
           </button>
 
           <h1
             data-testid="FruitName"
-            className="mt-2 sm:mt-8 text-6xl font-extrabold"
+            className="mt-2 sm:mt-8 text-6xl font-bold"
           >
             {fruit.name}
           </h1>

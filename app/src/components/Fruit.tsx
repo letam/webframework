@@ -1,30 +1,44 @@
-import type { ReactElement } from "react";
+import type { ReactElement, SyntheticEvent, KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { IFruit } from "types";
 import ImageAttribution from "./ImageAttribution";
 
-interface Properties {
+const PREFERRED_IMAGE_WIDTH = 384;
+const MOBILE_PADDING = 16;
+const ASPECT_RATIO_WIDTH = 16;
+const ASPECT_RATIO_HEIGHT = 9;
+const IMAGE_INDEX_BELOW_THE_FOLD = 3;
+
+export default function Fruit({
+  fruit,
+  index,
+}: {
   fruit: IFruit;
-}
-export default function Fruit({ fruit }: Properties): ReactElement {
+  index: number;
+}): ReactElement {
   const navigate = useNavigate();
 
-  function onClick(event: React.SyntheticEvent<HTMLElement>): void {
+  function onClick(event: SyntheticEvent<HTMLElement>): void {
+    // Ignore if clicked element is an actual link (i.e. anchor tag)
     if ((event.target as HTMLElement).nodeName === "A") {
       return;
     }
     window.scrollTo(0, 0);
     navigate("/" + fruit.name.toLowerCase()); // eslint-disable-line prefer-template
   }
-  function onKeyDown(event: React.KeyboardEvent<HTMLElement>): void {
+  function onKeyDown(event: KeyboardEvent<HTMLElement>): void {
     if (event.key === "Enter") {
       onClick(event);
     }
   }
 
-  const imageWidth = Math.min(384, window.innerWidth - 16);
-  const imageHeight = imageWidth / (16 / 9);
+  const isTabletAndUp = window.matchMedia("(min-width: 600px)").matches;
+  const imageWidth = Math.min(
+    PREFERRED_IMAGE_WIDTH,
+    window.innerWidth - MOBILE_PADDING
+  );
+  const imageHeight = imageWidth / (ASPECT_RATIO_WIDTH / ASPECT_RATIO_HEIGHT);
 
   return (
     <div
@@ -38,7 +52,16 @@ export default function Fruit({ fruit }: Properties): ReactElement {
       <div className="relative">
         <img
           data-testid="FruitCardImage"
-          loading="lazy"
+          loading={
+            !isTabletAndUp && index >= IMAGE_INDEX_BELOW_THE_FOLD
+              ? "lazy"
+              : "eager"
+          }
+          decoding={
+            !isTabletAndUp && index >= IMAGE_INDEX_BELOW_THE_FOLD
+              ? "async"
+              : "sync"
+          }
           width={imageWidth}
           height={imageHeight}
           style={{
