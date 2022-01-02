@@ -2,6 +2,7 @@ import type { ReactElement, SyntheticEvent, KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { IFruit } from "types";
+import { useMediaQuery } from "utils/responsive";
 import ImageAttribution from "./ImageAttribution";
 
 const PREFERRED_IMAGE_WIDTH = 384;
@@ -17,6 +18,7 @@ export default function Fruit({
   fruit: IFruit;
   index: number;
 }): ReactElement {
+  const isTabletAndUp = useMediaQuery("(min-width: 600px)");
   const navigate = useNavigate();
 
   function onClick(event: SyntheticEvent<HTMLElement>): void {
@@ -33,7 +35,6 @@ export default function Fruit({
     }
   }
 
-  const isTabletAndUp = window.matchMedia("(min-width: 600px)").matches;
   const imageWidth = Math.min(
     PREFERRED_IMAGE_WIDTH,
     window.innerWidth - MOBILE_PADDING

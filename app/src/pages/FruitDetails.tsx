@@ -3,6 +3,7 @@ import { useQuery } from "react-query";
 import { useNavigate, useParams } from "react-router-dom";
 
 import getFruits from "api/getFruits";
+import { useMediaQuery } from "utils/responsive";
 import Head from "components/Head";
 import ImageAttribution from "components/ImageAttribution";
 import LoadingOrError from "components/LoadingOrError";
@@ -12,6 +13,7 @@ const DESKTOP_IMAGE_WIDTH_PERCENTAGE = 0.4;
 const MOBILE_IMAGE_HEIGHT_PERCENTAGE = 0.3;
 
 export default function FruitDetails(): ReactElement {
+  const isTabletAndUp = useMediaQuery("(min-width: 600px)");
   const navigate = useNavigate();
   const { fruitName } = useParams<{ fruitName: string }>();
   const { isLoading, isError, error, data } = useQuery("fruits", getFruits);
@@ -32,7 +34,6 @@ export default function FruitDetails(): ReactElement {
     );
   }
 
-  const isTabletAndUp = window.matchMedia("(min-width: 600px)").matches;
   const imageWidth =
     (isTabletAndUp
       ? window.innerWidth * DESKTOP_IMAGE_WIDTH_PERCENTAGE
