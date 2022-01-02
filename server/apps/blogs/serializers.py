@@ -26,3 +26,12 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
             'body',
             'post_set',
         ]
+
+
+class PostCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Post
+        fields = [
+            'head',
+            'body',
+        ]

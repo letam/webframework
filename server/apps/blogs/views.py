@@ -2,7 +2,7 @@ from rest_framework import viewsets
 from rest_framework.permissions import AllowAny
 
 from .models import Post
-from .serializers import PostSerializer
+from .serializers import PostSerializer, PostCreateSerializer
 
 
 class PostViewSet(viewsets.ModelViewSet):
@@ -11,6 +11,11 @@ class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
     # TODO: Confirm that we should optimize with `.prefetch_related('post_set')`
     serializer_class = PostSerializer
+
+    def get_serializer_class(self):
+        if self.request.method == 'POST':
+            return PostCreateSerializer
+        return super().get_serializer_class()
 
     def perform_create(self, serializer):
         ANONYMOUS_USER_ID = 2
