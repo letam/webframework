@@ -25,7 +25,7 @@ def login(request):
     form = AuthenticationForm(request, data=data)
 
     if not form.is_valid():
-        errors = form.errors.copy()  # type: ignore
+        errors = form.errors.copy()
         if '__all__' in errors:
             errors['form'] = errors.pop('__all__')
         return JsonResponse(errors, status=400)

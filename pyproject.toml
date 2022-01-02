@@ -21,3 +21,6 @@ exclude = [
 	"app",
 ]
 
+
+[tool.django-stubs]
+# django_settings_module = "config.settings"
