@@ -13,7 +13,9 @@ class PostViewSet(viewsets.ModelViewSet):
     serializer_class = PostSerializer
 
     def get_serializer_class(self):
-        if self.request.method == 'POST':
+        if self.action == 'create':
+            # Note that this is a more "readable" alternative to checking
+            # if self.request.method == 'POST':
             return PostCreateSerializer
         return super().get_serializer_class()
 
