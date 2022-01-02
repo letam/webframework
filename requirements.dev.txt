@@ -1,4 +1,6 @@
 -r requirements.txt
 
 ipython==7.30.1
+
 black==21.12b0
+neovim==0.3.1
