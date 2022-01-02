@@ -10,6 +10,3 @@ export default function LoadingOrError({ error }: Properties): ReactElement {
     </div>
   );
 }
-LoadingOrError.defaultProps = {
-  error: undefined,
-};

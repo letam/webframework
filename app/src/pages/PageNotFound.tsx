@@ -16,8 +16,5 @@ function PageNotFound({ children }: { children?: ReactElement }): ReactElement {
     </div>
   );
 }
-PageNotFound.defaultProps = {
-  children: undefined,
-};
 
 export default PageNotFound;
