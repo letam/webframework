@@ -30,16 +30,16 @@ router.register(r'posts', PostViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-
+    #
     path('auth/csrf/', auth_views.csrf),
     path('auth/login/', auth_views.login),
     path('auth/logout/', auth_views.logout),
     path('auth/status/', auth_views.status),
-
+    #
     path('api-auth/', include('rest_framework.urls')),
-
+    #
     path('api/', include(router.urls)),
-
+    #
     # https://docs.djangoproject.com/en/4.0/topics/http/urls/#using-regular-expressions
     re_path('', index),
 ]

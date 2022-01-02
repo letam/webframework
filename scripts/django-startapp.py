@@ -47,4 +47,3 @@ if __name__ == '__main__':
 
     app_name = sys.argv[1]
     add_django_app_to_project(app_name)
-

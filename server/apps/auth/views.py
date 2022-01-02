@@ -3,7 +3,11 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods, require_POST
 from django.middleware.csrf import get_token
 
-from django.contrib.auth import get_user_model, login as auth_login, logout as auth_logout
+from django.contrib.auth import (
+    get_user_model,
+    login as auth_login,
+    logout as auth_logout,
+)
 from django.contrib.auth.forms import AuthenticationForm
 
 
@@ -41,4 +45,3 @@ def logout(request):
 
 def status(request):
     return JsonResponse({'is_authenticated': request.user.is_authenticated})
-

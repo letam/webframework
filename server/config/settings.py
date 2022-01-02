@@ -40,13 +40,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
+    # third-party apps
     'rest_framework',
     'corsheaders',
     'django_extensions',
-
+    # project apps
     'apps.users.apps.UsersConfig',
-
     'apps.website',
     'apps.blogs',
 ]
@@ -143,6 +142,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Logging
 # https://docs.djangoproject.com/en/4.0/topics/logging/
 import os
+
 log_dir: Path = BASE_DIR / '..' / 'log'
 log_filepath: Path = log_dir / 'server-errors.log'
 log_symlinkpath: str = f'/var/log/app-errors/{BASE_DIR.parent.name}.log'
@@ -152,14 +152,20 @@ if not log_filepath.exists():
     try:
         os.mknod(log_filepath)
     except PermissionError:
-        with open(log_filepath, 'w'): pass
+        with open(log_filepath, 'w'):
+            pass
+
+
 def symlink_error_log_in_system_logs():
     if not Path(log_symlinkpath).parent.exists():
         import subprocess
+
         subprocess.call('./sys/mkdir-error-log')
-        #subprocess.call(BASE_DIR / '..' / 'sys/mkdir-error-log')
+        # subprocess.call(BASE_DIR / '..' / 'sys/mkdir-error-log')
     if not Path(log_symlinkpath).is_symlink():
         os.symlink(log_filepath, log_symlinkpath)
+
+
 if not DEBUG:
     try:
         symlink_error_log_in_system_logs()
@@ -167,16 +173,19 @@ if not DEBUG:
         print(e)
 import copy
 from django.utils.log import DEFAULT_LOGGING
+
 LOGGING = copy.deepcopy(DEFAULT_LOGGING)
-LOGGING['handlers'].update({
-    'file_errors': {
-        'level': 'ERROR',
-        'filters': ['require_debug_false'],
-        'formatter': 'django.server',
-        'class': 'logging.FileHandler',
-        'filename': log_filepath,
-    },
-})
+LOGGING['handlers'].update(
+    {
+        'file_errors': {
+            'level': 'ERROR',
+            'filters': ['require_debug_false'],
+            'formatter': 'django.server',
+            'class': 'logging.FileHandler',
+            'filename': log_filepath,
+        },
+    }
+)
 LOGGING['loggers']['django']['handlers'].append('file_errors')
 
 # User Model
@@ -196,17 +205,18 @@ REST_FRAMEWORK = {
 # Handle server headers required for Cross-Origin Resource Sharing (CORS)
 # https://pypi.org/project/django-cors-headers/
 CORS_ALLOWED_ORIGINS = [
-    #"http://localhost:8080",
-    #"http://127.0.0.1:9000"
+    # "http://localhost:8080",
+    # "http://127.0.0.1:9000"
 ]
 if DEBUG:
-    CORS_ALLOWED_ORIGINS.extend([
-        "http://localhost:3000",
-    ])
+    CORS_ALLOWED_ORIGINS.extend(
+        [
+            "http://localhost:3000",
+        ]
+    )
 
 
 # Set debug value in templates
 # https://stackoverflow.com/questions/1271631/how-to-check-the-template-debug-flag-in-a-django-template
 if DEBUG:
     INTERNAL_IPS = ['127.0.0.1']
-

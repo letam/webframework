@@ -8,7 +8,6 @@ User = get_user_model()
 
 
 class UserNameSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = User
         fields = ['id', 'username', 'first_name', 'last_name']
@@ -19,4 +18,11 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
 
     class Meta:
         model = Post
-        fields = ['url', 'created', 'author', 'head', 'body', 'post_set',]
+        fields = [
+            'url',
+            'created',
+            'author',
+            'head',
+            'body',
+            'post_set',
+        ]
