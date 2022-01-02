@@ -21,7 +21,7 @@ def local_dev_response_from_file_in_app_public_dir(request):
     public_dir = 'app/public'
     file_path = public_dir + request.path
 
-    def get_content_response_type_for_file(filename: str) -> str:
+    def get_content_response_type_for_file(filename: str) -> str | None:
         if filename.endswith('.woff2'):
             return 'font/woff2'
         if filename.endswith('.svg'):

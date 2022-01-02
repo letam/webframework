@@ -25,14 +25,15 @@ def login(request):
     form = AuthenticationForm(request, data=data)
 
     if not form.is_valid():
-        errors = form.errors.copy()
+        errors = form.errors.copy()  # type: ignore
         if '__all__' in errors:
             errors['form'] = errors.pop('__all__')
         return JsonResponse(errors, status=400)
 
     auth_login(request, form.get_user())
+    user_id = form.get_user().id  # type: ignore
 
-    return JsonResponse(form.get_user().id, safe=False)
+    return JsonResponse(user_id, safe=False)
 
 
 @require_http_methods(["GET", "POST", "DELETE"])

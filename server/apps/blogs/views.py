@@ -1,5 +1,3 @@
-from django.shortcuts import render
-
 from rest_framework import viewsets
 from rest_framework.permissions import AllowAny
 
@@ -10,7 +8,7 @@ from .serializers import PostSerializer
 class PostViewSet(viewsets.ModelViewSet):
 
     permission_classes = [AllowAny]
-    queryset = Post.objects.all()
+    queryset = Post.objects.all()  # type: ignore
     # TODO: Confirm that we should optimize with `.prefetch_related('post_set')`
     serializer_class = PostSerializer
 
