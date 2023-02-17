@@ -1,8 +1,8 @@
 -r requirements.txt
 
-ipython==8.2.0
+ipython==8.10.0
 
-django-stubs==1.10.1
+django-stubs==1.14.0
 
-black==22.3.0
+black==23.1.0
 neovim==0.3.1
