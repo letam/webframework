@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-const PORT = "3000";
+const PORT = "5173";
 const BASE_URL = `http://localhost${PORT ? `:${PORT}` : ""}`;
 
 test("title", async ({ page }) => {

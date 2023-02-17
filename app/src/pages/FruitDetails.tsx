@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { useQuery } from "react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 
 import getFruits from "api/getFruits";
@@ -16,7 +16,7 @@ export default function FruitDetails(): ReactElement {
   const isTabletAndUp = useMediaQuery("(min-width: 600px)");
   const navigate = useNavigate();
   const { fruitName } = useParams<{ fruitName: string }>();
-  const { isLoading, isError, error, data } = useQuery("fruits", getFruits);
+  const { isLoading, isError, error, data } = useQuery(["fruits"], getFruits);
   const isLoadingOrError = isLoading || isError;
   const fruit = data?.find(
     (f) => f.name.toLowerCase() === fruitName?.toLowerCase()
@@ -44,6 +44,11 @@ export default function FruitDetails(): ReactElement {
       : window.innerHeight * MOBILE_IMAGE_HEIGHT_PERCENTAGE) *
     window.devicePixelRatio;
 
+  function onClickBackLink(): void {
+    const previousURLIndex = -1;
+    navigate(previousURLIndex);
+  }
+
   return (
     <>
       <Head title={fruit.name} />
@@ -65,7 +70,7 @@ export default function FruitDetails(): ReactElement {
           <button
             type="button"
             data-testid="BackLink"
-            onClick={() => navigate(-1)}
+            onClick={onClickBackLink}
             className="flex items-center"
           >
             <img src="/icons/arrow-left.svg" alt="" className="h-5 w-5" />

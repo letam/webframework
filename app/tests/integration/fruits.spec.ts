@@ -20,7 +20,7 @@ function get(id: string) {
   return _page.locator(`data-testid=${id}`);
 }
 
-const PORT = "3000";
+const PORT = "5173";
 const BASE_URL = `http://localhost${PORT ? `:${PORT}` : ""}`;
 
 test("Sample test suite, featuring sample Fruit code", async ({ page }) => {

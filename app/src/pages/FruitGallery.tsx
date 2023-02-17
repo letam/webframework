@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { useQuery } from "react-query";
+import { useQuery } from "@tanstack/react-query";
 
 import getFruits from "api/getFruits";
 import Fruit from "components/Fruit";
@@ -7,7 +7,7 @@ import Head from "components/Head";
 import LoadingOrError from "components/LoadingOrError";
 
 export default function FruitGallery(): ReactElement {
-  const { isLoading, isError, error, data } = useQuery("fruits", getFruits);
+  const { isLoading, isError, error, data } = useQuery(["fruits"], getFruits);
   if (isLoading || isError) {
     return <LoadingOrError error={error as Error} />;
   }
