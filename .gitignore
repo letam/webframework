@@ -6,3 +6,5 @@ __pycache__/
 static/
 *.sqlite3
 log/
+
+.env
