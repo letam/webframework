@@ -7,4 +7,6 @@ static/
 *.sqlite3
 log/
 
+secret_key.txt
+
 .env
