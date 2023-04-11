@@ -10,6 +10,10 @@ extend-exclude = '''
 skip-string-normalization = true
 
 
+[tool.isort]
+profile = "black"
+
+
 [tool.pyright]
 # https://github.com/microsoft/pyright/blob/main/docs/configuration.md
 # reportOptionalMemberAccess = false
