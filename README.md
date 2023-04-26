@@ -20,50 +20,50 @@ Includes some functionality for a basic public micro-blogging app.
 3. Open terminal and change present directory to be the project directory
 
 4. Create and activate python virtual environment for the project
-    ```
-    python3 -m venv venv
-    source venv/bin/activate
-    ```
+	```
+	python3 -m venv venv
+	source venv/bin/activate
+	```
 
 5. Install project requirements
-    ```
-    pip install -U pip
-    pip install -r requirements.txt
-    ```
+	```
+	pip install -U pip
+	pip install -r requirements.txt
+	```
 
 6. Run project migrations
-    ```
-    python server/manage.py migrate
-    ```
+	```
+	python server/manage.py migrate
+	```
 
 7. Run other setup scripts
-    ```
-	 python server/manage.py init_users
-	 ```
+	```
+	python server/manage.py init_users
+	```
 
 8. Run the development server
-    ```
-    python server/manage.py runserver
-    ```
+	```
+	python server/manage.py runserver
+	```
 
 ### Frontend server
 
 1. In another terminal session, change into frontend app directory
-    ```
-	 cd app
-	 ```
+	```
+	cd app
+	```
 
 2. Install npm packages:
-    ```
-	 npm i
-	 ```
+	```
+	npm i
+	```
 
 3. Create `.env` file for frontend code
-    ```
-	 cp .env.development.local.sample .env
-	 ```
+	```
+	cp .env.development.local.sample .env
+	```
 
 4. Start frontend dev server
-    ```
-	 npm run dev
-	 ```
+	```
+	npm run dev
+	```
