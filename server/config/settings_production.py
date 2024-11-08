@@ -1,24 +1,24 @@
 from .settings import *
 
-with open("/var/www/test.zgry.dev/secret_key.txt") as f:
+with open("/var/www/wut.sh/secret_key.txt") as f:
     SECRET_KEY = f.read().strip()
 
 DEBUG = False
 
-STATIC_ROOT = "/var/www/test.zgry.dev/static"
+STATIC_ROOT = "/var/www/wut.sh/static"
 STATIC_URL = "/static/"
 
-MEDIA_ROOT = "/var/www/test.zgry.dev/uploads"
+MEDIA_ROOT = "/var/www/wut.sh/uploads"
 MEDIA_URL = "/uploads/"
 
 ALLOWED_HOSTS = [
-    "test.zgry.dev",
-    "dev.test.zgry.dev",
+    "wut.sh",
+    "dev.wut.sh",
 ]
 
 CORS_ALLOWED_ORIGINS.extend(
     [
-        "https://dev.test.zgry.dev",
+        "https://dev.wut.sh",
     ]
 )
 
@@ -32,7 +32,7 @@ CORS_ALLOWED_ORIGINS.extend(
 # import getpass
 
 # with open(
-#     f"/home/{os.environ.get('SUDO_USER') or getpass.getuser()}/.credentials/psql/test.zgry.dev"
+#     f"/home/{os.environ.get('SUDO_USER') or getpass.getuser()}/.credentials/psql/wut.sh"
 # ) as fd:
 #     credentials = {
 #         var: val.rstrip("\n")

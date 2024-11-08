@@ -5,8 +5,7 @@
 [[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." && exit 1
 
 manage() {
-	# cd /var/www/wut.sh
-	cd /var/www/test.zgry.dev
+	cd /var/www/wut.sh
 	venv/bin/python server/manage.py $@ --settings=config.settings_production
 	cd - >/dev/null
 }
