@@ -20,7 +20,7 @@ def csrf(request):
 
 @require_POST
 def login(request):
-    '''Reference: https://docs.djangoproject.com/en/4.0/topics/auth/default/#django.contrib.auth.login'''
+    '''Reference: https://docs.djangoproject.com/en/5.1/topics/auth/default/#django.contrib.auth.login'''
     data = json.loads(request.body) if request.body else {}
     form = AuthenticationForm(request, data=data)
 
@@ -38,7 +38,7 @@ def login(request):
 
 @require_http_methods(["GET", "POST", "DELETE"])
 def logout(request):
-    '''Reference: https://docs.djangoproject.com/en/4.0/topics/auth/default/#django.contrib.auth.logout'''
+    '''Reference: https://docs.djangoproject.com/en/5.1/topics/auth/default/#django.contrib.auth.logout'''
     auth_logout(request)
 
     return JsonResponse({})
