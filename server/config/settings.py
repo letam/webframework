@@ -139,58 +139,71 @@ STATIC_URL = '/static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+
 # Logging
 # https://docs.djangoproject.com/en/5.1/topics/logging/
-import os
-
-log_dir: Path = BASE_DIR / '..' / 'log'
-log_filepath: Path = log_dir / 'server-errors.log'
-log_symlinkpath: str = f'/var/log/app-errors/{BASE_DIR.parent.name}.log'
-if not log_dir.exists():
-    os.mkdir(log_dir)
-if not log_filepath.exists():
-    try:
-        os.mknod(log_filepath)
-    except PermissionError:
-        with open(log_filepath, 'w'):
-            pass
-
-
-def symlink_error_log_in_system_logs():
-    if not Path(log_symlinkpath).parent.exists():
-        import subprocess
-
-        subprocess.call('./sys/mkdir-error-log')
-        # subprocess.call(BASE_DIR / '..' / 'sys/mkdir-error-log')
-    if not Path(log_symlinkpath).is_symlink():
-        os.symlink(log_filepath, log_symlinkpath)
-
-
-if not DEBUG:
-    try:
-        symlink_error_log_in_system_logs()
-    except FileNotFoundError as e:
-        print(e)
 import copy
 from django.utils.log import DEFAULT_LOGGING
 
 LOGGING = copy.deepcopy(DEFAULT_LOGGING)
-LOGGING['handlers'].update(
-    {
-        'file_errors': {
-            'level': 'ERROR',
-            'filters': ['require_debug_false'],
-            'formatter': 'django.server',
-            'class': 'logging.FileHandler',
-            'filename': log_filepath,
-        },
-    }
-)
-LOGGING['loggers']['django']['handlers'].append('file_errors')
+
+
+def setup_save_errorlog_to_file(logging: dict):
+    import os
+
+    log_dir: Path = BASE_DIR / '..' / 'log'
+    errorlog_filepath: Path = log_dir / 'server-errors.log'
+
+    def create_log_dir_for_server_errors():
+        if not log_dir.exists():
+            os.mkdir(log_dir)
+        if not errorlog_filepath.exists():
+            try:
+                os.mknod(errorlog_filepath)
+            except PermissionError:
+                with open(errorlog_filepath, 'w'):
+                    pass
+
+    create_log_dir_for_server_errors()
+
+    def symlink_error_log_in_system_logs():
+        log_symlinkpath: str = f'/var/log/app-errors/{BASE_DIR.parent.name}.log'
+        if not Path(log_symlinkpath).parent.exists():
+            import subprocess
+
+            subprocess.call('./sys/mkdir-error-log')
+            # subprocess.call(BASE_DIR / '..' / 'sys/mkdir-error-log')
+        if not Path(log_symlinkpath).is_symlink():
+            os.symlink(errorlog_filepath, log_symlinkpath)
+
+    if not DEBUG:
+        try:
+            symlink_error_log_in_system_logs()
+        except FileNotFoundError as e:
+            print(e)
+
+    logging['handlers'].update(
+        {
+            'file_errors': {
+                'level': 'ERROR',
+                'filters': ['require_debug_false'],
+                'formatter': 'django.server',
+                'class': 'logging.FileHandler',
+                'filename': errorlog_filepath,
+            },
+        }
+    )
+    logging['loggers']['django']['handlers'].append('file_errors')
+    return logging
+
+
+LOGGING = setup_save_errorlog_to_file(LOGGING)
+
 
 # User Model
 # https://docs.djangoproject.com/en/5.1/topics/auth/customizing/
 AUTH_USER_MODEL = 'users.User'
+
 
 # REST Framework
 # https://www.django-rest-framework.org/#example
