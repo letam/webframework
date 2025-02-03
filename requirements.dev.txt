@@ -3,7 +3,7 @@
 ipython==8.10.0
 werkzeug==2.2.3
 
-django-stubs==1.14.0
+django-stubs==5.1.2
 
 black==23.3.0
 isort==5.12.0
