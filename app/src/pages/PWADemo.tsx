@@ -16,7 +16,9 @@ function PWADemo(): ReactElement {
   const [count, setCount] = useState(0)
 
   return (
-    <>
+    <div id="demo">
+    <div id="demo-body">
+    <div id="demo-root">
     <button type="button" onClick={goHome}>
         Go home
       </button>
@@ -41,7 +43,9 @@ function PWADemo(): ReactElement {
         Click on the Vite and React logos to learn more
       </p>
       <PWABadge />
-    </>
+    </div>
+    </div>
+    </div>
   )
 }
 
