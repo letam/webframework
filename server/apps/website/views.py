@@ -7,7 +7,7 @@ def index(request):
         if response := local_dev_response_from_file_in_app_public_dir(request):
             return response
 
-    template = 'website/index.html'
+    template = 'website/index.html' if settings.DEBUG else 'website/dist/index.html'
     return render(request, template)
 
 

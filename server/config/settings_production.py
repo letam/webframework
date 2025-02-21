@@ -18,22 +18,16 @@ with open(SECRET_KEY_FILE) as f:
     SECRET_KEY = f.read().strip()
 
 
-SERVER_PATH = Path.cwd() / "server"
-
-STATIC_ROOT = SERVER_PATH / "static"
-STATIC_URL = "/static/"
-
-MEDIA_ROOT = SERVER_PATH / "uploads"
-MEDIA_URL = "/uploads/"
-
-
 ALLOWED_HOSTS = [
+    "127.0.0.1",
+    "localhost",
     "wut.sh",
     "dev.wut.sh",
 ]
 
 CORS_ALLOWED_ORIGINS.extend(
     [
+        "http://127.0.0.1:8000",
         "https://dev.wut.sh",
     ]
 )

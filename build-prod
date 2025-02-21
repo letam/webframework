@@ -2,6 +2,9 @@
 
 # Build project for production
 
+
+## Build Backend
+
 manage() {
 	venv/bin/python server/manage.py $@ --settings=config.settings_production
 }
@@ -9,19 +12,41 @@ manage() {
 manage migrate
 manage collectstatic --noinput
 
-if command -v getenforce >/dev/null && [[ $(getenforce) = Enforcing ]]; then
-	version=3.12
-	# Restore SELinux context of files (default file label should be httpd_sys_content_t)
-	echo "Relabel venv/lib/python3/site-packages and all its contents from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-	/sbin/restorecon -R venv/lib/python3/site-packages
-	echo "Relabel server/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-	/sbin/restorecon -R server
-	echo "Relabel static/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-	/sbin/restorecon -R static
-	echo "Relabel uploads/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
-	/sbin/restorecon -R uploads
-	/sbin/restorecon -v server/config/secret_key.txt
-	/sbin/restorecon -v venv/pyvenv.cfg
-	/sbin/restorecon -v venv/bin/gunicorn
-	/sbin/restorecon -v nginx.conf
-fi
+
+## Build Frontend
+
+STATIC_APP_DIR="server/static/app"
+
+### Build frontend files and move to static app dir
+cd app
+npm run build
+cd - >/dev/null
+
+rm -rf "$STATIC_APP_DIR"
+mv app/dist "$STATIC_APP_DIR"
+
+
+### Setup server's website dist index.html template
+WEBSITE_TEMPLATE_DIST_DIR="server/apps/website/templates/website/dist"
+mkdir -p "$WEBSITE_TEMPLATE_DIST_DIR"
+cp -p "$STATIC_APP_DIR/index.html" "$WEBSITE_TEMPLATE_DIST_DIR/index.html"
+
+### Update path to static files referenced in dist/index.html
+
+get_sed_command() {
+	# Determine which sed to use (use gsed on macOS)
+    if [[ "$(uname)" == "Darwin" ]]; then
+        if command -v gsed &>/dev/null; then
+            echo "gsed"
+        else
+            echo "Error: gsed is required on macOS. Please install it with: brew install gnu-sed" >&2
+            exit 1
+        fi
+    else
+        echo "sed"
+    fi
+}
+SED_CMD=$(get_sed_command)
+
+$SED_CMD -i 's|src="/|src="/static/app/|g' "$WEBSITE_TEMPLATE_DIST_DIR/index.html"
+$SED_CMD -i 's|href="/|href="/static/app/|g' "$WEBSITE_TEMPLATE_DIST_DIR/index.html"

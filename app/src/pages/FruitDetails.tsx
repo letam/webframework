@@ -10,6 +10,7 @@ import LoadingOrError from "../components/LoadingOrError";
 import PageNotFound from "./PageNotFound";
 
 import type { IFruit } from "../types";
+import { STATIC_APP_ROOT } from "../utils/misc";
 
 const DESKTOP_IMAGE_WIDTH_PERCENTAGE = 0.4;
 const MOBILE_IMAGE_HEIGHT_PERCENTAGE = 0.3;
@@ -78,7 +79,7 @@ export default function FruitDetails(): ReactElement {
             onClick={onClickBackLink}
             className="flex items-center"
           >
-            <img src="/icons/arrow-left.svg" alt="" className="h-5 w-5" />
+            <img src={`${STATIC_APP_ROOT}icons/arrow-left.svg`} alt="" className="h-5 w-5" />
             <span className="ml-4 text-xl">Back</span>
           </button>
 

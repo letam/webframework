@@ -39,11 +39,14 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
+    'whitenoise.runserver_nostatic',
     'django.contrib.staticfiles',
+
     # third-party apps
     'rest_framework',
     'corsheaders',
     'django_extensions',
+
     # project apps
     'apps.users.apps.UsersConfig',
     'apps.website',
@@ -52,6 +55,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -235,3 +239,21 @@ if DEBUG:
 # https://stackoverflow.com/questions/1271631/how-to-check-the-template-debug-flag-in-a-django-template
 if DEBUG:
     INTERNAL_IPS = ['127.0.0.1']
+
+
+# https://whitenoise.readthedocs.io/en/stable/django.html
+STORAGES = {
+    # ...
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+
+SERVER_PATH = Path.cwd() / "server"
+
+STATIC_ROOT = SERVER_PATH / "static"
+STATIC_URL = "/static/"
+
+MEDIA_ROOT = SERVER_PATH / "uploads"
+MEDIA_URL = "/uploads/"

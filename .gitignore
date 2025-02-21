@@ -6,6 +6,7 @@ __pycache__/
 static/
 *.sqlite3
 log/
+server/**/website/dist/
 
 secret_key.txt
 

@@ -1,8 +1,5 @@
 <!DOCTYPE html>
-<html
-  lang="en"
-  class="antialiased text-gray-900 dark:text-white dark:bg-gray-800"
->
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
@@ -11,14 +8,14 @@
     <meta name="description" content="wut up" />
     <meta name="theme-color" content="#42b883" />
     <title>wut up</title>
-    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
+    <!-- <link rel="stylesheet" href="https://rsms.me/inter/inter.css" /> -->
   </head>
-  <body>
+  <body class="antialiased text-gray-900 dark:text-white dark:bg-gray-800">
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
 
 {% if debug %}
-  <!-- if development -->
+  <!-- development -->
   <script type="module">
     import RefreshRuntime from 'http://localhost:5173/@react-refresh'
     RefreshRuntime.injectIntoGlobalHook(window)
