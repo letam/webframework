@@ -13,7 +13,10 @@ function getIdFromRecord(record: IPost): string {
 }
 
 export default function PostList(): ReactElement {
-  const { isLoading, isError, error, data } = useQuery(["posts"], getPosts);
+  const { isLoading, isError, error, data } = useQuery({
+    queryKey: ["posts"],
+    queryFn: getPosts,
+  });
   if (isLoading || isError) {
     return <LoadingOrError error={error as Error} />;
   }

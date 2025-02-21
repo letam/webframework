@@ -18,7 +18,10 @@ export default function FruitDetails(): ReactElement {
   const isTabletAndUp = useMediaQuery("(min-width: 600px)");
   const navigate = useNavigate();
   const { fruitName } = useParams<{ fruitName: string }>();
-  const { isLoading, isError, error, data } = useQuery(["fruits"], getFruits);
+  const { isLoading, isError, error, data } = useQuery({
+    queryKey: ["fruits"],
+    queryFn: getFruits,
+  });
   const isLoadingOrError = isLoading || isError;
   const fruit = data?.find(
     (f) => f.name.toLowerCase() === fruitName?.toLowerCase()
