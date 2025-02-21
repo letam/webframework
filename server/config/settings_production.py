@@ -1,7 +1,19 @@
 from .settings import *
 
-with open("/var/www/wut.sh/secret_key.txt") as f:
+
+SECRET_KEY_FILE = "server/config/secret_key.txt"
+
+def generate_server_secret_key():
+    from pathlib import Path
+    if not Path(SECRET_KEY_FILE).is_file():
+        print("Generate secret key for production...")
+        from django.core.management.utils import get_random_secret_key
+        Path(SECRET_KEY_FILE).write_text(get_random_secret_key(), encoding="utf-8")
+generate_server_secret_key()
+
+with open(SECRET_KEY_FILE) as f:
     SECRET_KEY = f.read().strip()
+
 
 DEBUG = False
 

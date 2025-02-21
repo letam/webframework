@@ -24,7 +24,7 @@ if command -v getenforce >/dev/null && [[ $(getenforce) = Enforcing ]]; then
 	/sbin/restorecon -R static
 	echo "Relabel uploads/* from unconfined_u:object_r:var_t:s0 to unconfined_u:object_r:httpd_sys_content_t:s0"
 	/sbin/restorecon -R uploads
-	/sbin/restorecon -v secret_key.txt
+	/sbin/restorecon -v server/config/secret_key.txt
 	/sbin/restorecon -v venv/pyvenv.cfg
 	/sbin/restorecon -v venv/bin/gunicorn
 	/sbin/restorecon -v nginx.conf
