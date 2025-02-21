@@ -1,10 +1,13 @@
 from .settings import *
+from pathlib import Path
+
+
+DEBUG = False
 
 
 SECRET_KEY_FILE = "server/config/secret_key.txt"
 
 def generate_server_secret_key():
-    from pathlib import Path
     if not Path(SECRET_KEY_FILE).is_file():
         print("Generate secret key for production...")
         from django.core.management.utils import get_random_secret_key
@@ -15,13 +18,14 @@ with open(SECRET_KEY_FILE) as f:
     SECRET_KEY = f.read().strip()
 
 
-DEBUG = False
+SERVER_PATH = Path.cwd() / "server"
 
-STATIC_ROOT = "/var/www/wut.sh/static"
+STATIC_ROOT = SERVER_PATH / "static"
 STATIC_URL = "/static/"
 
-MEDIA_ROOT = "/var/www/wut.sh/uploads"
+MEDIA_ROOT = SERVER_PATH / "uploads"
 MEDIA_URL = "/uploads/"
+
 
 ALLOWED_HOSTS = [
     "wut.sh",
