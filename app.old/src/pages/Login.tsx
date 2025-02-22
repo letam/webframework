@@ -41,7 +41,7 @@ export default function Login(): ReactElement {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <Head title="Login | wut.sh" />
+      <Head title="Login | webframework.app" />
       <Header />
       <div className="flex-grow bg-gray-50 flex flex-col justify-center sm:py-12 sm:px-6 lg:px-8 dark:bg-gray-800">
         <div className="sm:mx-auto sm:w-full sm:max-w-md">

@@ -58,8 +58,8 @@ else:
     ALLOWED_HOSTS = [
         '127.0.0.1',
         'localhost',
-        'wut.sh',
-        'dev.wut.sh',
+        'webframework.app',
+        'dev.webframework.app',
     ]
 
 # Application definition
@@ -269,7 +269,7 @@ else:
     CORS_ALLOWED_ORIGINS.extend(
         [
             'http://127.0.0.1:8000',
-            'https://dev.wut.sh',
+            'https://dev.webframework.app',
         ]
     )
 

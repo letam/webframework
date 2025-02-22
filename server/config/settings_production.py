@@ -24,14 +24,14 @@ with open(SECRET_KEY_FILE) as f:
 ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
-    "wut.sh",
-    "dev.wut.sh",
+    "webframework.app",
+    "dev.webframework.app",
 ]
 
 CORS_ALLOWED_ORIGINS.extend(
     [
         "http://127.0.0.1:8000",
-        "https://dev.wut.sh",
+        "https://dev.webframework.app",
     ]
 )
 
@@ -45,7 +45,7 @@ CORS_ALLOWED_ORIGINS.extend(
 # import getpass
 
 # with open(
-#     f"/home/{os.environ.get('SUDO_USER') or getpass.getuser()}/.credentials/psql/wut.sh"
+#     f"/home/{os.environ.get('SUDO_USER') or getpass.getuser()}/.credentials/psql/webframework.app"
 # ) as fd:
 #     credentials = {
 #         var: val.rstrip("\n")

@@ -15,7 +15,7 @@ Includes some functionality for a basic public micro-blogging app.
 
 1. Install latest Python binary
 
-2. Download and unzip project from [https://github.com/letam/wut.sh/master.zip](https://github.com/letam/wut.sh/archive/refs/heads/main.zip)
+2. Download and unzip project from [https://github.com/letam/web-framework-2025/archive/refs/heads/main.zip](https://github.com/letam/web-framework-2025/archive/refs/heads/main.zip)
 
 3. Open terminal and change present directory to be the project directory
 

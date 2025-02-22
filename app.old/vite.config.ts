@@ -51,8 +51,8 @@ export default defineConfig(({ mode }) => ({
               "fonts/*.woff2",
             ],
             manifest: {
-              name: "wut.sh",
-              short_name: "wut.sh",
+              name: "webframework.app",
+              short_name: "webframework.app",
               theme_color: "#BD34FE",
               icons: [
                 {
