@@ -28,9 +28,12 @@ env = environ.Env(
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+IS_RUNNING_FROM_PROJECT_ROOT = \
+    Path(BASE_DIR / 'server').exists()
+
 ENV_FILE = 'server/.env'
 
-if not Path(ENV_FILE).is_file():
+if IS_RUNNING_FROM_PROJECT_ROOT and not Path(ENV_FILE).is_file():
     print('Required .env file not found.')
     from django.core.management.utils import get_random_secret_key
     with open(ENV_FILE, 'a') as f:

@@ -2,3 +2,12 @@ fly.toml
 .git/
 *.sqlite3
 venv
+
+.env
+server/.env
+app/.env
+
+node_modules
+npm-debug.log
+
+.DS_Store
