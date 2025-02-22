@@ -1,5 +1,5 @@
-# Web Framework 2021
-Boring web framework to get stuff done. A framework on top of a framework.
+# Web Framework 2025
+Boring web framework to get stuff done. A framework on top of frameworks.
 
 Includes some functionality for a basic public micro-blogging app.
 
@@ -7,7 +7,7 @@ Includes some functionality for a basic public micro-blogging app.
 - [Python programming language](https://www.python.org/)
 - [Django web framework](https://www.djangoproject.com/)
 - [React UI library](https://react.dev/)
-- [Vite web dev frontend build tool](https://vitejs.dev/)
+- [Vite web dev frontend build tool](https://vite.dev/)
 
 ## Setup for Local Development
 
@@ -66,4 +66,13 @@ Includes some functionality for a basic public micro-blogging app.
 4. Start frontend dev server
 	```
 	npm run dev
+	```
+
+## Setup for Production
+
+1. Follow above steps to install Python and project dependencies for both backend and frontend servers
+
+2. Build app for production
+	```
+	./build-prod
 	```
