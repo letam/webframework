@@ -4,6 +4,20 @@
 
 
 ## Check if server/.env is setup correctly for production build
+
+if [ ! -f "server/.env" ]; then
+    echo "ERROR: No .env file found in server/"
+
+    ### Ask if user wants to create a new .env file
+    read -p "Do you want to create a new .env file? (y/n): " create_new_env
+    if [ "$create_new_env" == "y" ]; then
+        cp server/.env.production.sample server/.env
+    else
+        echo "Please ensure that .env is setup correctly for production build."
+        exit 1
+    fi
+fi
+
 if grep -q "DEBUG=True" server/.env; then
     echo "ERROR: DEBUG is set to True in server/.env"
     echo "Please ensure that .env is setup correctly for production build."
