@@ -13,23 +13,54 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+import environ
+import os
 from pathlib import Path
+
+
+# Environment variables
+# Reference: https://github.com/joke2k/django-environ
+env = environ.Env(
+    # set casting, default value
+    DEBUG=(bool, False)
+)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+ENV_FILE = 'server/.env'
 
-# Quick-start development settings - unsuitable for production
+if not Path(ENV_FILE).is_file():
+    print('Required .env file not found.')
+    from django.core.management.utils import get_random_secret_key
+    with open(ENV_FILE, 'a') as f:
+        f.write('DEBUG=True\n')
+        f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
+        f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
+    print('Created .env file at server/.env with default values for development.')
+    print('WARNING: Please edit the .env file for production environment.')
+    print()
+
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+
+# Quick-start settings
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-1@%k#v4j5q=m9l7z&230(0d0(nm$-v(kk+zv5y@afw%xeebx0!'
+SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = []
-
+if DEBUG:
+    ALLOWED_HOSTS = []
+else:
+    ALLOWED_HOSTS = [
+        '127.0.0.1',
+        'localhost',
+        'wut.sh',
+        'dev.wut.sh',
+    ]
 
 # Application definition
 
@@ -90,7 +121,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
+    'default': env.db() or {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
@@ -170,21 +201,22 @@ def setup_save_errorlog_to_file(logging: dict):
 
     create_log_dir_for_server_errors()
 
-    def symlink_error_log_in_system_logs():
-        log_symlinkpath: str = f'/var/log/app-errors/{BASE_DIR.parent.name}.log'
-        if not Path(log_symlinkpath).parent.exists():
-            import subprocess
+    # if not DEBUG:
+    #     # In case of a single server managing multiple apps, symlink the project's server error log to the common /var/log/app-errors directory
+    #     def symlink_error_log_in_system_logs():
+    #         log_symlinkpath: str = f'/var/log/app-errors/{BASE_DIR.parent.name}.log'
+    #         if not Path(log_symlinkpath).parent.exists():
+    #             import subprocess
 
-            subprocess.call('./sys/mkdir-error-log')
-            # subprocess.call(BASE_DIR / '..' / 'sys/mkdir-error-log')
-        if not Path(log_symlinkpath).is_symlink():
-            os.symlink(errorlog_filepath, log_symlinkpath)
+    #             subprocess.call('./sys/mkdir-error-log')
+    #             # subprocess.call(BASE_DIR / '..' / 'sys/mkdir-error-log')
+    #         if not Path(log_symlinkpath).is_symlink():
+    #             os.symlink(errorlog_filepath, log_symlinkpath)
 
-    if not DEBUG:
-        try:
-            symlink_error_log_in_system_logs()
-        except FileNotFoundError as e:
-            print(e)
+    #     try:
+    #         symlink_error_log_in_system_logs()
+    #     except FileNotFoundError as e:
+    #         print(e)
 
     logging['handlers'].update(
         {
@@ -222,18 +254,24 @@ REST_FRAMEWORK = {
 # Handle server headers required for Cross-Origin Resource Sharing (CORS)
 # https://pypi.org/project/django-cors-headers/
 CORS_ALLOWED_ORIGINS = [
-    # "http://localhost:8080",
-    # "http://127.0.0.1:9000"
+    # 'http://localhost:8080',
+    # 'http://127.0.0.1:9000'
 ]
 if DEBUG:
     CORS_ALLOWED_ORIGINS.extend(
         [
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
+            'http://localhost:3000',
+            'http://localhost:5173',
+            'http://127.0.0.1:5173',
         ]
     )
-
+else:
+    CORS_ALLOWED_ORIGINS.extend(
+        [
+            'http://127.0.0.1:8000',
+            'https://dev.wut.sh',
+        ]
+    )
 
 # Set debug value in templates
 # https://stackoverflow.com/questions/1271631/how-to-check-the-template-debug-flag-in-a-django-template
@@ -244,16 +282,16 @@ if DEBUG:
 # https://whitenoise.readthedocs.io/en/stable/django.html
 STORAGES = {
     # ...
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
 }
 
 
-SERVER_PATH = Path.cwd() / "server"
+SERVER_PATH = Path.cwd() / 'server'
 
-STATIC_ROOT = SERVER_PATH / "static"
-STATIC_URL = "/static/"
+STATIC_ROOT = SERVER_PATH / 'static'
+STATIC_URL = '/static/'
 
-MEDIA_ROOT = SERVER_PATH / "uploads"
-MEDIA_URL = "/uploads/"
+MEDIA_ROOT = SERVER_PATH / 'uploads'
+MEDIA_URL = '/uploads/'
