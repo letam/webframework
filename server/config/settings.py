@@ -48,6 +48,7 @@ environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 # Quick-start settings
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
+# Also https://fly.io/django-beats/deploying-django-to-production/
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env('SECRET_KEY')
@@ -61,6 +62,7 @@ else:
     ALLOWED_HOSTS = [
         '127.0.0.1',
         'localhost',
+        'web-framework-2025.fly.dev',
         'webframework.app',
         'dev.webframework.app',
     ]
@@ -275,6 +277,12 @@ else:
             'https://dev.webframework.app',
         ]
     )
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://web-framework-2025.fly.dev',
+    'https://webframework.app',
+    'https://dev.webframework.app',
+]
 
 # Set debug value in templates
 # https://stackoverflow.com/questions/1271631/how-to-check-the-template-debug-flag-in-a-django-template
