@@ -63,6 +63,7 @@ else:
         '127.0.0.1',
         'localhost',
         'web-framework-2025.fly.dev',
+        'web-framework-2025-restless-thunder-7727.fly.dev',
         'webframework.app',
         'dev.webframework.app',
     ]
@@ -280,6 +281,7 @@ else:
 
 CSRF_TRUSTED_ORIGINS = [
     'https://web-framework-2025.fly.dev',
+    'https://web-framework-2025-restless-thunder-7727.fly.dev',
     'https://webframework.app',
     'https://dev.webframework.app',
 ]
