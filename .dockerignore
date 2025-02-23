@@ -3,11 +3,13 @@ fly.toml
 *.sqlite3
 venv
 
-.env
 server/.env
+server/static
+
 app/.env
+app/node_modules
 
-node_modules
-npm-debug.log
-
-.DS_Store
+**/__pycache__
+**/*.sqlite3
+**/secret_key.txt
+**/.DS_Store
