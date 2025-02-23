@@ -28,21 +28,24 @@ env = environ.Env(
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-IS_RUNNING_FROM_PROJECT_ROOT = \
-    Path(BASE_DIR / 'server').exists()
+# NOTE: In production container (Docker) image, the application file structure
+#   is simplified and flattened, and the directory BASE_DIR is 'code' instead of
+#   'server'.
+IS_USING_SERVER_DIR = \
+    BASE_DIR.name == 'server'
 
-ENV_FILE = 'server/.env'
-
-if IS_RUNNING_FROM_PROJECT_ROOT and not Path(ENV_FILE).is_file():
-    print('Required .env file not found.')
-    from django.core.management.utils import get_random_secret_key
-    with open(ENV_FILE, 'a') as f:
-        f.write('DEBUG=True\n')
-        f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
-        f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
-    print('Created .env file at server/.env with default values for development.')
-    print('WARNING: Please edit the .env file for production environment.')
-    print()
+if IS_USING_SERVER_DIR:
+    ENV_FILE = 'server/.env'
+    if not Path(ENV_FILE).is_file():
+        print('Required .env file not found.')
+        from django.core.management.utils import get_random_secret_key
+        with open(ENV_FILE, 'a') as f:
+            f.write('DEBUG=True\n')
+            f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
+            f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
+        print('Created .env file at server/.env with default values for development.')
+        print('WARNING: Please edit the .env file for production environment.')
+        print()
 
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
@@ -301,7 +304,9 @@ STORAGES = {
 }
 
 
-SERVER_PATH = Path.cwd() / 'server'
+SERVER_PATH = Path.cwd()
+if IS_USING_SERVER_DIR:
+    SERVER_PATH = SERVER_PATH / 'server'
 
 STATIC_ROOT = SERVER_PATH / 'static'
 STATIC_URL = '/static/'
