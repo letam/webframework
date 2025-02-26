@@ -16,13 +16,14 @@ jobs:
       - run: flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-  migrate:
-    name: Run migrations
-    runs-on: ubuntu-latest
-    needs: deploy
-    steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl ssh console -C 'python manage.py migrate'
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+  # If using storage volume, i.e. to persist SQLite database, then uncomment to activate the following job:
+  # migrate:
+  #   name: Run migrations if using storage volume
+  #   runs-on: ubuntu-latest
+  #   needs: deploy
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: superfly/flyctl-actions/setup-flyctl@master
+  #     - run: flyctl ssh console -C 'python manage.py migrate'
+  #       env:
+  #         FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
