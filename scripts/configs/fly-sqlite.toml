@@ -10,7 +10,7 @@ console_command = '/code/manage.py shell'
 [build]
 
 [deploy]
-# Run the database migration manually after deploy if using volume storage, since release_command does not have access to fly.io storage volumes
+# NOTE: Run database migrations manually after deploy if using volume storage, since release_command does not have access to fly.io storage volumes
 # Reference: https://community.fly.io/t/using-sqlite-from-persistent-volume-for-django-application/16206/3
 #  release_command = 'python manage.py migrate --noinput'
 

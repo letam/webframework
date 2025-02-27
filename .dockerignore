@@ -2,6 +2,7 @@ fly.toml
 .git/
 *.sqlite3
 venv
+.tmp/
 
 server/.env
 server/static

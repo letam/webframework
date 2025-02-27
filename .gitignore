@@ -1,4 +1,5 @@
 *.swp
+.tmp/
 
 venv/
 __pycache__/
