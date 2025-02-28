@@ -31,7 +31,7 @@ fi
 # Update fly.toml to disable release_command and migrate in a separate step
 # NOTE: Run database migrations manually after deploy if using volume storage, since release_command does not have access to fly.io storage volumes
 # Reference: https://community.fly.io/t/using-sqlite-from-persistent-volume-for-django-application/16206/3
-$SED_CMD -i "s|  release_command = 'python manage.py migrate --noinput'|#  release_command = 'python manage.py migrate --noinput'|g" fly.toml
+$SED_CMD -i "s|^  release_command = 'python manage.py migrate --noinput'|#  release_command = 'python manage.py migrate --noinput'|g" fly.toml
 
 
 # Launch app
