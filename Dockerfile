@@ -72,6 +72,17 @@ RUN npm run build
 # Production Stage: Integrate and Serve
 FROM python:${PYTHON_IMAGE_VERSION} as production
 
+# # Install utilities for investigation
+# RUN apt-get update && apt-get install -y \
+#     openssh-client \
+#     iputils-ping \
+#     inetutils-traceroute \
+#     mtr-tiny \
+#     netcat-openbsd \
+#     postgresql-client \
+#     iperf3 \
+#     && rm -rf /var/lib/apt/lists/*
+
 # Copy the Python dependencies from the builder stage
 COPY --from=build-backend /usr/local/lib/python3.13/site-packages/ /usr/local/lib/python3.13/site-packages/
 COPY --from=build-backend /usr/local/bin/ /usr/local/bin/
