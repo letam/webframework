@@ -1,9 +1,11 @@
 import type { ReactElement } from "react";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import createPost from "../api/createPost";
 
 export default function PostForm(): ReactElement {
+  const queryClient = useQueryClient();
   const [form, setForm] = useState({
     head: "",
     body: "",
@@ -15,7 +17,8 @@ export default function PostForm(): ReactElement {
     }
     createPost(form)
       .then(() => {
-        window.location.reload();
+        setForm({ head: "", body: "" }); // Reset form
+        queryClient.invalidateQueries({ queryKey: ["posts"] }); // Trigger posts refetch
       })
       .catch((error) => {
         console.error(error); // eslint-disable-line no-console
