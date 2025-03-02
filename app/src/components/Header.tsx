@@ -3,6 +3,7 @@ import { Link } from "react-router";
 
 import Logout from "../components/Logout";
 import { useAuthContext } from "../contexts/auth";
+import { ThemeToggle } from "../components/ThemeToggle";
 
 export default function Header(): ReactElement {
   const auth = useAuthContext();
@@ -13,24 +14,29 @@ export default function Header(): ReactElement {
         <Link className="m-4" to="/">
           <h1>Wut?</h1>
         </Link>
-        {!auth.isInitialized ? undefined : auth.isAuthenticated ? (
-          <div className="m-4">
-            <div
-              style={{
-                display: "inline-block",
-                marginRight: "1em",
-              }}
-            >
-              Hello{" "}
-              <span style={{ fontWeight: "bold" }}>{auth.user.username}</span>!
+        <div className="flex flex-row items-center justify-between">
+          {!auth.isInitialized ? undefined : auth.isAuthenticated ? (
+            <div className="m-4">
+              <div
+                style={{
+                  display: "inline-block",
+                  marginRight: "1em",
+                }}
+              >
+                Hello{" "}
+                <span style={{ fontWeight: "bold" }}>{auth.user.username}</span>!
+              </div>
+              <Logout />
             </div>
-            <Logout />
+          ) : (
+            <Link className="m-4" to="/login">
+              Login
+            </Link>
+          )}
+          <div className="m-4">
+            <ThemeToggle />
           </div>
-        ) : (
-          <Link className="m-4" to="/login">
-            Login
-          </Link>
-        )}
+        </div>
       </div>
       <hr />
     </>

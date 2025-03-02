@@ -1,2 +1,25 @@
 @import "tailwindcss";
 
+:root {
+  --background: #ffffff;
+  --text: #000000;
+}
+
+.dark {
+  --background: #1a1a1a;
+  --text: #ffffff;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Add dark mode transitions */
+* {
+  transition-property: background-color, border-color, color, fill, stroke;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+

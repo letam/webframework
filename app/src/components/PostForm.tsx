@@ -36,7 +36,8 @@ export default function PostForm(): ReactElement {
           <label htmlFor="head">Wut up</label>
           <br />
           <textarea
-            className="dark:bg-gray-900"
+            className="w-full p-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+
             id="head"
             value={form.head}
             onChange={(event) =>
