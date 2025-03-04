@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ThemeToggle } from '../ThemeToggle';
-import { ThemeProvider, useTheme } from '../../contexts/ThemeContext';
+import { ThemeProvider } from '../../contexts/ThemeContext';
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
