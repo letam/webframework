@@ -10,8 +10,12 @@ export default function Header(): ReactElement {
 
   return (
     <>
-      <div className=" flex flex-row items-center justify-between">
-        <Link className="m-4" to="/">
+      <div className="flex flex-row items-center justify-between">
+        <Link
+          className="m-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:rounded-md p-2"
+          to="/"
+          tabIndex={0}
+        >
           <h1>Wut?</h1>
         </Link>
         <div className="flex flex-row items-center justify-between">
@@ -29,7 +33,11 @@ export default function Header(): ReactElement {
               <Logout />
             </div>
           ) : (
-            <Link className="m-4" to="/login">
+            <Link
+              className="m-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:rounded-md p-2"
+              to="/login"
+              tabIndex={0}
+            >
               Login
             </Link>
           )}

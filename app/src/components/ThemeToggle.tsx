@@ -4,11 +4,25 @@ import { useTheme } from '../contexts/ThemeContext';
 export const ThemeToggle: React.FC = () => {
   const { isDarkMode, toggleDarkMode } = useTheme();
 
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      toggleDarkMode();
+    }
+  };
+
+  const handleClick = (event: React.MouseEvent) => {
+    event.preventDefault();
+    toggleDarkMode();
+  };
+
   return (
     <button
-      onClick={toggleDarkMode}
-      className="top-4 right-4 p-2 rounded-full bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors"
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      className="top-4 right-4 p-2 rounded-full bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
       aria-label={`Switch to ${isDarkMode ? 'light' : 'dark'} mode`}
+      tabIndex={0}
     >
       {isDarkMode ? (
         <svg className="w-6 h-6 text-gray-800 dark:text-yellow-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
