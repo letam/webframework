@@ -33,48 +33,57 @@ export default function PostForm(): ReactElement {
 
   return (
     <div style={{ margin: "16px" }}>
-      <form onSubmit={handleSubmit}>
-        <p>
-          {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label htmlFor="head">Wut up</label>
-          <br />
-          <textarea
-            className="w-full p-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
-
-            id="head"
-            value={form.head}
-            onChange={(event) =>
-              setForm((state) => ({ ...state, head: event.target.value }))
-            }
-            onKeyDown={(event) => {
-              if (event.code === "Enter" && (event.ctrlKey || event.metaKey)) {
-                event.preventDefault();
-                submitForm();
+      <form onSubmit={handleSubmit} role="form" aria-label="Create new post">
+        <div className="space-y-4">
+          <div>
+            <label htmlFor="head" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              What's on your mind?
+            </label>
+            <textarea
+              className="w-full p-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              id="head"
+              name="head"
+              value={form.head}
+              onChange={(event) =>
+                setForm((state) => ({ ...state, head: event.target.value }))
               }
-            }}
-          />
-        </p>
-        <p style={{ display: "none" }}>
-          {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
-          <label htmlFor="body">More details</label>
-          <br />
-          <textarea
-            className="dark:bg-gray-900"
-            id="body"
-            value={form.body}
-            onChange={(event) =>
-              setForm((state) => ({ ...state, body: event.target.value }))
-            }
-          />
-        </p>
-        <p>
-          <button
-            type="submit"
-            className="px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:bg-indigo-800 md:px-5 md:text-lg "
-          >
-            Send
-          </button>
-        </p>
+              onKeyDown={(event) => {
+                if (event.code === "Enter" && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault();
+                  submitForm();
+                }
+              }}
+              placeholder="Share your thoughts..."
+              aria-label="Post content"
+              tabIndex={0}
+            />
+          </div>
+          <div style={{ display: "none" }}>
+            <label htmlFor="body" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              More details
+            </label>
+            <textarea
+              className="dark:bg-gray-900"
+              id="body"
+              name="body"
+              value={form.body}
+              onChange={(event) =>
+                setForm((state) => ({ ...state, body: event.target.value }))
+              }
+              aria-label="Additional post details"
+              tabIndex={-1}
+            />
+          </div>
+          <div>
+            <button
+              type="submit"
+              className="px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:bg-indigo-800 md:px-5 md:text-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              tabIndex={0}
+            >
+              Send
+            </button>
+          </div>
+        </div>
       </form>
     </div>
   );
