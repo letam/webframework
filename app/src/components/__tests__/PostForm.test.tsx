@@ -147,4 +147,58 @@ describe("PostForm", () => {
     expect(consoleErrorSpy).toHaveBeenCalledWith(new Error("API Error"));
     consoleErrorSpy.mockRestore();
   });
+
+  it("renders form elements with correct accessibility attributes", () => {
+    renderPostForm();
+
+    // Check if textarea is present and has correct tabIndex
+    const textarea = screen.getByRole('textbox', { name: /post content/i });
+    expect(textarea).toBeInTheDocument();
+    expect(textarea).toHaveAttribute('tabindex', '1');
+
+    // Check if submit button is present and has correct tabIndex
+    const submitButton = screen.getByRole('button', { name: /send/i });
+    expect(submitButton).toBeInTheDocument();
+    expect(submitButton).toHaveAttribute('tabindex', '2');
+  });
+
+  it("maintains correct tab order", async () => {
+    renderPostForm();
+
+    // Get all focusable elements
+    const textarea = screen.getByRole('textbox', { name: /post content/i });
+    const submitButton = screen.getByRole('button', { name: /send/i });
+
+    // Focus the textarea
+    textarea.focus();
+    expect(document.activeElement).toBe(textarea);
+
+    // Press Tab to move to submit button
+    await userEvent.tab();
+    expect(document.activeElement).toBe(submitButton);
+  });
+
+  it("applies focus styles when elements are focused", () => {
+    renderPostForm();
+
+    const textarea = screen.getByRole('textbox', { name: /post content/i });
+    const submitButton = screen.getByRole('button', { name: /send/i });
+
+    // Check if focus styles are applied
+    expect(textarea).toHaveClass('focus:ring-2', 'focus:ring-blue-500');
+    expect(submitButton).toHaveClass('focus:ring-2', 'focus:ring-offset-2', 'focus:ring-indigo-500');
+  });
+
+  it("focuses textarea first when pressing Tab on the page", async () => {
+    renderPostForm();
+
+    // Get the textarea
+    const textarea = screen.getByRole('textbox', { name: /post content/i });
+
+    // Press Tab on the page
+    await userEvent.tab();
+
+    // Verify textarea is focused first
+    expect(document.activeElement).toBe(textarea);
+  });
 });

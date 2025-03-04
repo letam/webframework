@@ -55,7 +55,7 @@ export default function PostForm(): ReactElement {
               }}
               placeholder="Share your thoughts..."
               aria-label="Post content"
-              tabIndex={0}
+              tabIndex={1}
             />
           </div>
           <div style={{ display: "none" }}>
@@ -78,7 +78,7 @@ export default function PostForm(): ReactElement {
             <button
               type="submit"
               className="px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:bg-indigo-800 md:px-5 md:text-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              tabIndex={0}
+              tabIndex={2}
             >
               Send
             </button>
