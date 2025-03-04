@@ -201,4 +201,49 @@ describe("PostForm", () => {
     // Verify textarea is focused first
     expect(document.activeElement).toBe(textarea);
   });
+
+  it("refocuses textarea after successful form submission", async () => {
+    const mockCreatePost = vi.mocked(createPost);
+    mockCreatePost.mockResolvedValueOnce(mockPost);
+
+    renderPostForm();
+
+    const textarea = screen.getByRole('textbox', { name: /post content/i });
+    const submitButton = screen.getByRole('button', { name: /send/i });
+
+    // Type some text and submit
+    await userEvent.type(textarea, "Test post content");
+    await userEvent.click(submitButton);
+
+    // Verify textarea is refocused after submission
+    expect(document.activeElement).toBe(textarea);
+  });
+
+  it("submits form and refocuses textarea on Cmd/Ctrl+Enter", async () => {
+    const mockCreatePost = vi.mocked(createPost);
+    mockCreatePost.mockResolvedValueOnce(mockPost);
+
+    renderPostForm();
+
+    const textarea = screen.getByRole('textbox', { name: /post content/i });
+    await userEvent.type(textarea, "Test post content");
+
+    // Simulate Cmd+Enter (macOS) or Ctrl+Enter (Windows/Linux)
+    fireEvent.keyDown(textarea, {
+      key: "Enter",
+      code: "Enter",
+      metaKey: true, // Cmd key on macOS
+    });
+
+    // Verify form was submitted
+    await waitFor(() => {
+      expect(mockCreatePost).toHaveBeenCalledWith({
+        head: "Test post content",
+        body: "",
+      });
+    });
+
+    // Verify textarea is refocused
+    expect(document.activeElement).toBe(textarea);
+  });
 });

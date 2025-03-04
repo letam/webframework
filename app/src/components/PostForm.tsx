@@ -1,11 +1,12 @@
 import type { ReactElement } from "react";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import createPost from "../api/createPost";
 
 export default function PostForm(): ReactElement {
   const queryClient = useQueryClient();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [form, setForm] = useState({
     head: "",
     body: "",
@@ -19,6 +20,7 @@ export default function PostForm(): ReactElement {
       .then(() => {
         setForm({ head: "", body: "" }); // Reset form
         queryClient.invalidateQueries({ queryKey: ["posts"] }); // Trigger posts refetch
+        textareaRef.current?.focus(); // Refocus textarea after submission
       })
       .catch((error) => {
         console.error(error); // eslint-disable-line no-console
@@ -40,6 +42,7 @@ export default function PostForm(): ReactElement {
               What's on your mind?
             </label>
             <textarea
+              ref={textareaRef}
               className="w-full p-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
               id="head"
               name="head"
