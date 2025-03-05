@@ -70,6 +70,7 @@ else:
         'web-framework-2025-lively-glitter-9000.fly.dev',
         'webframework.app',
         'dev.webframework.app',
+        'webframework.dev',
     ]
 
 # Application definition
@@ -289,6 +290,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://web-framework-2025-lively-glitter-9000.fly.dev',
     'https://webframework.app',
     'https://dev.webframework.app',
+    'https://webframework.dev',
 ]
 
 # Set debug value in templates
