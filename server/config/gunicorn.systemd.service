@@ -1,0 +1,34 @@
+# Link to /etc/systemd/system/wut.sh-gunicorn.service
+# After update, run: `sudo systemctl daemon-reload && sudo service wut.sh-gunicorn reload`
+
+[Unit]
+Description=gunicorn daemon for wut.sh
+Requires=wut.sh-gunicorn.socket
+After=network.target
+
+[Service]
+Type=notify
+# the specific user that our service will run as
+User=webadmin
+Group=adm
+# another option for an even more restricted service is
+# DynamicUser=yes
+# see http://0pointer.net/blog/dynamic-users-with-systemd.html
+#RuntimeDirectory=wut.sh-gunicorn
+#WorkingDirectory=/var/www/wut.sh
+ExecStart=/var/www/wut.sh/venv/bin/gunicorn \
+	--chdir /var/www/wut.sh/server \
+	-b unix:/run/wut.sh-gunicorn.sock \
+	-w 3 \
+	#-e DJANGO_SETTINGS_MODULE="config.settings_production" \
+	-e DJANGO_SETTINGS_MODULE="config.settings" \
+	--capture-output \
+	--log-file /var/log/gunicorn/wut.sh.log \
+	config.wsgi
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
