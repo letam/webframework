@@ -28,24 +28,28 @@ env = environ.Env(
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# NOTE: In production container (Docker) image, the application file structure
-#   is simplified and flattened, and the directory BASE_DIR is 'code' instead of
-#   'server'.
-IS_USING_SERVER_DIR = \
-    BASE_DIR.name == 'server'
-
-if IS_USING_SERVER_DIR:
+# NOTE: In production container (Docker) image as well as gunicorn process, then the working directory is the project's server (Django project root) directory. Only during development and running the server from project root then we see the server child directory.
+IS_SERVER_CHILD_DIR_PRESENT = (Path.cwd() / 'server').exists()
+if IS_SERVER_CHILD_DIR_PRESENT:
     ENV_FILE = 'server/.env'
-    if not Path(ENV_FILE).is_file():
-        print('Required .env file not found.')
-        from django.core.management.utils import get_random_secret_key
-        with open(ENV_FILE, 'a') as f:
+else:
+    ENV_FILE = '.env'
+
+if not Path(ENV_FILE).is_file():
+    print('Required .env file not found.')
+    from django.core.management.utils import get_random_secret_key
+    with open(ENV_FILE, 'a') as f:
+        f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
+        if IS_SERVER_CHILD_DIR_PRESENT:
             f.write('DEBUG=True\n')
-            f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
             f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
-        print('Created .env file at server/.env with default values for development.')
-        print('WARNING: Please edit the .env file for production environment.')
-        print()
+            print('Created .env file at server/.env with default values for development.')
+            print('WARNING: Please edit the .env file for production environment.')
+        else:
+            f.write('DEBUG=False\n')
+            f.write('DATABASE_URL=sqlite:///db.sqlite3\n')
+            print('Created .env file at .env with default values for production.')
+    print()
 
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
@@ -71,6 +75,8 @@ else:
         'webframework.app',
         'dev.webframework.app',
         'webframework.dev',
+        'wut.sh',
+        'www.wut.sh'
     ]
 
 # Application definition
@@ -281,6 +287,8 @@ else:
         [
             'http://127.0.0.1:8000',
             'https://dev.webframework.app',
+            'https://wut.sh',
+            'https://www.wut.sh',
         ]
     )
 
@@ -291,6 +299,8 @@ CSRF_TRUSTED_ORIGINS = [
     'https://webframework.app',
     'https://dev.webframework.app',
     'https://webframework.dev',
+    'https://wut.sh',
+    'https://www.wut.sh',
 ]
 
 # Set debug value in templates
@@ -309,7 +319,8 @@ STORAGES = {
 
 
 SERVER_PATH = Path.cwd()
-if IS_USING_SERVER_DIR:
+IS_SERVER_CHILD_DIR_PRESENT = (Path.cwd() / 'server').exists()
+if IS_SERVER_CHILD_DIR_PRESENT:
     SERVER_PATH = SERVER_PATH / 'server'
 
 STATIC_ROOT = SERVER_PATH / 'static'
