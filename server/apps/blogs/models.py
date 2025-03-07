@@ -9,7 +9,7 @@ class Post(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     head = models.CharField(max_length=255)
     body = models.TextField(blank=True)
-    parent = models.ForeignKey('Post', on_delete=models.SET_NULL, null=True)
+    parent = models.ForeignKey('Post', on_delete=models.SET_NULL, null=True, blank=True)
 
     class Meta:
         ordering = ['-created']
