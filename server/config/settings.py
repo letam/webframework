@@ -69,11 +69,7 @@ else:
     ALLOWED_HOSTS = [
         '127.0.0.1',
         'localhost',
-        'web-framework-2025.fly.dev',
-        'web-framework-2025-restless-thunder-7727.fly.dev',
-        'web-framework-2025-lively-glitter-9000.fly.dev',
-        'webframework.app',
-        'dev.webframework.app',
+        'webframework.fly.dev',
         'webframework.dev',
         'wut.sh',
         'www.wut.sh'
@@ -286,18 +282,11 @@ else:
     CORS_ALLOWED_ORIGINS.extend(
         [
             'http://127.0.0.1:8000',
-            'https://dev.webframework.app',
-            'https://wut.sh',
-            'https://www.wut.sh',
         ]
     )
 
 CSRF_TRUSTED_ORIGINS = [
-    'https://web-framework-2025.fly.dev',
-    'https://web-framework-2025-restless-thunder-7727.fly.dev',
-    'https://web-framework-2025-lively-glitter-9000.fly.dev',
-    'https://webframework.app',
-    'https://dev.webframework.app',
+    'https://webframework.fly.dev',
     'https://webframework.dev',
     'https://wut.sh',
     'https://www.wut.sh',
