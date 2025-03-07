@@ -10,7 +10,9 @@ export default function Index(): ReactElement {
     <>
       <Head title="wut up" />
       <Header />
-      <PostForm />
+      <div className="w-full">
+        <PostForm />
+      </div>
       <PostList />
     </>
   );

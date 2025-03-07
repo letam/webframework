@@ -34,16 +34,16 @@ export default function PostForm(): ReactElement {
   }
 
   return (
-    <div style={{ margin: "16px" }}>
+    <div className="mt-8 max-w-2xl mx-auto px-4">
       <form onSubmit={handleSubmit} role="form" aria-label="Create new post">
-        <div className="space-y-4">
-          <div>
+        <div className="space-y-2">
+          <div className="space-y-2">
             <label htmlFor="head" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               What's on your mind?
             </label>
             <textarea
               ref={textareaRef}
-              className="w-full p-3 border rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              className="w-full p-4 border rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none"
               id="head"
               name="head"
               value={form.head}
@@ -59,6 +59,7 @@ export default function PostForm(): ReactElement {
               placeholder="Share your thoughts..."
               aria-label="Post content"
               tabIndex={1}
+              rows={3}
             />
           </div>
           <div style={{ display: "none" }}>
@@ -77,10 +78,10 @@ export default function PostForm(): ReactElement {
               tabIndex={-1}
             />
           </div>
-          <div>
+          <div className="flex justify-end">
             <button
               type="submit"
-              className="px-4 py-2 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:bg-indigo-800 md:px-5 md:text-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="w-full sm:w-auto px-6 py-3 text-base font-medium rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
               tabIndex={2}
             >
               Send
