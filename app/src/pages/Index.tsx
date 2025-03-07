@@ -4,6 +4,7 @@ import PostList from "../components/PostList";
 import PostForm from "../components/PostForm";
 import Header from "../components/Header";
 import Head from "../components/Head";
+import Footer from "../components/Footer";
 
 export default function Index(): ReactElement {
   return (
@@ -14,6 +15,7 @@ export default function Index(): ReactElement {
         <PostForm />
       </div>
       <PostList />
+      <Footer />
     </>
   );
 }

@@ -22,7 +22,7 @@ export default function PostList(): ReactElement {
   }
 
   return (
-    <div>
+    <div className="mt-4 max-w-2xl mx-auto px-4">
       {data?.map((post) => (
         <Post key={`PostCard-${getIdFromRecord(post)}`} post={post} />
       ))}
