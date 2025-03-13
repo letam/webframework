@@ -298,14 +298,22 @@ if DEBUG:
     INTERNAL_IPS = ['127.0.0.1']
 
 
-# https://whitenoise.readthedocs.io/en/stable/django.html
+# Storage configuration for Cloudflare R2
+AWS_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY')
+AWS_S3_ENDPOINT_URL = f"https://{os.getenv('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com"
+AWS_STORAGE_BUCKET_NAME = os.getenv('R2_BUCKET_NAME')
+AWS_S3_REGION_NAME = 'auto'  # R2 doesn't need a specific region
+AWS_DEFAULT_ACL = 'public-read'
+AWS_QUERYSTRING_AUTH = False  # Don't add complex authentication-related query parameters to URLs
+
 STORAGES = {
-    # ...
+    # https://whitenoise.readthedocs.io/en/stable/django.html
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
     'default': {
-        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
     },
 }
 
@@ -318,5 +326,7 @@ if IS_SERVER_CHILD_DIR_PRESENT:
 STATIC_ROOT = SERVER_PATH / 'static'
 STATIC_URL = '/static/'
 
+# Media files configuration
+MEDIA_URL = f'https://{os.getenv("R2_BUCKET_NAME")}.r2.cloudflarestorage.com/'
+
 MEDIA_ROOT = SERVER_PATH / 'uploads'
-MEDIA_URL = '/uploads/'
