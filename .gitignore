@@ -14,3 +14,5 @@ secret_key.txt
 .env
 
 .DS_Store
+
+server/uploads/
