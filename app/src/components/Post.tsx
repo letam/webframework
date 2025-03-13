@@ -39,9 +39,11 @@ export default function Post({ post }: Properties): ReactElement {
       <div className="text-sm text-gray-500 dark:text-gray-400">
         <AuthorNameDisplay author={post.author} /> {prettyDate(post.created)}
       </div>
-      <div className="mt-1">
-        <FormatText>{post.head}</FormatText>
-      </div>
+      {post.head && (
+        <div className="mt-1">
+          <FormatText>{post.head}</FormatText>
+        </div>
+      )}
       {post.audio && (
         <div className="mt-3">
           <audio controls src={`${BACKEND_HOST}${post.audio}`} className="w-full" />

@@ -140,11 +140,11 @@ export default function PostForm(): ReactElement {
         <div className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="head" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              What's on your mind?
+              What's on your mind? {!form.audio && <span className="text-red-500">*</span>}
             </label>
             <textarea
               ref={textareaRef}
-              className="w-full p-4 border rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none"
+              className="w-full p-4 border rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
               id="head"
               name="head"
               value={form.head}
@@ -166,7 +166,7 @@ export default function PostForm(): ReactElement {
 
           <div className="space-y-2">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              Add audio
+              Add audio {!form.head.trim() && <span className="text-red-500">*</span>}
             </label>
             <div className="flex flex-col space-y-2">
               <div className="flex space-x-2">
@@ -233,6 +233,7 @@ export default function PostForm(): ReactElement {
               type="submit"
               className="w-full sm:w-auto px-6 py-3 text-base font-medium rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:active:bg-indigo-600 transform transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:ring-offset-gray-800 disabled:opacity-50 hover:shadow-md dark:shadow-indigo-900/20"
               tabIndex={2}
+              disabled={!form.head.trim() && !form.audio}
             >
               Send
             </button>
