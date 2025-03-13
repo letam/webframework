@@ -97,7 +97,8 @@ export default function PostForm(): ReactElement {
   }
 
   function submitForm(): void {
-    if (form.head.trim() === "") {
+    // Check if either text or audio is present
+    if (form.head.trim() === "" && !form.audio) {
       return;
     }
 
@@ -156,7 +157,7 @@ export default function PostForm(): ReactElement {
                   submitForm();
                 }
               }}
-              placeholder="Share your thoughts..."
+              placeholder="Share your thoughts... (optional if audio is attached)"
               aria-label="Post content"
               tabIndex={1}
               rows={3}
