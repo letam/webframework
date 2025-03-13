@@ -172,10 +172,10 @@ export default function PostForm(): ReactElement {
                 <button
                   type="button"
                   onClick={isRecording ? stopRecording : startRecording}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                  className={`px-4 py-2 text-sm font-medium rounded-lg shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:ring-offset-gray-800 ${
                     isRecording
-                    ? 'text-white bg-red-600 hover:bg-red-500 focus:ring-red-500'
-                    : 'text-white bg-blue-600 hover:bg-blue-500 focus:ring-blue-500'
+                    ? 'text-white bg-red-600 hover:bg-red-500 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-400'
+                    : 'text-white bg-blue-600 hover:bg-blue-500 focus:ring-blue-500 dark:bg-blue-500 dark:hover:bg-blue-400'
                   }`}
                 >
                   {isRecording ? 'Stop Recording' : 'Start Recording'}
@@ -185,13 +185,13 @@ export default function PostForm(): ReactElement {
                   type="file"
                   accept="audio/*"
                   onChange={handleFileChange}
-                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 file:transition-colors file:duration-200"
+                  className="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900 dark:file:text-blue-300 dark:hover:file:bg-blue-800 file:transition-colors file:duration-200"
                 />
                 {form.audio && (
                   <button
                     type="button"
                     onClick={clearAudio}
-                    className="px-4 py-2 text-sm font-medium rounded-lg shadow-sm text-red-600 bg-red-50 hover:bg-red-100 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    className="px-4 py-2 text-sm font-medium rounded-lg shadow-sm text-red-600 bg-red-50 hover:bg-red-100 dark:text-red-400 dark:bg-red-900/50 dark:hover:bg-red-900/75 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:ring-offset-gray-800"
                     aria-label="Clear audio"
                   >
                     Clear
@@ -230,7 +230,7 @@ export default function PostForm(): ReactElement {
           <div className="flex justify-end">
             <button
               type="submit"
-              className="w-full sm:w-auto px-6 py-3 text-base font-medium rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 transform transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 hover:shadow-md"
+              className="w-full sm:w-auto px-6 py-3 text-base font-medium rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-400 dark:active:bg-indigo-600 transform transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:ring-offset-gray-800 disabled:opacity-50 hover:shadow-md dark:shadow-indigo-900/20"
               tabIndex={2}
             >
               Send
