@@ -16,6 +16,8 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path, include, re_path
+from django.conf import settings
+from django.conf.urls.static import static
 
 from rest_framework import routers
 
@@ -29,6 +31,7 @@ router = routers.DefaultRouter()
 router.register(r'posts', PostViewSet)
 
 
+# Order matters! More specific patterns should come before catch-all patterns
 urlpatterns = [
     path('admin/', admin.site.urls),
     #
@@ -40,7 +43,14 @@ urlpatterns = [
     path('api-auth/', include('rest_framework.urls')),
     #
     path('api/', include(router.urls)),
-    #
+]
+
+# Serve media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# Catch-all pattern for the frontend should be last
+urlpatterns += [
     # https://docs.djangoproject.com/en/5.1/topics/http/urls/#using-regular-expressions
     re_path('', index),
 ]

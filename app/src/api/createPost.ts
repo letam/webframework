@@ -2,17 +2,13 @@ import type { IDetailResponse, IPost } from "../types";
 import { BACKEND_HOST } from "./constants";
 import { csrfToken } from "./csrf";
 
-export default async function createPost(data: {
-  head: string;
-  body: string;
-}): Promise<IPost> {
+export default async function createPost(data: FormData): Promise<IPost> {
   const response = await fetch(`${BACKEND_HOST}/api/posts/`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json; charset=utf-8",
       "X-CSRFToken": csrfToken.token,
     },
-    body: JSON.stringify(data),
+    body: data,
   });
   if (response.status !== 201) {
     const responseBody = (await response.json()) as IDetailResponse;

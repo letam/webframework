@@ -24,6 +24,7 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
             'author',
             'head',
             'body',
+            'audio',
             'post_set',
         ]
 
@@ -34,4 +35,5 @@ class PostCreateSerializer(serializers.ModelSerializer):
         fields = [
             'head',
             'body',
+            'audio',
         ]

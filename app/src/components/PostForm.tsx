@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import createPost from "../api/createPost";
@@ -7,18 +7,118 @@ import createPost from "../api/createPost";
 export default function PostForm(): ReactElement {
   const queryClient = useQueryClient();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [form, setForm] = useState({
     head: "",
     body: "",
+    audio: null as File | null,
   });
+
+  // Cleanup preview URL when component unmounts or when audio changes
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  function clearAudio() {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewUrl('');
+    setAudioBlob(null);
+    setForm(state => ({ ...state, audio: null }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        setAudioBlob(blob);
+        const file = new File([blob], 'recording.webm', { type: 'audio/webm' });
+        setForm(state => ({ ...state, audio: file }));
+
+        // Clean up old preview URL and create new one
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+        }
+        const newPreviewUrl = URL.createObjectURL(blob);
+        setPreviewUrl(newPreviewUrl);
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+    }
+  }
+
+  function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      mediaRecorder.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+    }
+  }
+
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (file) {
+      setForm(state => ({ ...state, audio: file }));
+
+      // Clean up old preview URL and create new one
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      const newPreviewUrl = URL.createObjectURL(file);
+      setPreviewUrl(newPreviewUrl);
+    }
+  }
 
   function submitForm(): void {
     if (form.head.trim() === "") {
       return;
     }
-    createPost(form)
+
+    const formData = new FormData();
+    formData.append('head', form.head);
+    formData.append('body', form.body);
+    if (form.audio) {
+      formData.append('audio', form.audio);
+    }
+
+    createPost(formData)
       .then(() => {
-        setForm({ head: "", body: "" }); // Reset form
+        setForm({ head: "", body: "", audio: null }); // Reset form
+        setAudioBlob(null);
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+          setPreviewUrl('');
+        }
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''; // Clear file input
+        }
         queryClient.invalidateQueries({ queryKey: ["posts"] }); // Trigger posts refetch
         textareaRef.current?.focus(); // Refocus textarea after submission
       })
@@ -36,7 +136,7 @@ export default function PostForm(): ReactElement {
   return (
     <div className="mt-8 max-w-2xl mx-auto px-4">
       <form onSubmit={handleSubmit} role="form" aria-label="Create new post">
-        <div className="space-y-2">
+        <div className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="head" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               What's on your mind?
@@ -62,6 +162,50 @@ export default function PostForm(): ReactElement {
               rows={3}
             />
           </div>
+
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Add audio
+            </label>
+            <div className="flex flex-col space-y-2">
+              <div className="flex space-x-2">
+                <button
+                  type="button"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className="px-4 py-2 text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  {isRecording ? 'Stop Recording' : 'Start Recording'}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleFileChange}
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                {form.audio && (
+                  <button
+                    type="button"
+                    onClick={clearAudio}
+                    className="px-4 py-2 text-sm font-medium rounded-lg shadow-sm text-white bg-red-600 hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                    aria-label="Clear audio"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {previewUrl && (
+                <audio
+                  ref={audioRef}
+                  controls
+                  src={previewUrl}
+                  className="w-full"
+                  onError={(e) => console.error('Audio preview error:', e)}
+                />
+              )}
+            </div>
+          </div>
+
           <div style={{ display: "none" }}>
             <label htmlFor="body" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               More details
@@ -78,6 +222,7 @@ export default function PostForm(): ReactElement {
               tabIndex={-1}
             />
           </div>
+
           <div className="flex justify-end">
             <button
               type="submit"

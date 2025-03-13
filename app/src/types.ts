@@ -37,4 +37,5 @@ export interface IPost {
   author: IAuthor;
   head: string;
   body: string;
+  audio?: string;
 }

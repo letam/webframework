@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from "react";
 
 import { useAuthContext } from "../contexts/auth";
 import { prettyDate } from "../utils/date";
+import { BACKEND_HOST } from "../api/constants";
 
 import type { IPost, IAuthor } from "../types";
 
@@ -31,14 +32,21 @@ function AuthorNameDisplay({ author }: { author: IAuthor }): ReactElement {
 interface Properties {
   post: IPost;
 }
+
 export default function Post({ post }: Properties): ReactElement {
   return (
-    <div data-testid="PostCard">
-      <h3 data-testid="PostCardHeadline" className="p-6 font-bold text-xl">
+    <div className="py-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="text-sm text-gray-500 dark:text-gray-400">
         <AuthorNameDisplay author={post.author} /> {prettyDate(post.created)}
-        <br />
+      </div>
+      <div className="mt-1">
         <FormatText>{post.head}</FormatText>
-      </h3>
+      </div>
+      {post.audio && (
+        <div className="mt-3">
+          <audio controls src={`${BACKEND_HOST}${post.audio}`} className="w-full" />
+        </div>
+      )}
     </div>
   );
 }
