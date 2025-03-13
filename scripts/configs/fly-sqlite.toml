@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for web-framework-2025-restless-thunder-7727 on 2025-02-25T16:59:31-05:00
+# fly.toml app configuration file generated for webframework on 2025-02-25T16:59:31-05:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'web-framework-2025-restless-thunder-7727'
+app = 'webframework'
 primary_region = 'yyz'
 console_command = '/code/manage.py shell'
 
