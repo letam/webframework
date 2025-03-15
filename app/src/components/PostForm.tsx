@@ -10,7 +10,6 @@ export default function PostForm(): ReactElement {
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [form, setForm] = useState({
@@ -33,7 +32,6 @@ export default function PostForm(): ReactElement {
       URL.revokeObjectURL(previewUrl);
     }
     setPreviewUrl('');
-    setAudioBlob(null);
     setForm(state => ({ ...state, audio: null }));
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -54,7 +52,6 @@ export default function PostForm(): ReactElement {
 
       recorder.onstop = () => {
         const blob = new Blob(chunks, { type: 'audio/webm' });
-        setAudioBlob(blob);
         const file = new File([blob], 'recording.webm', { type: 'audio/webm' });
         setForm(state => ({ ...state, audio: file }));
 
@@ -112,7 +109,6 @@ export default function PostForm(): ReactElement {
     createPost(formData)
       .then(() => {
         setForm({ head: "", body: "", audio: null }); // Reset form
-        setAudioBlob(null);
         if (previewUrl) {
           URL.revokeObjectURL(previewUrl);
           setPreviewUrl('');
