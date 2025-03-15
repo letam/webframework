@@ -27,7 +27,7 @@ export default function Fruit({
       return;
     }
     window.scrollTo(0, 0);
-    navigate("/" + fruit.name.toLowerCase()); // eslint-disable-line prefer-template
+    navigate("/" + fruit.name.toLowerCase());
   }
   function onKeyDown(event: KeyboardEvent<HTMLElement>): void {
     if (event.key === "Enter") {

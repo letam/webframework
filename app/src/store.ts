@@ -13,7 +13,7 @@ export class Store {
   }
 
   public remove(key: string): void {
-    delete this.store[key]; // eslint-disable-line @typescript-eslint/no-dynamic-delete
+    delete this.store[key];
     this.storeInLocalStorage();
   }
 
@@ -32,4 +32,4 @@ export class Store {
 export const store = new Store();
 store.restoreFromLocalStorage();
 
-(window as any)._store = store; // eslint-disable-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-member-access,no-underscore-dangle
+(window as any)._store = store; // eslint-disable-line @typescript-eslint/no-explicit-any

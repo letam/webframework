@@ -30,5 +30,4 @@ function prettyDate(dateValue: string): string {
   // return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
-// eslint-disable-next-line import/prefer-default-export
 export { prettyDate };

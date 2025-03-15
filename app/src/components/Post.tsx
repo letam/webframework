@@ -17,7 +17,6 @@ function FormatText({ children }: { children: ReactNode }): ReactElement {
       '<a href="$1" target="_blank" style="text-decoration: underline; word-break: break-all;">$1</a>$2'
     ),
   };
-  // eslint-disable-next-line react/no-danger
   return <div dangerouslySetInnerHTML={markup} />;
 }
 

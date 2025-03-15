@@ -36,7 +36,6 @@ async function fetchAuthStatus(): Promise<IAuthStatus> {
 }
 
 // Set global window variables for easy debugging
-(window as any).fetchAuthStatus = fetchAuthStatus; // eslint-disable-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-member-access,no-underscore-dangle
+(window as any).fetchAuthStatus = fetchAuthStatus; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-// eslint-disable-next-line import/prefer-default-export
 export { login, logout, fetchAuthStatus };

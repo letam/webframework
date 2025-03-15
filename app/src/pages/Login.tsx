@@ -22,7 +22,7 @@ export default function Login(): ReactElement {
   ): Promise<void> {
     event.preventDefault();
     // TODO: Form validation
-    let userId; // eslint-disable-line @typescript-eslint/init-declarations
+    let userId;
     try {
       userId = await login(username, password);
     } catch (error_) {
@@ -34,7 +34,7 @@ export default function Login(): ReactElement {
       auth.setIsAuthenticated(true);
       auth.setUser({ id, username });
       // Note: Not waiting here since we want to navigate to the home page immediately
-      csrfToken.fetchCsrfToken(); // eslint-disable-line @typescript-eslint/no-floating-promises
+      csrfToken.fetchCsrfToken();
       navigate("/");
     }
   }
@@ -54,7 +54,6 @@ export default function Login(): ReactElement {
           <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 dark:bg-gray-900">
             <form className="space-y-6" onSubmit={handleSubmit} method="POST">
               <div>
-                {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
                 <label
                   htmlFor="username"
                   className="block text-sm font-medium text-gray-700 dark:text-current"
@@ -76,7 +75,6 @@ export default function Login(): ReactElement {
               </div>
 
               <div>
-                {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
                 <label
                   htmlFor="password"
                   className="block text-sm font-medium text-gray-700 dark:text-current"
@@ -105,7 +103,6 @@ export default function Login(): ReactElement {
                     type="checkbox"
                     className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                   />
-                  {/* eslint-disable-next-line jsx-a11y/label-has-associated-control */}
                   <label
                     htmlFor="remember_me"
                     className="ml-2 block text-sm text-gray-900 dark:text-current"

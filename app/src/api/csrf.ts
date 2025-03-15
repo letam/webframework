@@ -24,6 +24,6 @@ class CSRFToken {
 }
 
 const csrfToken = new CSRFToken();
-csrfToken.fetchCsrfToken(); // eslint-disable-line @typescript-eslint/no-floating-promises
+csrfToken.fetchCsrfToken();
 
-export { csrfToken }; // eslint-disable-line import/prefer-default-export
+export { csrfToken };
