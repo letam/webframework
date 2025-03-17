@@ -43,6 +43,7 @@ if not Path(ENV_FILE).is_file():
         if IS_SERVER_CHILD_DIR_PRESENT:
             f.write('DEBUG=True\n')
             f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
+            f.write('USE_LOCAL_FILE_STORAGE=True\n')
             print('Created .env file at server/.env with default values for development.')
             print('WARNING: Please edit the .env file for production environment.')
         else:
@@ -180,6 +181,12 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
+SERVER_PATH = Path.cwd()
+IS_SERVER_CHILD_DIR_PRESENT = (Path.cwd() / 'server').exists()
+if IS_SERVER_CHILD_DIR_PRESENT:
+    SERVER_PATH = SERVER_PATH / 'server'
+
+STATIC_ROOT = SERVER_PATH / 'static'
 STATIC_URL = '/static/'
 
 # Default primary key field type
@@ -298,35 +305,35 @@ if DEBUG:
     INTERNAL_IPS = ['127.0.0.1']
 
 
-# Storage configuration for Cloudflare R2
-AWS_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY')
-AWS_S3_ENDPOINT_URL = f"https://{os.getenv('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com"
-AWS_STORAGE_BUCKET_NAME = os.getenv('R2_BUCKET_NAME')
-AWS_S3_REGION_NAME = 'auto'  # R2 doesn't need a specific region
-AWS_DEFAULT_ACL = 'public-read'
-AWS_QUERYSTRING_AUTH = False  # Don't add complex authentication-related query parameters to URLs
+# File storage configuration
+USE_LOCAL_FILE_STORAGE = os.getenv('USE_LOCAL_FILE_STORAGE', 'False').lower() == 'true'
 
+# Configure Cloudflare R2 storage if not using local storage
+if not USE_LOCAL_FILE_STORAGE:
+    # Cloudflare R2 configuration
+    AWS_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY')
+    AWS_S3_ENDPOINT_URL = f"https://{os.getenv('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com"
+    AWS_STORAGE_BUCKET_NAME = os.getenv('R2_BUCKET_NAME')
+    AWS_S3_REGION_NAME = 'auto'  # R2 doesn't need a specific region
+    AWS_DEFAULT_ACL = 'public-read'
+    AWS_QUERYSTRING_AUTH = False  # Don't add complex authentication-related query parameters to URLs
+
+# Media files configuration
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'uploads')
+
+# Storage backend configuration
 STORAGES = {
     # https://whitenoise.readthedocs.io/en/stable/django.html
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
     'default': {
-        'BACKEND': 'storages.backends.s3boto3.S3Boto3Storage',
+        'BACKEND': 'django.core.files.storage.FileSystemStorage' if USE_LOCAL_FILE_STORAGE else 'storages.backends.s3boto3.S3Boto3Storage',
     },
 }
 
-
-SERVER_PATH = Path.cwd()
-IS_SERVER_CHILD_DIR_PRESENT = (Path.cwd() / 'server').exists()
-if IS_SERVER_CHILD_DIR_PRESENT:
-    SERVER_PATH = SERVER_PATH / 'server'
-
-STATIC_ROOT = SERVER_PATH / 'static'
-STATIC_URL = '/static/'
-
-# Media files configuration
-MEDIA_URL = f'https://{os.getenv("R2_BUCKET_NAME")}.r2.cloudflarestorage.com/'
-
-MEDIA_ROOT = SERVER_PATH / 'uploads'
+# Create uploads directory if using local storage
+if USE_LOCAL_FILE_STORAGE and not os.path.exists(MEDIA_ROOT):
+    os.makedirs(MEDIA_ROOT)
