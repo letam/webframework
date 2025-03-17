@@ -6,6 +6,7 @@ venv
 
 server/.env
 server/static
+server/uploads
 
 app/.env
 app/node_modules
