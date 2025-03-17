@@ -45,7 +45,21 @@ export default function Post({ post }: Properties): ReactElement {
       )}
       {post.audio && (
         <div className="mt-3">
-          <audio controls src={`${BACKEND_HOST}${post.audio}`} className="w-full" />
+          <audio
+            controls
+            src={`${BACKEND_HOST}${post.audio}`}
+            className="w-full"
+            onError={(e) => {
+              const audioElement = e.currentTarget;
+              console.error('Audio playback error:', {
+                event: e,
+                src: audioElement.src,
+                networkState: audioElement.networkState,
+                readyState: audioElement.readyState,
+                errorCode: audioElement.error
+              });
+            }}
+          />
         </div>
       )}
     </div>

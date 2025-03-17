@@ -42,13 +42,24 @@ export default function PostForm(): ReactElement {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // Check for supported MIME types
+      // Check for supported MIME types, prioritizing Safari-compatible formats
       const mimeType = [
+        'audio/mp4',
+        'audio/mp4;codecs=mp4a',
+        'audio/mpeg',
+        'audio/wav',
         'audio/webm',
         'audio/webm;codecs=opus',
-        'audio/ogg;codecs=opus',
-        'audio/mp4'
-      ].find(type => MediaRecorder.isTypeSupported(type)) || '';
+        'audio/ogg;codecs=opus'
+      ].find(type => {
+        const isSupported = MediaRecorder.isTypeSupported(type);
+        console.log(`MIME type ${type} supported: ${isSupported}`);
+        return isSupported;
+      }) || '';
+
+      if (!mimeType) {
+        console.warn('No supported MIME types found for audio recording');
+      }
 
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       const chunks: BlobPart[] = [];
@@ -60,8 +71,11 @@ export default function PostForm(): ReactElement {
       };
 
       recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: mimeType || 'audio/webm' });
-        const file = new File([blob], 'recording.webm', { type: mimeType || 'audio/webm' });
+        const blob = new Blob(chunks, { type: mimeType || 'audio/mp4' });
+        const fileExtension = mimeType.includes('mp4') ? 'mp4' :
+                            mimeType.includes('webm') ? 'webm' :
+                            mimeType.includes('wav') ? 'wav' : 'mp4';
+        const file = new File([blob], `recording.${fileExtension}`, { type: mimeType || 'audio/mp4' });
         setForm(state => ({ ...state, audio: file }));
 
         // Clean up old preview URL and create new one
