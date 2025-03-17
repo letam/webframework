@@ -41,7 +41,16 @@ export default function PostForm(): ReactElement {
   async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+
+      // Check for supported MIME types
+      const mimeType = [
+        'audio/webm',
+        'audio/webm;codecs=opus',
+        'audio/ogg;codecs=opus',
+        'audio/mp4'
+      ].find(type => MediaRecorder.isTypeSupported(type)) || '';
+
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       const chunks: BlobPart[] = [];
 
       recorder.ondataavailable = (e) => {
@@ -51,8 +60,8 @@ export default function PostForm(): ReactElement {
       };
 
       recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' });
-        const file = new File([blob], 'recording.webm', { type: 'audio/webm' });
+        const blob = new Blob(chunks, { type: mimeType || 'audio/webm' });
+        const file = new File([blob], 'recording.webm', { type: mimeType || 'audio/webm' });
         setForm(state => ({ ...state, audio: file }));
 
         // Clean up old preview URL and create new one
