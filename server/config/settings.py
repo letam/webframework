@@ -44,11 +44,13 @@ if not Path(ENV_FILE).is_file():
             f.write('DEBUG=True\n')
             f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
             f.write('USE_LOCAL_FILE_STORAGE=True\n')
+            f.write('MEDIA_ROOT=server/uploads\n')
             print('Created .env file at server/.env with default values for development.')
             print('WARNING: Please edit the .env file for production environment.')
         else:
             f.write('DEBUG=False\n')
             f.write('DATABASE_URL=sqlite:///db.sqlite3\n')
+            f.write('MEDIA_ROOT=/data/media/uploads\n')
             print('Created .env file at .env with default values for production.')
     print()
 
@@ -321,7 +323,7 @@ if not USE_LOCAL_FILE_STORAGE:
 
 # Media files configuration
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'uploads')
+MEDIA_ROOT = env.str('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'uploads'))
 
 # Storage backend configuration
 STORAGES = {
