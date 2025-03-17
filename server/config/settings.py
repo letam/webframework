@@ -322,7 +322,7 @@ if not USE_LOCAL_FILE_STORAGE:
     AWS_QUERYSTRING_AUTH = False  # Don't add complex authentication-related query parameters to URLs
 
 # Media files configuration
-MEDIA_URL = '/media/'
+MEDIA_URL = env.str('MEDIA_URL', default='/media/')
 MEDIA_ROOT = env.str('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'uploads'))
 
 # Storage backend configuration
