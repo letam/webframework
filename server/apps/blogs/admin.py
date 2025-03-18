@@ -10,6 +10,7 @@ class PostAdmin(admin.ModelAdmin):
         'id',
         'author',
         'head',
+        'audio',
         'created',
         'modified',
     )
