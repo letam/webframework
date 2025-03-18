@@ -72,6 +72,7 @@ else:
     ALLOWED_HOSTS = [
         '127.0.0.1',
         'localhost',
+        'FLY_APP_NAME.fly.dev',
         'webframework.fly.dev',
         'webframework.dev',
         'wut.sh',
@@ -295,6 +296,7 @@ else:
     )
 
 CSRF_TRUSTED_ORIGINS = [
+    'https://FLY_APP_NAME.fly.dev',
     'https://webframework.fly.dev',
     'https://webframework.dev',
     'https://wut.sh',

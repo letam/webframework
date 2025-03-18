@@ -3,7 +3,7 @@
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'web-framework-2025-lively-glitter-9000'
+app = 'FLY_APP_NAME'
 primary_region = 'iad'
 console_command = '/code/manage.py shell'
 

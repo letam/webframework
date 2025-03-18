@@ -76,3 +76,34 @@ Includes some functionality for a basic public micro-blogging app.
 	```
 	./build-prod
 	```
+
+
+## Deploying to fly.io
+
+### Config Type 1: Deploy on simple single webserver with SQLite database:
+
+1. Set app name in project (Replace *your_app_name* with an actual app name):
+```
+sed -i.bak 's/FLY_APP_NAME/your_app_name/g' server/config/settings.py && find scripts/ -type f -name "deploy_*" -exec sed -i.bak 's/FLY_APP_NAME/your_app_name/g' {} +
+```
+
+2. Run app deployment script:
+```
+./scripts/deploy-fly.io-sqlite.sh $app_name
+```
+
+### Config Type 2: Deploy using HA configuration with Postgres database:
+
+1. Set app name in project (Replace *your_app_name* with an actual app name):
+```
+sed -i.bak 's/FLY_APP_NAME/your_app_name/g' server/config/settings.py && find scripts/ -type f -name "deploy_*" -exec sed -i.bak 's/FLY_APP_NAME/your_app_name/g' {} +
+```
+
+2. Run app deployment script:
+```
+./scripts/deploy-fly.io-postgres.sh
+```
+
+### To use Cloudflare R2 object storage for user uploads (Required for Config Type 2):
+
+TODO
