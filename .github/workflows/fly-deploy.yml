@@ -2,9 +2,10 @@
 
 name: Fly Deploy
 on:
-  push:
-    branches:
-      - main
+  # push:    # Uncomment this to trigger on push to main
+  #   branches:
+  #     - main
+  workflow_dispatch:  # Add this to allow manual triggering
 jobs:
   deploy:
     name: Deploy app
