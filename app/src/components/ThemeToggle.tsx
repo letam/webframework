@@ -18,6 +18,7 @@ export const ThemeToggle: React.FC = () => {
 
   return (
     <button
+      type="button"
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       className="top-4 right-4 p-2 rounded-full bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"

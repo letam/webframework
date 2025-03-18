@@ -8,7 +8,7 @@ function PWABadge() {
   const period = 0
 
   const {
-    
+
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
   } = useRegisterSW({
@@ -28,7 +28,7 @@ function PWABadge() {
   })
 
   function close() {
-    
+
     setNeedRefresh(false)
   }
 
@@ -39,12 +39,12 @@ function PWABadge() {
         <div className="PWABadge-toast">
           <div className="PWABadge-message">
             <span id="toast-message">New content available, click on reload button to update.</span>
-              
-              
+
+
           </div>
           <div className="PWABadge-buttons">
-            <button className="PWABadge-toast-button" onClick={() => updateServiceWorker(true)}>Reload</button>
-            <button className="PWABadge-toast-button" onClick={() => close()}>Close</button>
+            <button type="button" className="PWABadge-toast-button" onClick={() => updateServiceWorker(true)}>Reload</button>
+            <button type="button" className="PWABadge-toast-button" onClick={() => close()}>Close</button>
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode, Dispatch, SetStateAction } from "react";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, use, useEffect, useState } from "react";
 
 import { store } from "../store";
 import { fetchAuthStatus } from "../api/auth";
@@ -28,7 +28,7 @@ const AuthContext = createContext({
 } as IAuthContext);
 
 export function useAuthContext(): IAuthContext {
-  return useContext(AuthContext);
+  return use(AuthContext);
 }
 
 function useAuthContextManager(): IAuthContext {
@@ -79,5 +79,5 @@ export function AuthContextProvider({
   children: ReactNode;
 }): ReactElement {
   const value = useAuthContextManager();
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return <AuthContext value={value}>{children}</AuthContext>;
 }

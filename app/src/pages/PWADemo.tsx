@@ -7,7 +7,7 @@ import PWABadge from '../PWABadge.tsx'
 import '../PWADemo.css'
 
 function PWADemo(): ReactElement {
-  
+
     const navigate = useNavigate();
   function goHome(): void {
     navigate("/");
@@ -23,16 +23,16 @@ function PWADemo(): ReactElement {
         Go home
       </button>
       <div>
-        <a href="https://vite.dev" target="_blank">
+        <a href="https://vite.dev" target="_blank" rel="noopener noreferrer">
           <img src={appLogo} className="logo" alt="app logo" />
         </a>
-        <a href="https://react.dev" target="_blank">
+        <a href="https://react.dev" target="_blank" rel="noopener noreferrer">
           <img src={reactLogo} className="logo react" alt="React logo" />
         </a>
       </div>
       <h1>app</h1>
       <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
+        <button type="button" onClick={() => setCount((count) => count + 1)}>
           count is {count}
         </button>
         <p>
