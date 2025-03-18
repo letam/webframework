@@ -50,7 +50,7 @@ if not Path(ENV_FILE).is_file():
         else:
             f.write('DEBUG=False\n')
             f.write('DATABASE_URL=sqlite:////data/db.sqlite3\n')
-            f.write('MEDIA_ROOT=/data/media/uploads\n')
+            f.write('MEDIA_ROOT=/data/uploads\n')
             print('Created .env file at .env with default values for production.')
     print()
 

@@ -39,5 +39,5 @@ console_command = '/code/manage.py shell'
   url_prefix = '/static/'
 
 [[statics]]
-  guest_path = '/data/media'
+  guest_path = '/data/uploads'
   url_prefix = '/media/'
