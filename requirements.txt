@@ -14,3 +14,5 @@ django-extensions==3.2.3
 
 django-storages==1.14.5
 boto3==1.37.11
+
+django-csp==4.0b7

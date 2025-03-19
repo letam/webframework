@@ -111,6 +111,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'csp.middleware.CSPMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
@@ -341,3 +342,32 @@ STORAGES = {
 # Create uploads directory if using local storage
 if USE_LOCAL_FILE_STORAGE and not os.path.exists(MEDIA_ROOT):
     os.makedirs(MEDIA_ROOT)
+
+
+# CSP settings
+# Reference: https://django-csp.readthedocs.io/en/latest/configuration.html
+from csp.constants import SELF
+
+CONTENT_SECURITY_POLICY_DIRECTIVES = {
+    'default-src': [SELF],
+    'frame-ancestors': [SELF],
+    'form-action': [SELF],
+    'report-uri': '/csp-report/',
+}
+
+if DEBUG:
+    from csp.constants import UNSAFE_INLINE
+    CONTENT_SECURITY_POLICY_DIRECTIVES.update({
+        'script-src': [SELF, UNSAFE_INLINE],
+        'script-src-elem': [SELF, UNSAFE_INLINE, 'localhost:5173'],
+        'style-src': [SELF, UNSAFE_INLINE],
+        'connect-src': [SELF, 'ws://localhost:5173'],
+        'img-src': [SELF, 'localhost:5173'],
+        'media-src': [SELF, 'blob:'],
+
+    })
+
+CONTENT_SECURITY_POLICY = {
+    # 'EXCLUDE_URL_PREFIXES': ['/excluded-path/'],
+    'DIRECTIVES': CONTENT_SECURITY_POLICY_DIRECTIVES,
+}
