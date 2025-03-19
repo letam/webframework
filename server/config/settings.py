@@ -193,6 +193,13 @@ if IS_SERVER_CHILD_DIR_PRESENT:
 STATIC_ROOT = SERVER_PATH / 'static'
 STATIC_URL = '/static/'
 
+if DEBUG:
+    # Include static files from app/public directory during development
+    # Reference: https://docs.djangoproject.com/en/5.1/ref/settings/#staticfiles-dirs
+    STATICFILES_DIRS = [
+        SERVER_PATH / '..' / 'app' / 'public'
+    ]
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
