@@ -1,4 +1,5 @@
 import type { ReactElement, ReactNode } from "react";
+import DOMPurify from 'dompurify';
 
 import { useAuthContext } from "../contexts/auth";
 import { prettyDate } from "../utils/date";
@@ -7,17 +8,14 @@ import { BACKEND_HOST } from "../api/constants";
 import type { IPost, IAuthor } from "../types";
 
 function FormatText({ children }: { children: ReactNode }): ReactElement {
-  // TODO: Handle unsafe post content / investigate hacks
-  // TODO: If contains <script>, then do not set dangerously, and instead display button asking for permission.
-  let content = children as string;
-  content = content.replace(/\n/g, "<br/>");
-  const markup = {
-    __html: content.replace(
+  const content = DOMPurify.sanitize(children as string)
+    .replace(/\n/g, "<br/>")
+    .replace(
       /(https?:[^ ]+)( ?)/g,
-      '<a href="$1" target="_blank" style="text-decoration: underline; word-break: break-all;">$1</a>$2'
-    ),
-  };
-  return <div dangerouslySetInnerHTML={markup} />;
+      '<a href="$1" target="_blank" rel="noopener noreferrer" style="text-decoration: underline; word-break: break-all;">$1</a>$2'
+    );
+  // eslint-disable-next-line @eslint-react/dom/no-dangerously-set-innerhtml
+  return <div dangerouslySetInnerHTML={{ __html: content }} />;
 }
 
 function AuthorNameDisplay({ author }: { author: IAuthor }): ReactElement {
