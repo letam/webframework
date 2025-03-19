@@ -28,9 +28,11 @@ fi
 ## Build Backend
 
 source venv/bin/activate
-python server/manage.py migrate
-python server/manage.py collectstatic --noinput
+cd server
+python manage.py migrate
+python manage.py collectstatic --noinput
 deactivate
+cd - >/dev/null
 
 
 ## Build Frontend
