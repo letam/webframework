@@ -3,6 +3,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+const NODE_ENV = process.env.NODE_ENV ?? '';
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -36,6 +37,10 @@ export default defineConfig({
       type: 'module',
     },
   })],
-  // Reference: https://vite.dev/config/shared-options.html#base ; https://vite.dev/guide/build.html#public-base-path
-  base: "/static/app/",
+
+  ...(NODE_ENV === 'development' ? {
+  } : {
+    // Reference: https://vite.dev/config/shared-options.html#base ; https://vite.dev/guide/build.html#public-base-path
+    base: '/static/app/',
+  }),
 })
