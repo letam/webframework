@@ -36,4 +36,6 @@ export default defineConfig({
       type: 'module',
     },
   })],
+  // Reference: https://vite.dev/config/shared-options.html#base ; https://vite.dev/guide/build.html#public-base-path
+  base: "/static/app/",
 })
