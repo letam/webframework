@@ -101,8 +101,6 @@ COPY --from=build-frontend /code/dist /code/static/app
 ARG WEBSITE_TEMPLATE_DIST_DIR="apps/website/templates/website/dist"
 RUN mkdir -p "$WEBSITE_TEMPLATE_DIST_DIR"
 RUN cp static/app/index.html "$WEBSITE_TEMPLATE_DIST_DIR/index.html"
-# RUN sed -i 's|src="/|src="/static/app/|g' "$WEBSITE_TEMPLATE_DIST_DIR/index.html"
-# RUN sed -i 's|href="/|href="/static/app/|g' "$WEBSITE_TEMPLATE_DIST_DIR/index.html"
 
 # Set environment variables to optimize Python
 ENV PYTHONDONTWRITEBYTECODE=1
