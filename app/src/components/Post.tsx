@@ -41,11 +41,11 @@ export default function Post({ post }: Properties): ReactElement {
           <FormatText>{post.head}</FormatText>
         </div>
       )}
-      {post.audio && (
+      {(post.signedAudioUrl || post.audio) && (
         <div className="mt-3">
           <audio
             controls
-            src={`${BACKEND_HOST}${post.audio}`}
+            src={post.signedAudioUrl || `${BACKEND_HOST}${post.audio}`}
             className="w-full"
             onError={(e) => {
               const audioElement = e.currentTarget;

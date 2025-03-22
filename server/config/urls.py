@@ -25,7 +25,7 @@ from apps.auth import views as auth_views
 
 from apps.website.views import index
 from apps.blogs.views import PostViewSet
-
+from apps.uploads.views import get_presigned_url, get_presigned_url_for_post
 
 router = routers.DefaultRouter()
 router.register(r'posts', PostViewSet)
@@ -41,6 +41,9 @@ urlpatterns = [
     path('auth/status/', auth_views.status),
     #
     path('api-auth/', include('rest_framework.urls')),
+    #
+    path('api/uploads/presign/', get_presigned_url, name='get_presigned_url'),
+    path('api/uploads/presign/<int:post_id>/', get_presigned_url_for_post, name='get_presigned_url_for_post'),
     #
     path('api/', include(router.urls)),
 ]

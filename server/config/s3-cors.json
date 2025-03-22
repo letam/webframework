@@ -1,0 +1,18 @@
+{
+    "rules": [
+        {
+            "AllowedHeaders": [
+                "*"
+            ],
+            "AllowedMethods": [
+                "GET",
+                "PUT",
+                "DELETE"
+            ],
+            "AllowedOrigins": [
+                "http://localhost:8000"
+            ],
+            "ExposeHeaders": []
+        }
+    ]
+}

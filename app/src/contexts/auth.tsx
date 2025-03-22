@@ -81,3 +81,11 @@ export function AuthContextProvider({
   const value = useAuthContextManager();
   return <AuthContext value={value}>{children}</AuthContext>;
 }
+
+export function getUser(): IUser {
+  const user = store.get("user") as IUser;
+  if (!user) {
+    return userUninitialized;
+  }
+  return user;
+}

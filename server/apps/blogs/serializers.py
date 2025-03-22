@@ -19,12 +19,13 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
         model = Post
         fields = [
-            'url',
+            'id',
             'created',
             'author',
             'head',
             'body',
             'audio',
+            'audio_s3_file_key',
             'post_set',
         ]
 
@@ -36,4 +37,5 @@ class PostCreateSerializer(serializers.ModelSerializer):
             'head',
             'body',
             'audio',
+            'audio_s3_file_key',
         ]

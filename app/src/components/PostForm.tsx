@@ -75,7 +75,7 @@ export default function PostForm(): ReactElement {
         const fileExtension = mimeType.includes('mp4') ? 'mp4' :
                             mimeType.includes('webm') ? 'webm' :
                             mimeType.includes('wav') ? 'wav' : 'mp4';
-        const file = new File([blob], `recording.${fileExtension}`, { type: mimeType || 'audio/mp4' });
+        const file = new File([blob], `recording_${Date.now()}.${fileExtension}`, { type: mimeType || 'audio/mp4' });
         setForm(state => ({ ...state, audio: file }));
 
         // Clean up old preview URL and create new one
@@ -125,11 +125,11 @@ export default function PostForm(): ReactElement {
     const formData = new FormData();
     formData.append('head', form.head);
     formData.append('body', form.body);
-    if (form.audio) {
-      formData.append('audio', form.audio);
-    }
+    const files = {
+      ...(form.audio ? {audio: form.audio} : {})
+    };
 
-    createPost(formData)
+    createPost(formData, files)
       .then(() => {
         setForm({ head: "", body: "", audio: null }); // Reset form
         if (previewUrl) {

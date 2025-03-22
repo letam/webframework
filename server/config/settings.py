@@ -325,7 +325,7 @@ if not USE_LOCAL_FILE_STORAGE:
     # Cloudflare R2 configuration
     AWS_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID')
     AWS_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY')
-    AWS_S3_ENDPOINT_URL = f"https://{os.getenv('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com"
+    AWS_S3_ENDPOINT_URL = f"https://{os.getenv('R2_ACCOUNT_ID')}.{os.getenv('R2_ENDPOINT_DOMAIN')}"
     AWS_STORAGE_BUCKET_NAME = os.getenv('R2_BUCKET_NAME')
     AWS_S3_REGION_NAME = 'auto'  # R2 doesn't need a specific region
     AWS_DEFAULT_ACL = 'public-read'
@@ -372,6 +372,18 @@ if DEBUG:
         'img-src': [SELF, 'localhost:5173'],
         'media-src': [SELF, 'blob:'],
 
+    })
+
+if not USE_LOCAL_FILE_STORAGE:
+    CONTENT_SECURITY_POLICY_DIRECTIVES.update({
+        'connect-src': [
+            *CONTENT_SECURITY_POLICY_DIRECTIVES.get('connect-src', []),
+            os.getenv('R2_ENDPOINT_DOMAIN_FOR_CSP')
+        ],
+        'media-src': [
+            *CONTENT_SECURITY_POLICY_DIRECTIVES.get('media-src', []),
+            os.getenv('R2_ENDPOINT_DOMAIN_FOR_CSP')
+        ],
     })
 
 CONTENT_SECURITY_POLICY = {

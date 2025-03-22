@@ -21,6 +21,7 @@ describe("PostForm", () => {
   });
 
   const mockPost: IPost = {
+    id: 1,
     url: "/api/posts/1/",
     created: "2024-03-04T00:00:00Z",
     author: {

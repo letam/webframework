@@ -32,10 +32,15 @@ export interface IAuthor {
 }
 
 export interface IPost {
+  id: number;
   url: string;
   created: string;
   author: IAuthor;
   head: string;
   body: string;
   audio?: string;
+  audio_s3_file_key?: string;
+
+  // Dynamically added by the client
+  signedAudioUrl?: string;
 }

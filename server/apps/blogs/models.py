@@ -10,6 +10,7 @@ class Post(models.Model):
     head = models.CharField(max_length=255, blank=True)
     body = models.TextField(blank=True)
     audio = models.FileField(upload_to='audio/', blank=True, null=True)
+    audio_s3_file_key = models.CharField(max_length=255, blank=True, null=True)
     parent = models.ForeignKey('Post', on_delete=models.SET_NULL, null=True, blank=True)
 
     class Meta:

@@ -11,6 +11,7 @@ class PostAdmin(admin.ModelAdmin):
         'author',
         'head',
         'audio',
+        'audio_s3_file_key',
         'created',
         'modified',
     )
