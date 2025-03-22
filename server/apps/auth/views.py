@@ -45,4 +45,8 @@ def logout(request):
 
 
 def status(request):
-    return JsonResponse({'is_authenticated': request.user.is_authenticated})
+    return JsonResponse({
+        'is_authenticated': request.user.is_authenticated,
+        'user_id': request.user.id,
+        'username': request.user.username,
+    })

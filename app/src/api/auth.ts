@@ -5,6 +5,8 @@ import type { IFormResponse } from "../types";
 
 interface IAuthStatus {
   is_authenticated: boolean;
+  user_id: number;
+  username: string;
 }
 
 async function login(username: string, password: string): Promise<string> {

@@ -49,15 +49,15 @@ function useAuthContextManager(): IAuthContext {
       setIsInitialized(true);
       return;
     }
-    if (userFromStore !== null) {
-      console.log("auth as:", userFromStore);
-      setIsInitialized(true);
-      setIsAuthenticated(true);
-      // TODO: get user id and user name from `fetchAuthStatus` request/response
+    if (userFromStore != null) {
+      console.log("[auth] userFromStore:", userFromStore);
       setUser({ id: userFromStore.id, username: userFromStore.username });
-    } else {
-      setIsInitialized(true);
     }
+    if (userFromStore?.id !== authStatus.user_id) {
+      setUser({ id: authStatus.user_id, username: authStatus.username });
+    }
+    setIsAuthenticated(true);
+    setIsInitialized(true);
   }
 
   useEffect(() => {
