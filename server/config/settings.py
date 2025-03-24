@@ -22,7 +22,8 @@ from pathlib import Path
 # Reference: https://github.com/joke2k/django-environ
 env = environ.Env(
     # set casting, default value
-    DEBUG=(bool, False)
+    DEBUG=(bool, False),
+    OPENAI_API_KEY=(str, ''),
 )
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -389,3 +390,7 @@ CONTENT_SECURITY_POLICY = {
     # 'EXCLUDE_URL_PREFIXES': ['/excluded-path/'],
     'DIRECTIVES': CONTENT_SECURITY_POLICY_DIRECTIVES,
 }
+
+
+# OpenAI API Key
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')

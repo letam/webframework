@@ -16,3 +16,5 @@ django-storages==1.14.5
 boto3==1.37.11
 
 django-csp==4.0b7
+
+openai==1.68.2
