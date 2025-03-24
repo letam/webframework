@@ -320,16 +320,15 @@ if DEBUG:
 # File storage configuration
 USE_LOCAL_FILE_STORAGE = os.getenv('USE_LOCAL_FILE_STORAGE', 'False').lower() == 'true'
 
-# Configure Cloudflare R2 storage if not using local storage
-if not USE_LOCAL_FILE_STORAGE:
-    # Cloudflare R2 configuration
-    AWS_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID')
-    AWS_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY')
-    AWS_S3_ENDPOINT_URL = f"https://{os.getenv('R2_ACCOUNT_ID')}.{os.getenv('R2_ENDPOINT_DOMAIN')}"
-    AWS_STORAGE_BUCKET_NAME = os.getenv('R2_BUCKET_NAME')
-    AWS_S3_REGION_NAME = 'auto'  # R2 doesn't need a specific region
-    AWS_DEFAULT_ACL = 'public-read'
-    AWS_QUERYSTRING_AUTH = False  # Don't add complex authentication-related query parameters to URLs
+# S3-compatible object storage configuration
+AWS_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY')
+AWS_S3_ENDPOINT_URL = f"https://{os.getenv('R2_ACCOUNT_ID')}.{os.getenv('R2_ENDPOINT_DOMAIN')}"
+AWS_STORAGE_BUCKET_NAME = os.getenv('R2_BUCKET_NAME')
+AWS_S3_REGION_NAME = 'auto'  # R2 doesn't need a specific region
+AWS_DEFAULT_ACL = 'public-read'
+AWS_QUERYSTRING_AUTH = False  # Don't add complex authentication-related query parameters to URLs
+AWS_S3_ENDPOINT_FOR_CSP = os.getenv('R2_ENDPOINT_DOMAIN_FOR_CSP')
 
 # Media files configuration
 MEDIA_URL = env.str('MEDIA_URL', default='/media/')
@@ -374,15 +373,15 @@ if DEBUG:
 
     })
 
-if not USE_LOCAL_FILE_STORAGE:
+if AWS_S3_ENDPOINT_FOR_CSP:
     CONTENT_SECURITY_POLICY_DIRECTIVES.update({
         'connect-src': [
             *CONTENT_SECURITY_POLICY_DIRECTIVES.get('connect-src', []),
-            os.getenv('R2_ENDPOINT_DOMAIN_FOR_CSP')
+            AWS_S3_ENDPOINT_FOR_CSP
         ],
         'media-src': [
             *CONTENT_SECURITY_POLICY_DIRECTIVES.get('media-src', []),
-            os.getenv('R2_ENDPOINT_DOMAIN_FOR_CSP')
+            AWS_S3_ENDPOINT_FOR_CSP
         ],
     })
 
