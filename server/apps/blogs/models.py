@@ -25,7 +25,7 @@ class Post(models.Model):
 
 
 #  TODO: Instead of using post_save, transcribe the audio outside of main thread and update the post asynchronously
-@receiver(post_save, sender=Post)
+# @receiver(post_save, sender=Post)
 def handle_audio_transcription(sender, instance, created, **kwargs):
     """
     Signal handler to transcribe audio when a post is saved with an audio file.
