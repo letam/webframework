@@ -1,8 +1,11 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.permissions import AllowAny
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
 from .models import Post
 from .serializers import PostSerializer, PostCreateSerializer
+from .transcription import transcribe_audio
 
 
 class PostViewSet(viewsets.ModelViewSet):
@@ -27,3 +30,38 @@ class PostViewSet(viewsets.ModelViewSet):
             else ANONYMOUS_USER_ID
         )
         serializer.save(author_id=user_id)
+
+    @action(detail=True, methods=['post'])
+    def transcribe(self, request, pk=None):
+        """
+        Transcribe the audio file of an existing post.
+        """
+        post = self.get_object()
+
+        if not post.audio:
+            return Response(
+                {"error": "No audio file found for this post"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            transcript = transcribe_audio(post.audio)
+            # Update the post with the transcript
+            update_kwargs = {
+                'head': transcript,
+                **({
+                    'body': transcript,
+                } if len(transcript) > 255 else {})
+            }
+            Post.objects.filter(id=post.id).update(**update_kwargs)
+
+            # Refresh the post instance to get updated data
+            post.refresh_from_db()
+            serializer = self.get_serializer(post)
+            return Response(serializer.data)
+
+        except Exception as e:
+            return Response(
+                {"error": f"Error transcribing audio: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

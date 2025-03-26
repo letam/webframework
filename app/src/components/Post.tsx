@@ -1,9 +1,11 @@
 import type { ReactElement, ReactNode } from "react";
 import DOMPurify from 'dompurify';
+import { useState } from "react";
 
 import { useAuthContext } from "../contexts/auth";
 import { prettyDate } from "../utils/date";
 import { BACKEND_HOST } from "../api/constants";
+import { transcribePost } from "../api/transcribePost";
 
 import type { IPost, IAuthor } from "../types";
 
@@ -31,6 +33,27 @@ interface Properties {
 }
 
 export default function Post({ post }: Properties): ReactElement {
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleTranscribe = async () => {
+    setIsTranscribing(true);
+    setError(null);
+    try {
+      const response = await transcribePost(post.id);
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to transcribe audio');
+      }
+      // Reload the page to show the updated post
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to transcribe audio');
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
   return (
     <div className="py-4 border-b border-gray-200 dark:border-gray-700">
       <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -58,6 +81,25 @@ export default function Post({ post }: Properties): ReactElement {
               });
             }}
           />
+          {!post.body && (
+            <div className="mt-2">
+              <button
+                onClick={handleTranscribe}
+                disabled={isTranscribing}
+                className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-blue-300 disabled:cursor-not-allowed"
+              >
+                {isTranscribing ? 'Transcribing...' : 'Transcribe Audio'}
+              </button>
+              {error && (
+                <p className="mt-2 text-sm text-red-500">{error}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {post.body && (
+        <div className="mt-3">
+          <FormatText>{post.body}</FormatText>
         </div>
       )}
     </div>
