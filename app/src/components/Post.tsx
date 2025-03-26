@@ -8,6 +8,7 @@ import { BACKEND_HOST } from "../api/constants";
 import { transcribePost } from "../api/transcribePost";
 
 import type { IPost, IAuthor } from "../types";
+import { useQueryClient } from "@tanstack/react-query";
 
 function FormatText({ children }: { children: ReactNode }): ReactElement {
   const content = DOMPurify.sanitize(children as string)
@@ -36,6 +37,8 @@ export default function Post({ post }: Properties): ReactElement {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const queryClient = useQueryClient(); // For refetching posts
+
   const handleTranscribe = async () => {
     setIsTranscribing(true);
     setError(null);
@@ -45,8 +48,7 @@ export default function Post({ post }: Properties): ReactElement {
         const data = await response.json();
         throw new Error(data.error || 'Failed to transcribe audio');
       }
-      // Reload the page to show the updated post
-      window.location.reload();
+      queryClient.invalidateQueries({ queryKey: ["posts"] }); // Trigger posts refetch
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to transcribe audio');
     } finally {
