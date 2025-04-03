@@ -16,11 +16,47 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 import environ
 import os
 import logging
+import logging.config
 from pathlib import Path
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'server': {  # Main app logger
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'server.apps': {  # Apps logger
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': False,  # Prevent propagation to avoid duplicate logs
+        },
+        'django': {  # Django framework logger
+            'handlers': ['console'],
+            'level': 'INFO',  # Set to INFO to reduce noise
+            'propagate': True,
+        },
+    },
+}
+
+# Initialize logging
+logging.config.dictConfig(LOGGING)
+logger = logging.getLogger('server')
 
 # Environment variables
 # Reference: https://github.com/joke2k/django-environ

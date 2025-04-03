@@ -7,7 +7,7 @@ import logging
 from .transcription import transcribe_audio
 
 # Configure logging
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('server.apps.blogs')
 
 
 class Post(models.Model):

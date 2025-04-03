@@ -6,7 +6,7 @@ from django.core.files.base import ContentFile
 import tempfile
 
 # Configure logging
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('server.apps.blogs')
 
 def transcribe_audio(audio_file):
     """
