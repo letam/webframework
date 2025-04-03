@@ -400,6 +400,8 @@ CONTENT_SECURITY_POLICY_DIRECTIVES = {
     'frame-ancestors': [SELF],
     'form-action': [SELF],
     'report-uri': '/csp-report/',
+
+    'media-src': [SELF, 'blob:'],
 }
 
 if DEBUG:
@@ -410,8 +412,6 @@ if DEBUG:
         'style-src': [SELF, UNSAFE_INLINE],
         'connect-src': [SELF, 'ws://localhost:5173'],
         'img-src': [SELF, 'localhost:5173'],
-        'media-src': [SELF, 'blob:'],
-
     })
 
 if AWS_S3_ENDPOINT_FOR_CSP:
