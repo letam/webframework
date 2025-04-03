@@ -15,8 +15,12 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 import environ
 import os
+import logging
 from pathlib import Path
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 # Environment variables
 # Reference: https://github.com/joke2k/django-environ
@@ -37,7 +41,7 @@ else:
     ENV_FILE = '.env'
 
 if not Path(ENV_FILE).is_file():
-    print('Required .env file not found.')
+    logger.debug('Required .env file not found.')
     from django.core.management.utils import get_random_secret_key
     with open(ENV_FILE, 'a') as f:
         f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
@@ -46,14 +50,14 @@ if not Path(ENV_FILE).is_file():
             f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
             f.write('USE_LOCAL_FILE_STORAGE=True\n')
             f.write('MEDIA_ROOT=server/uploads\n')
-            print('Created .env file at server/.env with default values for development.')
-            print('WARNING: Please edit the .env file for production environment.')
+            logger.debug('Created .env file at server/.env with default values for development.')
+            logger.warning('Please edit the .env file for production environment.')
         else:
             f.write('DEBUG=False\n')
             f.write('DATABASE_URL=sqlite:////data/db.sqlite3\n')
             f.write('MEDIA_ROOT=/data/uploads\n')
-            print('Created .env file at .env with default values for production.')
-    print()
+            logger.debug('Created .env file at .env with default values for production.')
+    logger.debug('')
 
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 

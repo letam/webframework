@@ -1,8 +1,12 @@
 import os
 import openai
+import logging
 from django.conf import settings
 from django.core.files.base import ContentFile
 import tempfile
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 def transcribe_audio(audio_file):
     """
@@ -32,7 +36,7 @@ def transcribe_audio(audio_file):
                 file=audio,
             )
 
-            print('transcription', transcription.text)
+            logger.debug('Transcription: %s', transcription.text)
 
             # Clean up the temporary file
             os.unlink(temp_file.name)

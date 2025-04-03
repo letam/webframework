@@ -2,8 +2,12 @@ from django.conf import settings
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+import logging
 
 from .transcription import transcribe_audio
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 
 class Post(models.Model):
@@ -48,8 +52,5 @@ def handle_audio_transcription(sender, instance, created, **kwargs):
             }
             Post.objects.filter(id=instance.id).update(**update_kwargs)
         except Exception as e:
-
-                Post.objects.filter(id=instance.id).update(body=transcript)
-        except Exception as e:
             # Log the error but don't raise it to prevent saving from failing
-            print(f"Error transcribing audio: {str(e)}")
+            logger.error("Error transcribing audio: %s", str(e))
