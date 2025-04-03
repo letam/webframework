@@ -12,12 +12,16 @@ logger = logging.getLogger('server.apps.blogs')
 
 class Post(models.Model):
 
+    @staticmethod
+    def audio_file_path(instance, filename):
+        return f'audio/{instance.author.id}/{filename}'
+
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     head = models.CharField(max_length=255, blank=True)
     body = models.TextField(blank=True)
-    audio = models.FileField(upload_to='audio/', blank=True, null=True)
+    audio = models.FileField(upload_to=audio_file_path, blank=True, null=True)
     audio_s3_file_key = models.CharField(max_length=255, blank=True, null=True)
     parent = models.ForeignKey('Post', on_delete=models.SET_NULL, null=True, blank=True)
 
