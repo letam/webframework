@@ -42,15 +42,15 @@ export default function PostForm(): ReactElement {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // Check for supported MIME types, prioritizing Safari-compatible formats
+      // Check for supported MIME types
+      // Reference: https://developer.mozilla.org/en-US/docs/Web/API/MediaRecorder/isTypeSupported
       const mimeType = [
-        'audio/mp4',
-        'audio/mp4;codecs=mp4a',
-        'audio/mpeg',
-        'audio/wav',
+        'audio/webm;codecs=opus',  // Most widely supported
         'audio/webm',
-        'audio/webm;codecs=opus',
-        'audio/ogg;codecs=opus'
+        'audio/ogg;codecs=opus',   // Good browser support
+        'audio/wav',               // Universal support
+        'audio/mp4;codecs=mp4a',  // Fallback
+        'audio/mp4'
       ].find(type => {
         const isSupported = MediaRecorder.isTypeSupported(type);
         console.log(`MIME type ${type} supported: ${isSupported}`);
@@ -58,7 +58,7 @@ export default function PostForm(): ReactElement {
       }) || '';
 
       if (!mimeType) {
-        console.warn('No supported MIME types found for audio recording');
+        throw new Error('No supported audio recording formats found. Please try a different browser.');
       }
 
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
