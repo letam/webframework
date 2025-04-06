@@ -2,6 +2,7 @@
 
 import subprocess
 import os
+import shutil
 import logging
 
 logger = logging.getLogger('server.apps.blogs')
@@ -18,13 +19,18 @@ def convert_to_mp3(input_file: str) -> str:
     Parameters:
         input_file (str): Path to the input audio file.
     """
+
+    # raise error if ffmpeg is not installed
+    if not shutil.which("ffmpeg"):
+        raise FileNotFoundError("ffmpeg is not installed")
+
     output_file = get_output_filename(input_file)
 
     # TODO: Handle case when file already exists
 
-    ffmpeg_binary = "./bin/ffmpeg"
+
     command = [
-        ffmpeg_binary,
+        "ffmpeg",
         "-i", input_file,
         "-vn",
         "-ar", "44100",

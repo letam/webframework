@@ -83,6 +83,11 @@ FROM python:${PYTHON_IMAGE_VERSION} as production
 #     iperf3 \
 #     && rm -rf /var/lib/apt/lists/*
 
+# Install ffmpeg
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy the Python dependencies from the builder stage
 COPY --from=build-backend /usr/local/lib/python3.13/site-packages/ /usr/local/lib/python3.13/site-packages/
 COPY --from=build-backend /usr/local/bin/ /usr/local/bin/
