@@ -45,6 +45,17 @@ class PostViewSet(viewsets.ModelViewSet):
             )
 
         try:
+            # if the audio file is not mp3, convert it to mp3
+            if not post.audio.path.endswith('.mp3'):
+                post.convert_audio_to_mp3()
+
+            # if the audio file is not mp3, return an error
+            if not post.audio.path.endswith('.mp3'):
+                return Response(
+                    {"error": "Audio file is not mp3"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             transcript = transcribe_audio(post.audio)
             # Update the post with the transcript
             update_kwargs = {
