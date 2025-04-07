@@ -2,10 +2,13 @@ from rest_framework import viewsets, status
 from rest_framework.permissions import AllowAny
 from rest_framework.decorators import action
 from rest_framework.response import Response
+import logging
 
 from .models import Post
 from .serializers import PostSerializer, PostCreateSerializer
 from .transcription import transcribe_audio
+
+logger = logging.getLogger(__name__)
 
 
 class PostViewSet(viewsets.ModelViewSet):
@@ -72,7 +75,8 @@ class PostViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
 
         except Exception as e:
+            logger.error(f"Error transcribing audio for post {post.id}: {str(e)}")
             return Response(
-                {"error": f"Error transcribing audio: {str(e)}"},
+                {"error": "An error occurred while processing the audio file"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
