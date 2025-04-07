@@ -13,12 +13,11 @@ from .utils import convert_to_mp3
 logger = logging.getLogger('server.apps.blogs')
 
 
+def audio_file_path(instance, filename):
+    return f'post/{instance.id}/audio/{filename}'
+
+
 class Post(models.Model):
-
-    @staticmethod
-    def audio_file_path(instance, filename):
-        return f'audio/{instance.author.id}/{filename}'
-
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
