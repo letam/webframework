@@ -257,6 +257,7 @@ LOGGING = copy.deepcopy(DEFAULT_LOGGING)
 
 def setup_save_errorlog_to_file(logging: dict):
     import os
+    from logging.handlers import RotatingFileHandler
 
     log_dir: Path = BASE_DIR / '..' / 'log'
     errorlog_filepath: Path = log_dir / 'server-errors.log'
@@ -296,8 +297,10 @@ def setup_save_errorlog_to_file(logging: dict):
                 'level': 'ERROR',
                 'filters': ['require_debug_false'],
                 'formatter': 'django.server',
-                'class': 'logging.FileHandler',
+                'class': 'logging.handlers.RotatingFileHandler',
                 'filename': errorlog_filepath,
+                'maxBytes': 10485760,  # 10MB
+                'backupCount': 5,
             },
         }
     )
