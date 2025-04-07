@@ -4,7 +4,6 @@ import { useState } from "react";
 
 import { useAuthContext } from "../contexts/auth";
 import { prettyDate } from "../utils/date";
-import { BACKEND_HOST } from "../api/constants";
 import { transcribePost } from "../api/transcribePost";
 
 import type { IPost, IAuthor } from "../types";
@@ -70,7 +69,7 @@ export default function Post({ post }: Properties): ReactElement {
         <div className="mt-3">
           <audio
             controls
-            src={post.signedAudioUrl || `${BACKEND_HOST}${post.audio}`}
+            src={post.signedAudioUrl || `${post.audio}`}
             className="w-full"
             onError={(e) => {
               const audioElement = e.currentTarget;
