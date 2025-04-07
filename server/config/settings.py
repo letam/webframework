@@ -301,7 +301,23 @@ def setup_save_errorlog_to_file(logging: dict):
             },
         }
     )
-    logging['loggers']['django']['handlers'].append('file_errors')
+    logging['loggers'].update({
+        'django': {
+            'handlers': ['console', 'file_errors'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'server': {
+            'handlers': ['console', 'file_errors'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'server.apps': {
+            'handlers': ['console', 'file_errors'],
+            'level': 'DEBUG',
+            'propagate': False,
+        }
+    })
     return logging
 
 
