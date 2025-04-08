@@ -69,7 +69,7 @@ export default function Post({ post }: Properties): ReactElement {
         <div className="mt-3">
           <audio
             controls
-            preload="none"
+            preload="metadata"
             src={post.signedAudioUrl || `${post.audio}`}
             className="w-full"
             onError={(e) => {
