@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 import os.path
+import os
 
 import logging
 
@@ -58,9 +59,10 @@ class Post(models.Model):
             # update the audio field with the new mp3 file
             self.audio.name = new_audio_file_name
 
-            # TODO: Fix to be able to update the audio field with the new mp3 file, and remove the old audio file
+            self.save()
 
-            # self.save()
+            # TODO: Fix to delete old audio file from file system after update
+            # # remove the old audio file from file system
+            # os.remove(old_audio_file.path)
 
-            # # remove the old audio file
-            # old_audio_file.delete()
+            # TODO: Run cleanup script to delete old audio files from file system every hour
