@@ -30,6 +30,17 @@ class Post(models.Model):
     def __str__(self):
         return self.head
 
+    def save(self, *args, **kwargs):
+        if self.id is None:
+            audio = self.audio
+            self.audio = None
+            super().save(*args, **kwargs)
+            self.audio = audio
+            if 'force_insert' in kwargs:
+                kwargs.pop('force_insert')
+
+        super().save(*args, **kwargs)
+
     def convert_audio_to_mp3(self):
         """
         Convert the audio file to MP3 format.
