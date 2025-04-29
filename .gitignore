@@ -16,3 +16,5 @@ secret_key.txt
 .DS_Store
 
 server/uploads/
+
+node_modules/
