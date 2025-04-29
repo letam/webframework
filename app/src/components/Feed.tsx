@@ -20,7 +20,8 @@ const Feed: React.FC = () => {
 			id: '1',
 			text: 'Just recorded a new podcast episode! Check it out 🎧',
 			mediaType: 'audio',
-			mediaUrl: 'https://soundtakes.com/p/s/RkP/d8pHEkmMkk0w.mp3',
+			mediaUrl:
+				'https://citizen-dj.labs.loc.gov/audio/samplepacks/loc-fma/Mushrooms_fma-178531_001_00-00-01.mp3',
 			timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
 			username: 'audiophile',
 			userAvatar: 'https://ui-avatars.com/api/?name=AP&background=7c3aed&color=fff',

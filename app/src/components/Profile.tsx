@@ -16,7 +16,8 @@ const Profile: React.FC<ProfileProps> = ({ username = 'user1' }) => {
 			id: '101',
 			text: 'Just shared my thoughts on the latest tech trends in my new podcast episode!',
 			mediaType: 'audio' as const,
-			mediaUrl: 'https://soundtakes.com/p/s/RkP/d8pHEkmMkk0w.mp3',
+			mediaUrl:
+				'https://citizen-dj.labs.loc.gov/audio/samplepacks/loc-fma/Mushrooms_fma-178531_001_00-00-01.mp3',
 			timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2), // 2 days ago
 			username: 'user1',
 			userAvatar: 'https://ui-avatars.com/api/?name=User&background=7c3aed&color=fff',

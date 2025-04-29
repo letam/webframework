@@ -431,7 +431,12 @@ if DEBUG:
         'style-src': [SELF, UNSAFE_INLINE],
         'style-src-elem': [SELF, UNSAFE_INLINE, 'http://localhost:5173/src/index.css'],
         'connect-src': [SELF, 'ws://localhost:5173'],
-        'img-src': [SELF, 'localhost:5173'],
+        'img-src': [SELF, 'localhost:5173', 'https://ui-avatars.com/api/'],
+        'media-src': [
+            *CONTENT_SECURITY_POLICY_DIRECTIVES.get('media-src', []),
+            'https://citizen-dj.labs.loc.gov/audio/samplepacks/loc-fma/Mushrooms_fma-178531_001_00-00-01.mp3',
+            'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+        ],
     })
 
 if AWS_S3_ENDPOINT_FOR_CSP:
