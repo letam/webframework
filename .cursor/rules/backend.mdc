@@ -1,0 +1,20 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Backend Structure Guide
+
+- The backend code is located in the [server](mdc:server) directory.
+- The main management script is [server/manage.py](mdc:server/manage.py).
+- Backend applications are organized in [server/apps](mdc:server/apps), including:
+  - [website](mdc:server/apps/website)
+  - [users](mdc:server/apps/users)
+  - [blogs](mdc:server/apps/blogs)
+  - [uploads](mdc:server/apps/uploads)
+  - [auth](mdc:server/apps/auth)
+- Each app typically contains [views.py](mdc:server/apps/website/views.py), [models.py](mdc:server/apps/website/models.py), [admin.py](mdc:server/apps/website/admin.py), and [tests.py](mdc:server/apps/website/tests.py).
+- Database file: [server/db.sqlite3](mdc:server/db.sqlite3)
+- Configuration files and settings are in [server/config](mdc:server/config).
+
+Refer to the [project structure guide](mdc:project-structure.mdc) for an overview of the entire project.

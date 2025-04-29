@@ -1,0 +1,16 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Frontend Structure Guide
+
+- The frontend code is located in the [app](mdc:app) directory.
+- Main source files are in [app/src](mdc:app/src).
+- The entry point is [app/src/main.tsx](mdc:app/src/main.tsx), which loads the main app component from [app/src/App.tsx](mdc:app/src/App.tsx).
+- Page components are in [app/src/pages](mdc:app/src/pages), including [Index.tsx](mdc:app/src/pages/Index.tsx), [NotFound.tsx](mdc:app/src/pages/NotFound.tsx), and [ProfilePage.tsx](mdc:app/src/pages/ProfilePage.tsx).
+- Shared components are in [app/src/components](mdc:app/src/components).
+- Styles are defined in [app/src/index.css](mdc:app/src/index.css) and [app/src/App.css](mdc:app/src/App.css).
+- Configuration files include [app/vite.config.ts](mdc:app/vite.config.ts) and [app/tsconfig.json](mdc:app/tsconfig.json).
+
+Refer to the [project structure guide](mdc:project-structure.mdc) for an overview of the entire project.

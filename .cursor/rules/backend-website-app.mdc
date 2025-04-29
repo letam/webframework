@@ -1,0 +1,19 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Backend Website App Guide
+
+The [website](mdc:server/apps/website) app in the backend contains:
+
+- [views.py](mdc:server/apps/website/views.py): Defines view functions or classes for handling web requests.
+- [models.py](mdc:server/apps/website/models.py): Contains database models for the website app.
+- [admin.py](mdc:server/apps/website/admin.py): Registers models for the Django admin interface.
+- [apps.py](mdc:server/apps/website/apps.py): App configuration.
+- [tests.py](mdc:server/apps/website/tests.py): Test cases for the website app.
+- [migrations](mdc:server/apps/website/migrations): Database migration files.
+- [templates](mdc:server/apps/website/templates): HTML templates for rendering views.
+- [__init__.py](mdc:server/apps/website/__init__.py): Marks the directory as a Python package.
+
+Refer to the [backend structure guide](mdc:backend.mdc) for more details on backend organization.

@@ -1,0 +1,16 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Frontend Pages Guide
+
+The main page components for the frontend are located in [app/src/pages](mdc:app/src/pages):
+
+- [Index.tsx](mdc:app/src/pages/Index.tsx): Likely the landing or home page of the application.
+- [NotFound.tsx](mdc:app/src/pages/NotFound.tsx): Handles 404 or unmatched routes.
+- [ProfilePage.tsx](mdc:app/src/pages/ProfilePage.tsx): Displays user profile information.
+
+These components are typically routed from the main app component ([App.tsx](mdc:app/src/App.tsx)).
+
+Refer to the [frontend structure guide](mdc:frontend.mdc) for more details on the frontend organization.

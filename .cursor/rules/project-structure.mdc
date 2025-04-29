@@ -1,0 +1,15 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+# Project Structure Guide
+
+This project is organized into frontend and backend components:
+
+- The frontend is located in the [app](mdc:app) directory, with main source files in [app/src](mdc:app/src). Entry point: [app/src/main.tsx](mdc:app/src/main.tsx). Main app component: [app/src/App.tsx](mdc:app/src/App.tsx).
+- The backend is located in the [server](mdc:server) directory. The main management script is [server/manage.py](mdc:server/manage.py). Backend apps are in [server/apps](mdc:server/apps), including [website](mdc:server/apps/website), [users](mdc:server/apps/users), [blogs](mdc:server/apps/blogs), [uploads](mdc:server/apps/uploads), and [auth](mdc:server/apps/auth).
+- Project-level configuration and dependencies are managed in [package.json](mdc:package.json), [requirements.txt](mdc:requirements.txt), and [pyproject.toml](mdc:pyproject.toml).
+- The [README.md](mdc:README.md) provides an overview and setup instructions.
+
+Refer to the respective directories for more detailed rules on frontend and backend structure.
