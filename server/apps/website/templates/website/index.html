@@ -1,38 +1,97 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    {% if debug %}
-      <link rel="icon" type="image/svg+xml" href="{% static 'favicon.svg' %}" />
-      <link rel="apple-touch-icon" href="{% static 'apple-touch-icon.png' %}" />
-    {% else %}
-      <link rel="icon" type="image/png" href="/favicon.png" />
-      <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    {% endif %}
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="wut up" />
-    <meta name="theme-color" content="#42b883" />
-    <title>wut up</title>
-    <!-- <link rel="stylesheet" href="https://rsms.me/inter/inter.css" /> -->
-  </head>
-  <body class="antialiased text-gray-900 dark:text-white dark:bg-gray-800">
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="root"></div>
 
-{% if debug %}
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  {% if debug %}
+  <link rel="icon" type="image/svg+xml" href="{% static 'vite-logo.svg' %}" />
+  <link rel="apple-touch-icon" href="{% static 'vite-logo.png' %}" />
+  {% else %}
+  <link rel="icon" type="image/svg+xml" href="/vite-logo.svg" />
+  <link rel="apple-touch-icon" href="/vite-logo.png" />
+  {% endif %}
+
+  <title>Echo Sphere</title>
+  <meta name="description" content="Echo Sphere" />
+  <!-- <meta name="author" content="" /> -->
+
+  <meta property="og:title" content="Echo Sphere" />
+  <!-- <meta property="og:description" content="" /> -->
+  <meta property="og:type" content="website" />
+  <!-- <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" /> -->
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@slowpowk" />
+  <!-- <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" /> -->
+
+  <script>
+    // Blocking script to set theme before any content renders
+    (function () {
+      // This script runs before the page renders to prevent flash of unstyled content
+      try {
+        const theme = (() => {
+          if (typeof localStorage !== "undefined") {
+            const savedTheme = localStorage.getItem("app-theme");
+            if (savedTheme) return savedTheme;
+          }
+          if (typeof window !== "undefined") {
+            if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+              return "dark";
+            }
+          }
+          return "light";
+        })();
+
+        if (theme === "dark") {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      } catch (e) {
+        console.error("Error setting theme:", e);
+      }
+    })();
+  </script>
+
+  <style>
+    /* Prevent flash of unstyled content */
+    :root {
+      color-scheme: light dark;
+    }
+
+    .dark {
+      color-scheme: dark;
+    }
+  </style>
+
+  {% if debug %}
+  <!-- development -->
+  <link href="http://localhost:5173/src/index.css" rel="stylesheet">
+  {% endif %}
+
+</head>
+
+<body>
+  <div id="root"></div>
+
+  {% if debug %}
+  <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
+  <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
   <!-- development -->
   <script type="module">
     import RefreshRuntime from 'http://localhost:5173/@react-refresh'
     RefreshRuntime.injectIntoGlobalHook(window)
-    window.$RefreshReg$ = () => {}
+    window.$RefreshReg$ = () => { }
     window.$RefreshSig$ = () => (type) => type
     window.__vite_plugin_react_preamble_installed__ = true
   </script>
   <script type="module" src="http://localhost:5173/@vite/client"></script>
   <script type="module" src="http://localhost:5173/src/main.tsx"></script>
-{% endif %}
+  {% endif %}
 
-  </body>
+</body>
+
 </html>
-

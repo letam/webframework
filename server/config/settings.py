@@ -427,8 +427,9 @@ if DEBUG:
     from csp.constants import UNSAFE_INLINE
     CONTENT_SECURITY_POLICY_DIRECTIVES.update({
         'script-src': [SELF, UNSAFE_INLINE],
-        'script-src-elem': [SELF, UNSAFE_INLINE, 'localhost:5173'],
+        'script-src-elem': [SELF, UNSAFE_INLINE, 'localhost:5173', 'https://cdn.gpteng.co/gptengineer.js'],
         'style-src': [SELF, UNSAFE_INLINE],
+        'style-src-elem': [SELF, UNSAFE_INLINE, 'http://localhost:5173/src/index.css'],
         'connect-src': [SELF, 'ws://localhost:5173'],
         'img-src': [SELF, 'localhost:5173'],
     })
