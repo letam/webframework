@@ -1,13 +1,67 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>app + TS</title>
+    <title>audio-echo-sphere</title>
+    <meta name="description" content="Lovable Generated Project" />
+    <meta name="author" content="Lovable" />
+
+    <meta property="og:title" content="audio-echo-sphere" />
+    <meta property="og:description" content="Lovable Generated Project" />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@lovable_dev" />
+    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+    <script>
+      // Blocking script to set theme before any content renders
+      (function() {
+        // This script runs before the page renders to prevent flash of unstyled content
+        try {
+          const theme = (() => {
+            if (typeof localStorage !== "undefined") {
+              const savedTheme = localStorage.getItem("app-theme");
+              if (savedTheme) return savedTheme;
+            }
+            if (typeof window !== "undefined") {
+              if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+                return "dark";
+              }
+            }
+            return "light";
+          })();
+
+          if (theme === "dark") {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+          }
+        } catch (e) {
+          console.error("Error setting theme:", e);
+        }
+      })();
+    </script>
+
+    <style>
+      /* Prevent flash of unstyled content */
+      :root {
+        color-scheme: light dark;
+      }
+      .dark {
+        color-scheme: dark;
+      }
+    </style>
+
+    <link href="/src/index.css" rel="stylesheet">
   </head>
-  <body class="antialiased text-gray-900 dark:text-white dark:bg-gray-800">
+
+  <body>
     <div id="root"></div>
+    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
+    <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

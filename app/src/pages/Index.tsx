@@ -1,21 +1,16 @@
-import type { ReactElement } from "react";
+import type React from 'react'
+import Navbar from '@/components/Navbar'
+import Feed from '@/components/Feed'
 
-import PostList from "../components/PostList";
-import PostForm from "../components/PostForm";
-import Header from "../components/Header";
-import Head from "../components/Head";
-import Footer from "../components/Footer";
-
-export default function Index(): ReactElement {
-  return (
-    <>
-      <Head title="wut up" />
-      <Header />
-      <div className="w-full">
-        <PostForm />
-      </div>
-      <PostList />
-      <Footer />
-    </>
-  );
+const Index: React.FC = () => {
+	return (
+		<div className="min-h-screen bg-background">
+			<Navbar />
+			<div className="container px-4 py-4">
+				<Feed />
+			</div>
+		</div>
+	)
 }
+
+export default Index

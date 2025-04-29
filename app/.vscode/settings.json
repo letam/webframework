@@ -1,0 +1,12 @@
+{
+	"files.associations": {
+		"*.css": "tailwindcss"
+	},
+	"editor.formatOnSave": true,
+	"editor.defaultFormatter": "biomejs.biome",
+	"editor.codeActionsOnSave": {
+		"source.fixAll": "explicit",
+		"source.organizeImports": "never"
+	},
+	"editor.tabSize": 2
+}
