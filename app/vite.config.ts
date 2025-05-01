@@ -24,8 +24,14 @@ export default defineConfig(({ mode }) => ({
 		},
 	},
 
-  ...(NODE_ENV === 'development' ? {} : {
-    // Reference: https://vite.dev/config/shared-options.html#base ; https://vite.dev/guide/build.html#public-base-path
-    base: '/static/app/',
-  }),
+	...(NODE_ENV === 'development' ? {} : {
+		// Reference: https://vite.dev/config/shared-options.html#base ; https://vite.dev/guide/build.html#public-base-path
+		base: '/static/app/',
+	}),
+
+	test: {
+		environment: 'jsdom',
+		setupFiles: ['./vitest.setup.ts'],
+		globals: true,
+	},
 }))

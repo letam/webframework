@@ -11,7 +11,10 @@
 		"preview": "vite preview",
 		"format": "biome format --write .",
 		"check": "biome check .",
-		"format:check": "biome format --check ."
+		"format:check": "biome format --check .",
+		"test": "vitest",
+		"test:watch": "vitest watch",
+		"test:coverage": "vitest run --coverage"
 	},
 	"dependencies": {
 		"@hookform/resolvers": "^5.0.1",
@@ -67,6 +70,9 @@
 		"@eslint/js": "^9.25.1",
 		"@tailwindcss/typography": "^0.5.16",
 		"@tailwindcss/vite": "^4.1.4",
+		"@testing-library/jest-dom": "^6.6.3",
+		"@testing-library/react": "^16.3.0",
+		"@testing-library/user-event": "^14.6.1",
 		"@types/node": "^22.14.1",
 		"@types/react": "^19.1.2",
 		"@types/react-dom": "^19.1.2",
@@ -75,10 +81,12 @@
 		"eslint-plugin-react-hooks": "^5.2.0",
 		"eslint-plugin-react-refresh": "^0.4.20",
 		"globals": "^16.0.0",
+		"jsdom": "^26.1.0",
 		"lovable-tagger": "^1.1.8",
 		"tailwindcss": "^4.1.4",
 		"typescript": "^5.8.3",
 		"typescript-eslint": "^8.31.0",
-		"vite": "^6.3.2"
+		"vite": "^6.3.2",
+		"vitest": "^3.1.2"
 	}
 }
