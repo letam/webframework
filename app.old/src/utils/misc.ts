@@ -1,1 +1,0 @@
-export const STATIC_APP_ROOT = import.meta.env.PROD ? "/static/app/": "/"
