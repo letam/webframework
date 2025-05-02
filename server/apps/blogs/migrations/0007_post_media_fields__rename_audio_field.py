@@ -23,16 +23,21 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterField(
             model_name='post',
+            name='media_s3_file_key',
+            field=models.CharField(blank=True, max_length=255),
+        ),
+        migrations.AlterField(
+            model_name='post',
             name='media',
             field=models.FileField(
-                blank=True, null=True, upload_to=apps.blogs.models.media_file_path
+                blank=True, upload_to=apps.blogs.models.media_file_path
             ),
         ),
         migrations.AddField(
             model_name='post',
             name='media_mp3',
             field=models.FileField(
-                blank=True, null=True, upload_to=apps.blogs.models.media_file_path
+                blank=True, upload_to=apps.blogs.models.media_file_path
             ),
         ),
         migrations.AddField(

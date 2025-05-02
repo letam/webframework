@@ -4,7 +4,7 @@ import { Calendar, MapPin, Link as LinkIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import Post from './post'
+import { Post } from './post/Post'
 
 interface ProfileProps {
 	username?: string

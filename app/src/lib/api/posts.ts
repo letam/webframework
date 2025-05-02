@@ -1,45 +1,97 @@
-import type {
-	Post,
-	CreatePostRequest,
-	CreatePostResponse,
-	GetPostsResponse,
-} from '../../types/post'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+import type { Post, CreatePostRequest } from '../../types/post'
+import { SERVER_API_URL, UPLOAD_FILES_TO_S3 } from '../constants'
 
 export const getPosts = async (): Promise<Post[]> => {
 	try {
-		const response = await fetch(`${API_BASE_URL}/posts`)
+		const response = await fetch(`${SERVER_API_URL}/posts/`)
 		if (!response.ok) {
 			throw new Error('Failed to fetch posts')
 		}
-		const data: GetPostsResponse = await response.json()
-		return data.posts.map((post) => ({
+		let data: Post[] = await response.json()
+		data = data.map((post) => ({
 			...post,
-			timestamp: new Date(post.timestamp),
+			created: new Date(post.created),
 		}))
+
+		// Get signed url for each post
+		const getPostSignedUrl = async (postId: number) => {
+			const response = await fetch(`${SERVER_API_URL}/uploads/presign/${postId}/`)
+			return response.json()
+		}
+		// TODO: If signed url is was recently generated, then don't request again and use the cached value
+		// TODO: Have single endpoint request for all signed urls
+		const dataWithSignedUrl = await Promise.all(
+			data.map(async (post) => {
+				if (post.media_s3_file_key) {
+					const response = (await getPostSignedUrl(post.id)) as { url: string }
+					// TODO: Cache the signed url
+					return { ...post, signedMediaUrl: response.url }
+				}
+				return post
+			})
+		)
+		return dataWithSignedUrl
 	} catch (error) {
 		console.error('Error fetching posts:', error)
 		throw error
 	}
 }
 
-export const createPost = async (postData: CreatePostRequest): Promise<Post> => {
+export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 	try {
-		const response = await fetch(`${API_BASE_URL}/posts`, {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify(postData),
-		})
+		let response: Response
+		const formData = new FormData()
+		formData.append('body', data.text)
+
+		// Check environment variable to see if we upload to S3 cloud-compatible storage or local storage
+		if (data.media && UPLOAD_FILES_TO_S3) {
+			// Get presigned url from backend
+			response = await fetch(`${SERVER_API_URL}/uploads/presign/`, {
+				method: 'POST',
+				body: JSON.stringify({
+					file_name: data.media.name,
+					content_type: data.media.type,
+				}),
+			})
+			// get presigned url from response
+			const presignedUrl = (await response.json()) as { url: string; file_path: string }
+
+			// upload file to s3
+			// NOTE: Must edit CORS settings for the bucket, refer to project's server/config/s3-cors.json
+			// https://dash.cloudflare.com/<ACCOUNT_ID>/r2/default/buckets/<bucket_name>/cors/edit
+			await fetch(presignedUrl.url, {
+				method: 'PUT',
+				headers: {
+					'Content-Type': data.media.type,
+				},
+				body: data.media,
+			})
+
+			// create post with file url
+			formData.append('audio_s3_file_key', presignedUrl.file_path)
+			response = await fetch(`${SERVER_API_URL}/posts/`, {
+				method: 'POST',
+				body: formData,
+			})
+		} else {
+			if (data.media) {
+				formData.append('media_type', data.media_type)
+				formData.append('media', data.media)
+			}
+
+			response = await fetch(`${SERVER_API_URL}/posts/`, {
+				method: 'POST',
+				body: formData,
+			})
+		}
+
 		if (!response.ok) {
 			throw new Error('Failed to create post')
 		}
-		const data: CreatePostResponse = await response.json()
+		const record: Post = await response.json()
 		return {
-			...data,
-			timestamp: new Date(data.timestamp),
+			...record,
+			created: new Date(record.created),
 		}
 	} catch (error) {
 		console.error('Error creating post:', error)

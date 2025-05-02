@@ -13,7 +13,7 @@ def set_media_type(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('blogs', '0007_rename_audio_s3_file_key_post_media_s3_file_key_and_more'),
+        ('blogs', '0007_post_media_fields__rename_audio_field'),
     ]
 
     operations = [

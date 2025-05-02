@@ -1,3 +1,4 @@
+from django.conf import settings
 from rest_framework import viewsets, status
 from rest_framework.permissions import AllowAny
 from rest_framework.decorators import action
@@ -33,6 +34,33 @@ class PostViewSet(viewsets.ModelViewSet):
             else ANONYMOUS_USER_ID
         )
         serializer.save(author_id=user_id)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+
+        # Only print the request data in DEBUG mode
+        if settings.DEBUG:
+            # pretty print the request data
+            import json
+
+            print("Pretty print of request data:")
+            # make a copy of the request data
+            request_data = request.data.copy()
+            # remove the media file from the request data before logging it
+            media = request_data.pop("media")
+            if media:
+                print(f"File: {media}")
+            print(json.dumps(request_data, indent=4))
+
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+
+        # Get the created instance and serialize it with PostSerializer
+        instance = serializer.instance
+        response_serializer = PostSerializer(instance)
+
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
     @action(detail=True, methods=['post'])
     def transcribe(self, request, pk=None):

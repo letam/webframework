@@ -26,9 +26,9 @@ class Post(models.Model):
     head = models.CharField(max_length=255, blank=True)
     body = models.TextField(blank=True)
     media_type = models.CharField(max_length=255, blank=True, choices=MEDIA_TYPE_CHOICES)
-    media = models.FileField(upload_to=media_file_path, blank=True, null=True)
-    media_mp3 = models.FileField(upload_to=media_file_path, blank=True, null=True)
-    media_s3_file_key = models.CharField(max_length=255, blank=True, null=True)
+    media = models.FileField(upload_to=media_file_path, blank=True)
+    media_mp3 = models.FileField(upload_to=media_file_path, blank=True)
+    media_s3_file_key = models.CharField(max_length=255, blank=True)
     parent = models.ForeignKey('Post', on_delete=models.SET_NULL, null=True, blank=True)
 
     class Meta:

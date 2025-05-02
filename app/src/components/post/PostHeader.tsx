@@ -22,9 +22,11 @@ const PostHeader: React.FC<PostHeaderProps> = ({ username, userAvatar, timestamp
 
 			<div className="grow">
 				<div className="flex items-center gap-2">
-					<p className="font-semibold">@{username}</p>
+					<p className="font-semibold">{username}</p>
 					<span className="text-muted-foreground text-sm">·</span>
-					<p className="text-muted-foreground text-sm">{timeAgo}</p>
+					<p className="text-muted-foreground text-sm" title={timestamp.toLocaleString()}>
+						{timeAgo}
+					</p>
 
 					<Button variant="ghost" size="icon" className="ml-auto h-8 w-8">
 						<MoreHorizontal className="h-4 w-4" />

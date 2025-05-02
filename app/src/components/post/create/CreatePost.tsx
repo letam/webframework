@@ -7,18 +7,10 @@ import TextPostTab from './TextPostTab'
 import AudioPostTab from './AudioPostTab'
 import VideoPostTab from './VideoPostTab'
 import MediaPreview from './MediaPreview'
+import type { CreatePostRequest } from '@/types/post'
 
 interface CreatePostProps {
-	onPostCreated: (post: {
-		id: string
-		text: string
-		mediaType?: 'audio' | 'video'
-		mediaUrl?: string
-		timestamp: Date
-		username: string
-		userAvatar: string
-		likes: number
-	}) => void
+	onPostCreated: (post: CreatePostRequest) => void
 }
 
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
@@ -87,30 +79,33 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 		// In a real app, we would upload the blob to a server and get a URL back
 		// For this demo, we'll create object URLs
+		// TODO: Upload the blob to a server and get a URL back
+		let blob: Blob | null = null
 		if (mediaType === 'audio' && (audioBlob || audioFile)) {
-			const blob = audioFile || audioBlob
+			blob = audioFile || audioBlob
 			if (blob) {
 				mediaUrl = URL.createObjectURL(blob)
 				finalMediaType = 'audio'
 			}
 		} else if (mediaType === 'video' && (videoBlob || videoFile)) {
-			const blob = videoFile || videoBlob
+			blob = videoFile || videoBlob
 			if (blob) {
 				mediaUrl = URL.createObjectURL(blob)
 				finalMediaType = 'video'
 			}
 		}
+		let file: File | null = null
+		// if file is a blob, convert it to a file
+		if (blob && !(blob instanceof File)) {
+			const fileExtension = finalMediaType === 'audio' ? 'mp3' : 'mp4'
+			file = new File([blob], `recording_${Date.now()}.${fileExtension}`, { type: finalMediaType })
+		}
 
 		// Create the post
-		const newPost = {
-			id: Date.now().toString(),
+		const newPost: CreatePostRequest = {
 			text: postText,
-			mediaType: finalMediaType,
-			mediaUrl: mediaUrl || undefined,
-			timestamp: new Date(),
-			username: 'user1',
-			userAvatar: 'https://ui-avatars.com/api/?name=User&background=7c3aed&color=fff',
-			likes: 0,
+			media_type: finalMediaType,
+			media: file,
 		}
 
 		onPostCreated(newPost)

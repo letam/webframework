@@ -3,9 +3,9 @@ import { Heart, MessageCircle, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface PostActionsProps {
-	id: string
+	id: number
 	likes: number
-	onLike: (id: string) => void
+	onLike: (id: number) => void
 }
 
 const PostActions: React.FC<PostActionsProps> = ({ id, likes, onLike }) => {

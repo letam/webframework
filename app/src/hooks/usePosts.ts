@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Post } from '../types/post'
+import type { Post, CreatePostRequest } from '../types/post'
 import { getPosts, createPost } from '../lib/api/posts'
 
 export const usePosts = () => {
@@ -20,9 +20,7 @@ export const usePosts = () => {
 		}
 	}, [])
 
-	const addPost = async (
-		postData: Omit<Post, 'id' | 'timestamp' | 'username' | 'userAvatar' | 'likes'>
-	) => {
+	const addPost = async (postData: CreatePostRequest) => {
 		try {
 			const newPost = await createPost(postData)
 			setPosts((prevPosts) => [newPost, ...prevPosts])

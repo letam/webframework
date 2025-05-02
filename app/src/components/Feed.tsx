@@ -1,16 +1,13 @@
 import type React from 'react'
-import Post from './post'
+import { Post } from './post/Post'
 import CreatePost from './post/create'
 import { usePosts } from '../hooks/usePosts'
+import type { CreatePostRequest } from '@/types/post'
 
 const Feed: React.FC = () => {
 	const { posts, isLoading, error, addPost } = usePosts()
 
-	const handlePostCreated = async (postData: {
-		text: string
-		mediaType?: 'audio' | 'video'
-		mediaUrl?: string
-	}) => {
+	const handlePostCreated = async (postData: CreatePostRequest) => {
 		try {
 			await addPost(postData)
 		} catch (error) {
@@ -18,7 +15,7 @@ const Feed: React.FC = () => {
 		}
 	}
 
-	const handleLike = (id: string) => {
+	const handleLike = (id: number) => {
 		// TODO: Implement like functionality with backend
 		console.log('Like post:', id)
 	}
@@ -41,18 +38,7 @@ const Feed: React.FC = () => {
 
 			<div className="space-y-4 my-6">
 				{posts.map((post) => (
-					<Post
-						key={post.id}
-						id={post.id}
-						text={post.text}
-						mediaType={post.mediaType}
-						mediaUrl={post.mediaUrl}
-						timestamp={post.timestamp}
-						username={post.username}
-						userAvatar={post.userAvatar}
-						likes={post.likes}
-						onLike={handleLike}
-					/>
+					<Post key={post.id} post={post} onLike={handleLike} />
 				))}
 			</div>
 		</div>
