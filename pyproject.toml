@@ -1,3 +1,42 @@
+[tool.ruff]
+# https://docs.astral.sh/ruff/settings/
+
+# Target Python version
+target-version = "py313" # change to match your Django project's Python version
+
+# Include common linting rules and Django-specific rules
+select = [
+  "E", # pycodestyle errors
+  "F", # pyflakes
+  "I", # isort (import sorting)
+  "DJ", # Django-specific rules
+  "D", # pydocstyle (docstring checks)
+  "B", # flake8-bugbear
+  "N", # pep8-naming
+  "UP", # pyupgrade
+]
+
+# Exclude migrations from strict linting
+exclude = [
+  "**/migrations/**",
+]
+
+# Max line length (optional)
+line-length = 99
+
+# Enable autofix on save
+fix = true
+
+# Optional: Restrict to specific paths (e.g., Django apps)
+# extend-include = ["*.py"]
+
+# Quote style
+[tool.ruff.format]
+quote-style = "preserve"
+
+# Docstring convention
+[tool.ruff.lint.pydocstyle]
+convention = "google" # or "numpy", "pep257"
 
 [tool.black]
 # https://black.readthedocs.io/en/stable/usage_and_configuration/the_basics.html
@@ -9,22 +48,19 @@ extend-exclude = '''
 '''
 skip-string-normalization = true
 
-
 [tool.isort]
 profile = "black"
-
 
 [tool.pyright]
 # https://github.com/microsoft/pyright/blob/main/docs/configuration.md
 # reportOptionalMemberAccess = false
-include = ["scripts", "server"]
 exclude = [
-	"**/node_modules",
-	"**/__pycache__",
-	".git",
-	"app",
+  "**/node_modules",
+  "**/__pycache__",
+  ".git",
+  "app",
 ]
-
+include = ["scripts", "server"]
 
 [tool.django-stubs]
 # django_settings_module = "config.settings"
