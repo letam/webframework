@@ -24,8 +24,9 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
             'author',
             'head',
             'body',
-            'audio',
-            'audio_s3_file_key',
+            'media_type',
+            'media',
+            'media_s3_file_key',
             'post_set',
         ]
 
@@ -36,6 +37,7 @@ class PostCreateSerializer(serializers.ModelSerializer):
         fields = [
             'head',
             'body',
-            'audio',
-            'audio_s3_file_key',
+            'media_type',
+            'media',
+            'media_s3_file_key',
         ]

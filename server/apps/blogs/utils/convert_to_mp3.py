@@ -14,10 +14,10 @@ def get_output_filename(input_file: str) -> str:
 
 def convert_to_mp3(input_file: str) -> str:
     """
-    Converts an audio file to MP3 format using the local ffmpeg binary located in the project.
+    Converts a file to MP3 format using the local ffmpeg binary located in the project.
 
     Parameters:
-        input_file (str): Path to the input audio file.
+        input_file (str): Path to the input media file.
     """
 
     # raise error if ffmpeg is not installed
@@ -59,5 +59,4 @@ if __name__ == "__main__":
         logger.error("No input file provided.")
         exit(1)
 
-    input_audio = filename
-    convert_to_mp3(input_audio)
+    convert_to_mp3(filename)

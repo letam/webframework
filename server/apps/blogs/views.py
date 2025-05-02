@@ -37,35 +37,34 @@ class PostViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def transcribe(self, request, pk=None):
         """
-        Transcribe the audio file of an existing post.
+        Transcribe the audio of a media file of an existing post.
         """
         post = self.get_object()
 
-        if not post.audio:
+        if not post.media and not post.media_mp3:
             return Response(
-                {"error": "No audio file found for this post"},
+                {"error": "No media file found for this post"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
-            # if the audio file is not mp3, convert it to mp3
-            if not post.audio.path.endswith('.mp3'):
-                post.convert_audio_to_mp3()
+            # if the media file is not mp3, convert it to mp3
+            media = post.media_mp3 if post.media_mp3 else post.media
+            if not media.path.endswith('.mp3'):
+                post.convert_media_to_mp3()
+                media = post.media_mp3
 
-            # if the audio file is not mp3, return an error
-            if not post.audio.path.endswith('.mp3'):
+            # if the media file is not mp3, return an error
+            if not media.path.endswith('.mp3'):
                 return Response(
-                    {"error": "Audio file is not mp3"},
+                    {"error": "Media file is not mp3"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            transcript = transcribe_audio(post.audio)
+            transcript = transcribe_audio(media)
             # Update the post with the transcript
             update_kwargs = {
-                'head': transcript,
-                **({
-                    'body': transcript,
-                } if len(transcript) > 255 else {})
+                'body': transcript,
             }
             Post.objects.filter(id=post.id).update(**update_kwargs)
 
@@ -77,6 +76,6 @@ class PostViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"Error transcribing audio for post {post.id}: {str(e)}")
             return Response(
-                {"error": "An error occurred while processing the audio file"},
+                {"error": "An error occurred while transcribing the media file"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

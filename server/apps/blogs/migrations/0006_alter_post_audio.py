@@ -11,9 +11,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterField(
-            model_name='post',
-            name='audio',
-            field=models.FileField(blank=True, null=True, upload_to=apps.blogs.models.audio_file_path),
-        ),
+        # migrations.AlterField(
+        #     model_name='post',
+        #     name='audio',
+        #     field=models.FileField(blank=True, null=True, upload_to=apps.blogs.models.audio_file_path),
+        # ),
     ]

@@ -11,9 +11,13 @@ from .utils import convert_to_mp3
 logger = logging.getLogger('server.apps.blogs')
 
 
-def audio_file_path(instance, filename):
-    return f'post/{instance.id}/audio/{filename}'
+def media_file_path(instance, filename):
+    return f'post/{instance.id}/media/{filename}'
 
+MEDIA_TYPE_CHOICES = [
+    ('audio', 'Audio'),
+    ('video', 'Video'),
+]
 
 class Post(models.Model):
     created = models.DateTimeField(auto_now_add=True)
@@ -21,8 +25,10 @@ class Post(models.Model):
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     head = models.CharField(max_length=255, blank=True)
     body = models.TextField(blank=True)
-    audio = models.FileField(upload_to=audio_file_path, blank=True, null=True)
-    audio_s3_file_key = models.CharField(max_length=255, blank=True, null=True)
+    media_type = models.CharField(max_length=255, blank=True, choices=MEDIA_TYPE_CHOICES)
+    media = models.FileField(upload_to=media_file_path, blank=True, null=True)
+    media_mp3 = models.FileField(upload_to=media_file_path, blank=True, null=True)
+    media_s3_file_key = models.CharField(max_length=255, blank=True, null=True)
     parent = models.ForeignKey('Post', on_delete=models.SET_NULL, null=True, blank=True)
 
     class Meta:
@@ -33,36 +39,32 @@ class Post(models.Model):
 
     def save(self, *args, **kwargs):
         if self.id is None:
-            audio = self.audio
-            self.audio = None
+            media = self.media
+            self.media = None
             super().save(*args, **kwargs)
-            self.audio = audio
+            self.media = media
             if 'force_insert' in kwargs:
                 kwargs.pop('force_insert')
 
         super().save(*args, **kwargs)
 
-    def convert_audio_to_mp3(self):
+    def convert_media_to_mp3(self):
         """
-        Convert the audio file to MP3 format.
+        Convert the media file to MP3 format.
         """
-        if not self.audio.path.endswith('.mp3'):
-            # Convert the audio file to MP3 format
-            convert_to_mp3(self.audio.path)
+        if not self.media.path.endswith('.mp3'):
+            # Convert the media file to MP3 format
+            convert_to_mp3(self.media.path)
 
-            # get new audio file name, using os.path.splitext
-            new_audio_file_name = os.path.splitext(self.audio.name)[0] + '.mp3'
+            # get new media file name, using os.path.splitext
+            new_media_file_name = os.path.splitext(self.media.name)[0] + '.mp3'
 
-            # save reference to old audio file
-            old_audio_file = self.audio
-
-            # update the audio field with the new mp3 file
-            self.audio.name = new_audio_file_name
-
+            # save the new mp3 file to the media_mp3 field
+            self.media_mp3 = new_media_file_name
             self.save()
 
-            # TODO: Fix to delete old audio file from file system after update
-            # # remove the old audio file from file system
-            # os.remove(old_audio_file.path)
+            # TODO: Fix to delete old media file from file system after update
+            # # remove the old media file from file system
+            # os.remove(old_media_file.path)
 
-            # TODO: Run cleanup script to delete old audio files from file system every hour
+            # TODO: Run cleanup script to delete old media files from file system every hour
