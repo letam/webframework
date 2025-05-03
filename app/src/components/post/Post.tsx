@@ -4,10 +4,13 @@ import PostHeader from './PostHeader'
 import PostActions from './PostActions'
 import { AudioPlayer, VideoPlayer } from './MediaPlayer'
 import type { Post as PostType } from '../../types/post'
+import { toast } from '@/components/ui/sonner'
+import { transcribePost } from '@/lib/api/posts'
 
 interface PostProps {
 	post: PostType
 	onLike: (id: number) => void
+	onTranscribed?: (post: PostType) => void
 }
 
 function FormatText({ children }: { children: React.ReactNode }): React.ReactElement {
@@ -21,8 +24,21 @@ function FormatText({ children }: { children: React.ReactNode }): React.ReactEle
 	return <div dangerouslySetInnerHTML={{ __html: content }} />
 }
 
-export const Post: React.FC<PostProps> = ({ post, onLike }) => {
+export const Post: React.FC<PostProps> = ({ post, onLike, onTranscribed }) => {
 	const mediaUrl = post.signedMediaUrl || post.media
+
+	const handleTranscribe = async (id: number) => {
+		try {
+			const updatedPost = await transcribePost(id)
+			toast.success('Media transcribed successfully')
+			if (onTranscribed) {
+				onTranscribed(updatedPost)
+			}
+		} catch (error) {
+			console.error('Error transcribing media:', error)
+			toast.error('Failed to transcribe media')
+		}
+	}
 
 	return (
 		<div className="bg-card rounded-lg shadow-xs p-4 border hover:border-primary/20 transition-colors">
@@ -51,7 +67,14 @@ export const Post: React.FC<PostProps> = ({ post, onLike }) => {
 					</div>
 				)}
 
-				<PostActions id={post.id} likes={post.likes} onLike={onLike} />
+				<PostActions
+					id={post.id}
+					likes={post.likes}
+					onLike={onLike}
+					mediaType={post.media_type}
+					body={post.body}
+					onTranscribe={handleTranscribe}
+				/>
 			</div>
 		</div>
 	)

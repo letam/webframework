@@ -98,3 +98,24 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 		throw error
 	}
 }
+
+export const transcribePost = async (id: number): Promise<Post> => {
+	try {
+		const response = await fetch(`${SERVER_API_URL}/posts/${id}/transcribe/`, {
+			method: 'POST',
+		})
+
+		if (!response.ok) {
+			throw new Error('Failed to transcribe media')
+		}
+
+		const post: Post = await response.json()
+		return {
+			...post,
+			created: new Date(post.created),
+		}
+	} catch (error) {
+		console.error('Error transcribing post:', error)
+		throw error
+	}
+}

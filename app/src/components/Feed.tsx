@@ -2,10 +2,10 @@ import type React from 'react'
 import { Post } from './post/Post'
 import CreatePost from './post/create'
 import { usePosts } from '../hooks/usePosts'
-import type { CreatePostRequest } from '@/types/post'
+import type { CreatePostRequest, Post as PostType } from '@/types/post'
 
 const Feed: React.FC = () => {
-	const { posts, isLoading, error, addPost } = usePosts()
+	const { posts, isLoading, error, addPost, fetchPosts } = usePosts()
 
 	const handlePostCreated = async (postData: CreatePostRequest) => {
 		try {
@@ -18,6 +18,11 @@ const Feed: React.FC = () => {
 	const handleLike = (id: number) => {
 		// TODO: Implement like functionality with backend
 		console.log('Like post:', id)
+	}
+
+	const handlePostTranscribed = (_updatedPost: PostType) => {
+		// Refresh posts to show the updated transcription
+		fetchPosts()
 	}
 
 	if (isLoading) {
@@ -38,7 +43,12 @@ const Feed: React.FC = () => {
 
 			<div className="space-y-4 my-6">
 				{posts.map((post) => (
-					<Post key={post.id} post={post} onLike={handleLike} />
+					<Post
+						key={post.id}
+						post={post}
+						onLike={handleLike}
+						onTranscribed={handlePostTranscribed}
+					/>
 				))}
 			</div>
 		</div>

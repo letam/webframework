@@ -1,16 +1,32 @@
 import type React from 'react'
-import { Heart, MessageCircle, Share2 } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Mic } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface PostActionsProps {
 	id: number
 	likes: number
 	onLike: (id: number) => void
+	mediaType?: 'audio' | 'video'
+	body?: string
+	onTranscribe?: (id: number) => void
 }
 
-const PostActions: React.FC<PostActionsProps> = ({ id, likes, onLike }) => {
+const PostActions: React.FC<PostActionsProps> = ({
+	id,
+	likes,
+	onLike,
+	mediaType,
+	body,
+	onTranscribe,
+}) => {
 	const handleLike = () => {
 		onLike(id)
+	}
+
+	const handleTranscribe = () => {
+		if (onTranscribe) {
+			onTranscribe(id)
+		}
 	}
 
 	return (
@@ -33,6 +49,18 @@ const PostActions: React.FC<PostActionsProps> = ({ id, likes, onLike }) => {
 			<Button variant="ghost" size="sm" className="text-muted-foreground">
 				<Share2 className="h-4 w-4 mr-1" />
 			</Button>
+
+			{mediaType && !body && onTranscribe && (
+				<Button
+					variant="ghost"
+					size="sm"
+					className="text-muted-foreground hover:text-primary"
+					onClick={handleTranscribe}
+				>
+					<Mic className="h-4 w-4 mr-1" />
+					<span>Transcribe</span>
+				</Button>
+			)}
 		</div>
 	)
 }
