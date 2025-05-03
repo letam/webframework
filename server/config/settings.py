@@ -450,6 +450,21 @@ if DEBUG:
             ],
         }
     )
+else:
+    CONTENT_SECURITY_POLICY_DIRECTIVES.update(
+        {
+            'script-src': [
+                SELF,
+                "'sha256-Ucm0AC6Vg7xQaBrSEjxBw5seBgXx38qp1ezaIVXWjWk='",
+            ],
+            'style-src': [
+                SELF,
+                "'sha256-3FCgTKTk3allIr51SmmUMsCl5xih+z//3swOXTPQq6o='",
+                "'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='",
+                "'sha256-7lAG9nNPimWNBky6j9qnn0jfFzu5wK96KOj/UzoG0hg='",
+            ],
+        }
+    )
 
 if AWS_S3_ENDPOINT_FOR_CSP:
     CONTENT_SECURITY_POLICY_DIRECTIVES.update(
