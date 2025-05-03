@@ -31,6 +31,12 @@ export const usePosts = () => {
 		}
 	}
 
+	const updatePost = (updatedPost: Post) => {
+		setPosts((prevPosts) =>
+			prevPosts.map((post) => (post.id === updatedPost.id ? updatedPost : post))
+		)
+	}
+
 	useEffect(() => {
 		fetchPosts()
 	}, [fetchPosts])
@@ -41,5 +47,6 @@ export const usePosts = () => {
 		error,
 		fetchPosts,
 		addPost,
+		updatePost,
 	}
 }

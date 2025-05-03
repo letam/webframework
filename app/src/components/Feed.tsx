@@ -5,7 +5,7 @@ import { usePosts } from '../hooks/usePosts'
 import type { CreatePostRequest, Post as PostType } from '@/types/post'
 
 const Feed: React.FC = () => {
-	const { posts, isLoading, error, addPost, fetchPosts } = usePosts()
+	const { posts, isLoading, error, addPost, updatePost } = usePosts()
 
 	const handlePostCreated = async (postData: CreatePostRequest) => {
 		try {
@@ -20,9 +20,8 @@ const Feed: React.FC = () => {
 		console.log('Like post:', id)
 	}
 
-	const handlePostTranscribed = (_updatedPost: PostType) => {
-		// Refresh posts to show the updated transcription
-		fetchPosts()
+	const handlePostTranscribed = (updatedPost: PostType) => {
+		updatePost(updatedPost)
 	}
 
 	if (isLoading) {
