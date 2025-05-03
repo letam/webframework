@@ -79,6 +79,7 @@ else:
 if not Path(ENV_FILE).is_file():
     logger.debug('Required .env file not found.')
     from django.core.management.utils import get_random_secret_key
+
     with open(ENV_FILE, 'a') as f:
         f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
         if IS_SERVER_CHILD_DIR_PRESENT:
@@ -117,7 +118,7 @@ else:
         'webframework.fly.dev',
         'webframework.dev',
         'wut.sh',
-        'www.wut.sh'
+        'www.wut.sh',
     ]
 
 # Application definition
@@ -130,12 +131,12 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'whitenoise.runserver_nostatic',
     'django.contrib.staticfiles',
-
+    #
     # third-party apps
     'rest_framework',
     'corsheaders',
     'django_extensions',
-
+    #
     # project apps
     'apps.users.apps.UsersConfig',
     'apps.website',
@@ -180,7 +181,8 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-    'default': env.db(default='sqlite:///db.sqlite3') or {
+    'default': env.db(default='sqlite:///db.sqlite3')
+    or {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
     }
@@ -237,9 +239,7 @@ STATIC_URL = '/static/'
 if DEBUG:
     # Include static files from app/public directory during development
     # Reference: https://docs.djangoproject.com/en/5.1/ref/settings/#staticfiles-dirs
-    STATICFILES_DIRS = [
-        SERVER_PATH / '..' / 'app' / 'public'
-    ]
+    STATICFILES_DIRS = [SERVER_PATH / '..' / 'app' / 'public']
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
@@ -304,23 +304,25 @@ def setup_save_errorlog_to_file(logging: dict):
             },
         }
     )
-    logging['loggers'].update({
-        'django': {
-            'handlers': ['console', 'file_errors'],
-            'level': 'INFO',
-            'propagate': True,
-        },
-        'server': {
-            'handlers': ['console', 'file_errors'],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-        'server.apps': {
-            'handlers': ['console', 'file_errors'],
-            'level': 'DEBUG',
-            'propagate': False,
+    logging['loggers'].update(
+        {
+            'django': {
+                'handlers': ['console', 'file_errors'],
+                'level': 'INFO',
+                'propagate': True,
+            },
+            'server': {
+                'handlers': ['console', 'file_errors'],
+                'level': 'DEBUG',
+                'propagate': True,
+            },
+            'server.apps': {
+                'handlers': ['console', 'file_errors'],
+                'level': 'DEBUG',
+                'propagate': False,
+            },
         }
-    })
+    )
     return logging
 
 
@@ -401,7 +403,9 @@ STORAGES = {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },
     'default': {
-        'BACKEND': 'django.core.files.storage.FileSystemStorage' if USE_LOCAL_FILE_STORAGE else 'storages.backends.s3boto3.S3Boto3Storage',
+        'BACKEND': 'django.core.files.storage.FileSystemStorage'
+        if USE_LOCAL_FILE_STORAGE
+        else 'storages.backends.s3boto3.S3Boto3Storage',
     },
 }
 
@@ -419,37 +423,47 @@ CONTENT_SECURITY_POLICY_DIRECTIVES = {
     'frame-ancestors': [SELF],
     'form-action': [SELF],
     'report-uri': '/csp-report/',
-
+    #
     'media-src': [SELF, 'blob:'],
 }
 
 if DEBUG:
     from csp.constants import UNSAFE_INLINE
-    CONTENT_SECURITY_POLICY_DIRECTIVES.update({
-        'script-src': [SELF, UNSAFE_INLINE],
-        'script-src-elem': [SELF, UNSAFE_INLINE, 'localhost:5173', 'https://cdn.gpteng.co/gptengineer.js'],
-        'style-src': [SELF, UNSAFE_INLINE, 'http://localhost:5173/src/index.css'],
-        'style-src-elem': [SELF, UNSAFE_INLINE, 'http://localhost:5173/src/index.css'],
-        'connect-src': [SELF, 'ws://localhost:5173'],
-        'img-src': [SELF, 'localhost:5173', 'https://ui-avatars.com/api/'],
-        'media-src': [
-            *CONTENT_SECURITY_POLICY_DIRECTIVES.get('media-src', []),
-            'https://citizen-dj.labs.loc.gov/audio/samplepacks/loc-fma/Mushrooms_fma-178531_001_00-00-01.mp3',
-            'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
-        ],
-    })
+
+    CONTENT_SECURITY_POLICY_DIRECTIVES.update(
+        {
+            'script-src': [SELF, UNSAFE_INLINE],
+            'script-src-elem': [
+                SELF,
+                UNSAFE_INLINE,
+                'localhost:5173',
+                'https://cdn.gpteng.co/gptengineer.js',
+            ],
+            'style-src': [SELF, UNSAFE_INLINE, 'http://localhost:5173/src/index.css'],
+            'style-src-elem': [SELF, UNSAFE_INLINE, 'http://localhost:5173/src/index.css'],
+            'connect-src': [SELF, 'ws://localhost:5173'],
+            'img-src': [SELF, 'localhost:5173', 'https://ui-avatars.com/api/'],
+            'media-src': [
+                *CONTENT_SECURITY_POLICY_DIRECTIVES.get('media-src', []),
+                'https://citizen-dj.labs.loc.gov/audio/samplepacks/loc-fma/Mushrooms_fma-178531_001_00-00-01.mp3',
+                'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+            ],
+        }
+    )
 
 if AWS_S3_ENDPOINT_FOR_CSP:
-    CONTENT_SECURITY_POLICY_DIRECTIVES.update({
-        'connect-src': [
-            *CONTENT_SECURITY_POLICY_DIRECTIVES.get('connect-src', []),
-            AWS_S3_ENDPOINT_FOR_CSP
-        ],
-        'media-src': [
-            *CONTENT_SECURITY_POLICY_DIRECTIVES.get('media-src', []),
-            AWS_S3_ENDPOINT_FOR_CSP
-        ],
-    })
+    CONTENT_SECURITY_POLICY_DIRECTIVES.update(
+        {
+            'connect-src': [
+                *CONTENT_SECURITY_POLICY_DIRECTIVES.get('connect-src', []),
+                AWS_S3_ENDPOINT_FOR_CSP,
+            ],
+            'media-src': [
+                *CONTENT_SECURITY_POLICY_DIRECTIVES.get('media-src', []),
+                AWS_S3_ENDPOINT_FOR_CSP,
+            ],
+        }
+    )
 
 CONTENT_SECURITY_POLICY = {
     # 'EXCLUDE_URL_PREFIXES': ['/excluded-path/'],
