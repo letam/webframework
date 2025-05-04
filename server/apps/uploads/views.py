@@ -6,29 +6,38 @@ from datetime import datetime
 
 from apps.blogs.models import Post
 
+
 def get_s3_client():
     return boto3.client(
         's3',
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
         aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
         endpoint_url=settings.AWS_S3_ENDPOINT_URL,
-        config=Config(signature_version = 's3v4',)
+        config=Config(signature_version='s3v4'),
     )
+
 
 def get_presigned_url(request):
     if request.method == 'POST':
         import json
+
         data = json.loads(request.body)
         content_type = data['content_type']
         file_name = data['file_name']
 
         user_id = request.user.id if request.user.is_authenticated else 2
-        file_path = f"post/audio/{user_id}/{file_name}"
+        file_path = f'post/audio/{user_id}/{file_name}'
 
         # check if file path is already used in the database
         if Post.objects.filter(audio_s3_file_key=file_path).exists():
             # add a timestamp to the file_name while (attempting to) respecting the file extension
-            file_name = file_name.rsplit('.', 1)[0] + '-' + datetime.now().strftime('%Y%m%d_%H%M%S') + '.' + file_name.rsplit('.', 1)[1]
+            file_name = (
+                file_name.rsplit('.', 1)[0]
+                + '-'
+                + datetime.now().strftime('%Y%m%d_%H%M%S')
+                + '.'
+                + file_name.rsplit('.', 1)[1]
+            )
 
         # idea: extract function to get presigned url as a portable function, to use it as a CLI command or django admin action.
         # Or! Is there a simpler way to make the request via CLI?
@@ -38,9 +47,9 @@ def get_presigned_url(request):
             Params={
                 'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
                 'Key': file_path,
-                'ContentType': content_type
+                'ContentType': content_type,
             },
-            ExpiresIn=300  # URL valid for 5 minutes
+            ExpiresIn=300,  # URL valid for 5 minutes
         )
 
         return JsonResponse({'url': presigned_url, 'file_path': file_path})
@@ -55,9 +64,9 @@ def _get_presigned_url_for_file_path(file_path):
         'get_object',
         Params={
             'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
-            'Key': file_path
+            'Key': file_path,
         },
-        ExpiresIn=3600  # URL valid for 1 hour
+        ExpiresIn=3600,  # URL valid for 1 hour
     )
     # TODO: Cache the signed url
     return presigned_url

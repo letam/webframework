@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class PostViewSet(viewsets.ModelViewSet):
-
     permission_classes = [AllowAny]
     queryset = Post.objects.all()
     # TODO: Confirm that we should optimize with `.prefetch_related('post_set')`
@@ -43,13 +42,13 @@ class PostViewSet(viewsets.ModelViewSet):
             # pretty print the request data
             import json
 
-            print("Pretty print of request data:")
+            print('Pretty print of request data:')
             # make a copy of the request data
             request_data = request.data.copy()
             # remove the media file from the request data before logging it
-            if "media" in request_data:
-                media = request_data.pop("media")
-                print(f"File: {media}")
+            if 'media' in request_data:
+                media = request_data.pop('media')
+                print(f'File: {media}')
             print(json.dumps(request_data, indent=4))
 
         serializer.is_valid(raise_exception=True)
@@ -71,8 +70,7 @@ class PostViewSet(viewsets.ModelViewSet):
 
         if not post.media and not post.media_mp3:
             return Response(
-                {"error": "No media file found for this post"},
-                status=status.HTTP_400_BAD_REQUEST
+                {'error': 'No media file found for this post'}, status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
@@ -85,8 +83,7 @@ class PostViewSet(viewsets.ModelViewSet):
             # if the media file is not mp3, return an error
             if not media.path.endswith('.mp3'):
                 return Response(
-                    {"error": "Media file is not mp3"},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {'error': 'Media file is not mp3'}, status=status.HTTP_400_BAD_REQUEST
                 )
 
             transcript = transcribe_audio(media)
@@ -102,8 +99,8 @@ class PostViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
 
         except Exception as e:
-            logger.error(f"Error transcribing audio for post {post.id}: {str(e)}")
+            logger.error(f'Error transcribing audio for post {post.id}: {str(e)}')
             return Response(
-                {"error": "An error occurred while transcribing the media file"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {'error': 'An error occurred while transcribing the media file'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )

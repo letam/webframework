@@ -1,4 +1,4 @@
-"""server URL Configuration
+"""server URL Configuration.
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/5.1/topics/http/urls/
@@ -43,7 +43,11 @@ urlpatterns = [
     path('api-auth/', include('rest_framework.urls')),
     #
     path('api/uploads/presign/', get_presigned_url, name='get_presigned_url'),
-    path('api/uploads/presign/<int:post_id>/', get_presigned_url_for_post, name='get_presigned_url_for_post'),
+    path(
+        'api/uploads/presign/<int:post_id>/',
+        get_presigned_url_for_post,
+        name='get_presigned_url_for_post',
+    ),
     #
     path('api/', include(router.urls)),
 ]

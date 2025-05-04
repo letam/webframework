@@ -14,10 +14,12 @@ logger = logging.getLogger('server.apps.blogs')
 def media_file_path(instance, filename):
     return f'post/{instance.id}/media/{filename}'
 
+
 MEDIA_TYPE_CHOICES = [
     ('audio', 'Audio'),
     ('video', 'Video'),
 ]
+
 
 class Post(models.Model):
     created = models.DateTimeField(auto_now_add=True)
@@ -49,9 +51,7 @@ class Post(models.Model):
         super().save(*args, **kwargs)
 
     def convert_media_to_mp3(self):
-        """
-        Convert the media file to MP3 format.
-        """
+        """Convert the media file to MP3 format."""
         if not self.media.path.endswith('.mp3'):
             # Convert the media file to MP3 format
             convert_to_mp3(self.media.path)

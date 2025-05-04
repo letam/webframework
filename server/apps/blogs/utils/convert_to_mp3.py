@@ -12,14 +12,13 @@ def get_output_filename(input_file: str) -> str:
     base, _ = os.path.splitext(input_file)
     return base + ".mp3"
 
+
 def convert_to_mp3(input_file: str) -> str:
-    """
-    Converts a file to MP3 format using the local ffmpeg binary located in the project.
+    """Converts a file to MP3 format using the local ffmpeg binary located in the project.
 
     Parameters:
         input_file (str): Path to the input media file.
     """
-
     # raise error if ffmpeg is not installed
     if not shutil.which("ffmpeg"):
         raise FileNotFoundError("ffmpeg is not installed")
@@ -28,7 +27,7 @@ def convert_to_mp3(input_file: str) -> str:
 
     # TODO: Handle case when file already exists
 
-
+    # fmt: off
     command = [
         "ffmpeg",
         "-i", input_file,
@@ -38,9 +37,10 @@ def convert_to_mp3(input_file: str) -> str:
         "-b:a", "96k",
         output_file
     ]
+    # fmt: on
 
     try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        subprocess.run(command, capture_output=True, check=True)
         logger.debug("Conversion successful! Output file: %s", output_file)
     except subprocess.CalledProcessError as error:
         logger.error("Error during conversion:")
@@ -50,7 +50,6 @@ def convert_to_mp3(input_file: str) -> str:
 
 
 if __name__ == "__main__":
-
     import sys
 
     if len(sys.argv) > 1:
