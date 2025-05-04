@@ -107,6 +107,11 @@ ARG WEBSITE_TEMPLATE_DIST_DIR="apps/website/templates/website/dist"
 RUN mkdir -p "$WEBSITE_TEMPLATE_DIST_DIR"
 RUN cp static/app/index.html "$WEBSITE_TEMPLATE_DIST_DIR/index.html"
 
+# Remove development-related code from index.html
+RUN sed -i '\|content="https://lovable.dev|d' "$WEBSITE_TEMPLATE_DIST_DIR/index.html"
+RUN sed -i '\|cdn.gpteng.co/gptengineer.js|d' "$WEBSITE_TEMPLATE_DIST_DIR/index.html"
+RUN sed -i '/IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT!/d' "$WEBSITE_TEMPLATE_DIST_DIR/index.html"
+
 # Set environment variables to optimize Python
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
