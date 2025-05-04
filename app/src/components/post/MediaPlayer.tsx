@@ -94,18 +94,57 @@ interface VideoPlayerProps {
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl }) => {
 	const [isPlaying, setIsPlaying] = useState(false)
 	const videoRef = useRef<HTMLVideoElement | null>(null)
+	const [error, setError] = useState<string | null>(null)
+	const [isLoading, setIsLoading] = useState(true)
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: executed when videoUrl changes
 	useEffect(() => {
 		setIsPlaying(false)
+		setError(null)
+		setIsLoading(true)
 		const player = videoRef.current
 
+		// Cleanup function
 		return () => {
 			if (player) {
 				player.pause()
+				player.removeAttribute('src')
+				player.load()
 			}
 		}
 	}, [videoUrl])
+
+	const handleError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+		const video = e.target as HTMLVideoElement
+		const error = video.error
+		if (error) {
+			let errorMessage = 'Video playback error: '
+			switch (error.code) {
+				case MediaError.MEDIA_ERR_ABORTED:
+					errorMessage += 'Playback was interrupted. Please try again.'
+					break
+				case MediaError.MEDIA_ERR_NETWORK:
+					errorMessage += 'A network error occurred. Please check your connection.'
+					break
+				case MediaError.MEDIA_ERR_DECODE:
+					errorMessage += 'The video format is not supported by your browser.'
+					break
+				case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+					errorMessage += 'The video source is not supported.'
+					break
+				default:
+					errorMessage += 'An unknown error occurred.'
+			}
+			setError(errorMessage)
+			setIsLoading(false)
+			console.error('Video error details:', error)
+		}
+	}
+
+	const handleLoadedMetadata = () => {
+		setIsLoading(false)
+		setError(null)
+	}
 
 	const togglePlayback = () => {
 		if (videoRef.current) {
@@ -125,10 +164,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl }) => {
 					.play()
 					.then(() => {
 						setIsPlaying(true)
+						setError(null)
 					})
 					.catch((error) => {
 						console.error('Video playback error:', error)
 						setIsPlaying(false)
+						setError(`Failed to play video: ${error.message}`)
 					})
 			}
 		}
@@ -145,13 +186,21 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl }) => {
 				src={videoUrl}
 				className="w-full rounded-md"
 				onEnded={handleEnded}
+				onError={handleError}
+				onLoadedMetadata={handleLoadedMetadata}
 				preload="metadata"
 				controls={isPlaying}
 			>
 				<track kind="captions" label="English" />
 			</video>
 
-			{!isPlaying && (
+			{isLoading && (
+				<div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white">
+					Loading video...
+				</div>
+			)}
+
+			{!isPlaying && !isLoading && !error && (
 				<Button
 					type="button"
 					variant="outline"
@@ -161,6 +210,29 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl }) => {
 				>
 					<Play className="h-6 w-6 text-white" />
 				</Button>
+			)}
+
+			{error && (
+				<div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white p-4 text-center">
+					<div>
+						<p>{error}</p>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => {
+								setError(null)
+								setIsLoading(true)
+								if (videoRef.current) {
+									videoRef.current.load()
+								}
+							}}
+							className="mt-2"
+						>
+							Try Again
+						</Button>
+					</div>
+				</div>
 			)}
 		</div>
 	)
