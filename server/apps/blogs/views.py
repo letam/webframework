@@ -47,8 +47,8 @@ class PostViewSet(viewsets.ModelViewSet):
             # make a copy of the request data
             request_data = request.data.copy()
             # remove the media file from the request data before logging it
-            media = request_data.pop("media")
-            if media:
+            if "media" in request_data:
+                media = request_data.pop("media")
                 print(f"File: {media}")
             print(json.dumps(request_data, indent=4))
 
