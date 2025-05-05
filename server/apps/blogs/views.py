@@ -44,11 +44,11 @@ class PostViewSet(viewsets.ModelViewSet):
 
             print('Pretty print of request data:')
             # make a copy of the request data
-            request_data = request.data.copy()
             # remove the media file from the request data before logging it
-            if 'media' in request_data:
-                media = request_data.pop('media')
+            if 'media' in request.data:
+                media = request.data.get('media')
                 print(f'File: {media}')
+                request_data = {k: v for k, v in request.data.items() if k != 'media'}
             print(json.dumps(request_data, indent=4))
 
         serializer.is_valid(raise_exception=True)
