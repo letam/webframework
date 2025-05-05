@@ -179,11 +179,12 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl }) => {
 		setIsPlaying(false)
 	}
 
+	const videoType = videoUrl.split('.').pop()
+
 	return (
 		<div className="mt-4 relative rounded-md overflow-hidden">
 			<video
 				ref={videoRef}
-				src={videoUrl}
 				className="w-full rounded-md"
 				onEnded={handleEnded}
 				onError={handleError}
@@ -191,7 +192,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl }) => {
 				preload="metadata"
 				controls={isPlaying}
 			>
+				<source src={videoUrl} type={`video/${videoType}`} />
 				<track kind="captions" label="English" />
+				Your browser does not support the video tag.
 			</video>
 
 			{isLoading && (
