@@ -154,6 +154,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'csp.middleware.CSPMiddleware',
+    'apps.website.middleware.http.HttpRangesMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
