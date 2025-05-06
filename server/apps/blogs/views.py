@@ -157,7 +157,14 @@ def stream_post_media(request, post_id):
         return response
 
     # For simplicity, handle only single range requests
-    start, end = ranges[0]
+    try:
+        start, end = ranges[0]
+    except Exception as e:
+        logger.info(f'Error getting range for post {post.id}: {str(e)}')
+        mime_type = get_file_mime_type(post.media.path)
+        response = FileResponse(open(post.media.path, 'rb'), content_type=mime_type)
+        return response
+
     with open(post.media.path, 'rb') as file_to_send:
         file_to_send.seek(start)
         data = file_to_send.read(end - start + 1)
