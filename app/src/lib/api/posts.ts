@@ -105,7 +105,12 @@ export const getPostMediaMimeType = async (post: Post) => {
 		return null
 	}
 	const response = await fetch(`${SERVER_API_URL}/posts/${post.id}/media/mime-type/`)
-	return response.text()
+	const mimeType = await response.text()
+	if (mimeType === 'video/x-matroska') {
+		// Hack fix to serve this video in Chrome
+		return 'video/mp4'
+	}
+	return mimeType
 }
 
 export const useGetPostMediaMimeType = (post: Post) => {
