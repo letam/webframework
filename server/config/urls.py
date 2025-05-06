@@ -24,7 +24,7 @@ from rest_framework import routers
 from apps.auth import views as auth_views
 
 from apps.website.views import index
-from apps.blogs.views import PostViewSet
+from apps.blogs.views import PostViewSet, stream_post_media, get_post_media_mime_type
 from apps.uploads.views import get_presigned_url, get_presigned_url_for_post
 
 router = routers.DefaultRouter()
@@ -48,6 +48,13 @@ urlpatterns = [
         get_presigned_url_for_post,
         name='get_presigned_url_for_post',
     ),
+    #
+    path(
+        'api/posts/<int:post_id>/media/mime-type/',
+        get_post_media_mime_type,
+        name='get_post_media_mime_type',
+    ),
+    path('api/posts/<int:post_id>/media/', stream_post_media, name='stream_post_media'),
     #
     path('api/', include(router.urls)),
 ]

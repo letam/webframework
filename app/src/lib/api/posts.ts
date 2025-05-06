@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query'
 import type { Post, CreatePostRequest } from '../../types/post'
 import { SERVER_API_URL, UPLOAD_FILES_TO_S3 } from '../constants'
 
@@ -97,6 +98,38 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 		console.error('Error creating post:', error)
 		throw error
 	}
+}
+
+export const getPostMediaMimeType = async (post: Post) => {
+	if (!post.media_type) {
+		return null
+	}
+	const response = await fetch(`${SERVER_API_URL}/posts/${post.id}/media/mime-type/`)
+	return response.text()
+}
+
+export const useGetPostMediaMimeType = (post: Post) => {
+	const { data, isLoading, error } = useQuery({
+		queryKey: ['post-media-mime-type', post.id],
+		queryFn: () => getPostMediaMimeType(post),
+	})
+
+	return {
+		data,
+		isLoading,
+		error,
+	}
+}
+
+export const getMediaUrl = (post: Post): string => {
+	if (post.signedMediaUrl) {
+		return post.signedMediaUrl
+	}
+	return `${SERVER_API_URL}/posts/${post.id}/media/`
+
+	// NOTE: Use this to serve media files directly from media server in non-Safari browsers
+	// const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+	// return isSafari ? `${SERVER_API_URL}/posts/${post.id}/media/` : post.media
 }
 
 export const transcribePost = async (id: number): Promise<Post> => {

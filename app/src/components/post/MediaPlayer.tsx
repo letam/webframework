@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button'
 
 interface AudioPlayerProps {
 	audioUrl: string
+	mimeType: string
 }
 
-export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl }) => {
+export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) => {
 	const [isPlaying, setIsPlaying] = useState(false)
 	const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -79,7 +80,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl }) => {
 					</div>
 				</div>
 
-				<audio ref={audioRef} src={audioUrl} onEnded={handleEnded} preload="metadata">
+				<audio ref={audioRef} onEnded={handleEnded} preload="metadata">
+					<source src={audioUrl} type={mimeType} />
 					<track kind="captions" label="English" />
 				</audio>
 			</div>
@@ -89,9 +91,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl }) => {
 
 interface VideoPlayerProps {
 	videoUrl: string
+	mimeType: string
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl }) => {
+export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, mimeType }) => {
 	const [isPlaying, setIsPlaying] = useState(false)
 	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const [error, setError] = useState<string | null>(null)
@@ -179,8 +182,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl }) => {
 		setIsPlaying(false)
 	}
 
-	const videoType = videoUrl.split('.').pop()
-
 	return (
 		<div className="mt-4 relative rounded-md overflow-hidden">
 			<video
@@ -192,7 +193,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl }) => {
 				preload="metadata"
 				controls={isPlaying}
 			>
-				<source src={videoUrl} type={`video/${videoType}`} />
+				<source src={videoUrl} type={mimeType} />
 				<track kind="captions" label="English" />
 				Your browser does not support the video tag.
 			</video>

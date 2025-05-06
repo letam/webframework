@@ -41,9 +41,9 @@ Includes some functionality for a basic public micro-blogging app.
 	python server/manage.py init_users
 	```
 
-8. Run the development server
+8. Run the development server (using django-extensions and werkzeug)
 	```
-	python server/manage.py runserver
+	python server/manage.py runserver_plus
 	```
 
 ### Frontend server

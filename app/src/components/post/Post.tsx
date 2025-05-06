@@ -5,7 +5,7 @@ import PostActions from './PostActions'
 import { AudioPlayer, VideoPlayer } from './MediaPlayer'
 import type { Post as PostType } from '../../types/post'
 import { toast } from '@/components/ui/sonner'
-import { transcribePost } from '@/lib/api/posts'
+import { getMediaUrl, transcribePost, useGetPostMediaMimeType } from '@/lib/api/posts'
 
 interface PostProps {
 	post: PostType
@@ -25,7 +25,8 @@ function FormatText({ children }: { children: React.ReactNode }): React.ReactEle
 }
 
 export const Post: React.FC<PostProps> = ({ post, onLike, onTranscribed }) => {
-	const mediaUrl = post.signedMediaUrl || post.media
+	const mediaUrl = getMediaUrl(post)
+	const mediaMimeTypeService = useGetPostMediaMimeType(post)
 
 	const handleTranscribe = async (id: number) => {
 		try {
@@ -40,8 +41,19 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onTranscribed }) => {
 		}
 	}
 
+	if (post.media_type && mediaMimeTypeService.isLoading) {
+		return <div>Loading...</div>
+	}
+
+	if (post.media_type && mediaMimeTypeService.error) {
+		return <div>Error: {mediaMimeTypeService.error.message}</div>
+	}
+
 	return (
-		<div className="bg-card rounded-lg shadow-xs p-4 border hover:border-primary/20 transition-colors">
+		<div
+			className="bg-card rounded-lg shadow-xs p-4 border hover:border-primary/20 transition-colors"
+			data-testid={`post-${post.id}`}
+		>
 			<PostHeader
 				username={post.author.username}
 				userAvatar={post.author.avatar}
@@ -57,9 +69,13 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onTranscribed }) => {
 					)}
 				</div>
 
-				{post.media_type === 'audio' && <AudioPlayer audioUrl={mediaUrl} />}
+				{post.media_type === 'audio' && (
+					<AudioPlayer audioUrl={mediaUrl} mimeType={mediaMimeTypeService.data} />
+				)}
 
-				{post.media_type === 'video' && <VideoPlayer videoUrl={mediaUrl} />}
+				{post.media_type === 'video' && (
+					<VideoPlayer videoUrl={mediaUrl} mimeType={mediaMimeTypeService.data} />
+				)}
 
 				{post.body && (
 					<div className="mt-2 whitespace-pre-line">
