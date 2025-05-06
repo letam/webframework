@@ -1,6 +1,7 @@
 import type React from 'react'
-import { Heart, MessageCircle, Share2, Mic } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Mic, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
 
 interface PostActionsProps {
 	id: number
@@ -29,6 +30,13 @@ const PostActions: React.FC<PostActionsProps> = ({
 		}
 	}
 
+	const handleCopy = () => {
+		if (body) {
+			navigator.clipboard.writeText(body)
+			toast.success('Text copied to clipboard')
+		}
+	}
+
 	return (
 		<div className="flex items-center mt-4 gap-6">
 			<Button
@@ -49,6 +57,18 @@ const PostActions: React.FC<PostActionsProps> = ({
 			<Button variant="ghost" size="sm" className="text-muted-foreground">
 				<Share2 className="h-4 w-4 mr-1" />
 			</Button>
+
+			{body && (
+				<Button
+					variant="ghost"
+					size="sm"
+					className="text-muted-foreground hover:text-primary"
+					onClick={handleCopy}
+				>
+					<Copy className="h-4 w-4 mr-1" />
+					<span>Copy</span>
+				</Button>
+			)}
 
 			{mediaType && !body && onTranscribe && (
 				<Button
