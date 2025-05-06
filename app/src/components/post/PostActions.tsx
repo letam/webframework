@@ -38,35 +38,37 @@ const PostActions: React.FC<PostActionsProps> = ({
 	}
 
 	return (
-		<div className="flex items-center mt-4 gap-6">
+		<div className="flex items-center mt-4 gap-2 sm:gap-6 flex-wrap">
 			<Button
 				variant="ghost"
 				size="sm"
-				className="text-muted-foreground hover:text-primary"
+				className="text-muted-foreground hover:text-primary px-2 sm:px-3"
 				onClick={handleLike}
 			>
-				<Heart className={`h-4 w-4 mr-1 ${likes > 0 ? 'fill-primary text-primary' : ''}`} />
-				<span>{likes}</span>
+				<Heart className={`h-4 w-4 sm:mr-1 ${likes > 0 ? 'fill-primary text-primary' : ''}`} />
+				<span className="hidden sm:inline">{likes}</span>
+				<span className="sm:hidden">{likes}</span>
 			</Button>
 
-			<Button variant="ghost" size="sm" className="text-muted-foreground">
-				<MessageCircle className="h-4 w-4 mr-1" />
-				<span>0</span>
+			<Button variant="ghost" size="sm" className="text-muted-foreground px-2 sm:px-3">
+				<MessageCircle className="h-4 w-4 sm:mr-1" />
+				<span className="hidden sm:inline">0</span>
+				<span className="sm:hidden">0</span>
 			</Button>
 
-			<Button variant="ghost" size="sm" className="text-muted-foreground">
-				<Share2 className="h-4 w-4 mr-1" />
+			<Button variant="ghost" size="sm" className="text-muted-foreground px-2 sm:px-3">
+				<Share2 className="h-4 w-4 sm:mr-1" />
 			</Button>
 
 			{body && (
 				<Button
 					variant="ghost"
 					size="sm"
-					className="text-muted-foreground hover:text-primary"
+					className="text-muted-foreground hover:text-primary px-2 sm:px-3"
 					onClick={handleCopy}
 				>
-					<Copy className="h-4 w-4 mr-1" />
-					<span>Copy</span>
+					<Copy className="h-4 w-4 sm:mr-1" />
+					<span className="hidden sm:inline">Copy</span>
 				</Button>
 			)}
 
@@ -74,11 +76,11 @@ const PostActions: React.FC<PostActionsProps> = ({
 				<Button
 					variant="ghost"
 					size="sm"
-					className="text-muted-foreground hover:text-primary"
+					className="text-muted-foreground hover:text-primary px-2 sm:px-3"
 					onClick={handleTranscribe}
 				>
-					<Mic className="h-4 w-4 mr-1" />
-					<span>Transcribe</span>
+					<Mic className="h-4 w-4 sm:mr-1" />
+					<span className="hidden sm:inline">Transcribe</span>
 				</Button>
 			)}
 		</div>
