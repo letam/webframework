@@ -1,0 +1,44 @@
+// Folder-specific settings
+//
+// For a full list of overridable settings, and general information on folder-specific settings,
+// see the documentation: https://zed.dev/docs/configuring-zed#settings-files
+{
+  "languages": {
+    "TypeScript": {
+      "language_servers": ["biome", "typescript"],
+      "lsp": {
+        "biome": {
+          "settings": {
+            "config_path": "app/biome.json"
+          }
+        }
+      },
+      "formatter": {
+        "language_server": {
+          "name": "biome"
+        }
+      },
+      "code_actions_on_format": {
+        "source.fixAll.biome": true
+      }
+    },
+    "TSX": {
+      "language_servers": ["biome", "typescript"],
+      "lsp": {
+        "biome": {
+          "settings": {
+            "config_path": "app/biome.json"
+          }
+        }
+      },
+      "formatter": {
+        "language_server": {
+          "name": "biome"
+        }
+      },
+      "code_actions_on_format": {
+        "source.fixAll.biome": true
+      }
+    }
+  }
+}
