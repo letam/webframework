@@ -32,7 +32,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	const handleVideoCaptured = (blob: Blob) => {
 		setVideoBlob(blob)
-		setVideoFile(null) // Clear uploaded video file
+		setVideoFile(null)
 		setMediaType('video')
 	}
 
@@ -40,7 +40,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		const file = e.target.files?.[0]
 		if (file?.type.startsWith('audio/')) {
 			setAudioFile(file)
-			setAudioBlob(null) // Clear recorded audio
+			setAudioBlob(null)
 			setMediaType('audio')
 		} else if (file) {
 			toast.error('Please select a valid audio file')
@@ -51,7 +51,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		const file = e.target.files?.[0]
 		if (file?.type.startsWith('video/')) {
 			setVideoFile(file)
-			setVideoBlob(null) // Clear recorded video
+			setVideoBlob(null)
 			setMediaType('video')
 		} else if (file) {
 			toast.error('Please select a valid video file')
@@ -74,36 +74,31 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			return
 		}
 
-		let mediaUrl = ''
 		let finalMediaType: 'audio' | 'video' | undefined
+		let file: File | null = null
 
-		// In a real app, we would upload the blob to a server and get a URL back
-		// For this demo, we'll create object URLs
-		// TODO: Upload the blob to a server and get a URL back
-		let blob: Blob | null = null
 		if (mediaType === 'audio' && (audioBlob || audioFile)) {
-			blob = audioFile || audioBlob
+			const blob = audioFile || audioBlob
 			if (blob) {
-				mediaUrl = URL.createObjectURL(blob)
 				finalMediaType = 'audio'
+				if (!(blob instanceof File)) {
+					file = new File([blob], `recording_${Date.now()}.mp3`, { type: blob.type })
+				} else {
+					file = blob
+				}
 			}
 		} else if (mediaType === 'video' && (videoBlob || videoFile)) {
-			blob = videoFile || videoBlob
+			const blob = videoFile || videoBlob
 			if (blob) {
-				mediaUrl = URL.createObjectURL(blob)
 				finalMediaType = 'video'
+				if (!(blob instanceof File)) {
+					file = new File([blob], `recording_${Date.now()}.mp4`, { type: blob.type })
+				} else {
+					file = blob
+				}
 			}
 		}
-		let file: File | null = null
-		// Only convert blob to file if it's not already a File
-		if (blob && !(blob instanceof File)) {
-			const fileExtension = finalMediaType === 'audio' ? 'mp3' : 'mp4'
-			file = new File([blob], `recording_${Date.now()}.${fileExtension}`, { type: blob.type })
-		} else if (blob instanceof File) {
-			file = blob
-		}
 
-		// Create the post
 		const newPost: CreatePostRequest = {
 			text: postText,
 			media_type: finalMediaType,
@@ -114,13 +109,13 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 		// Reset form
 		setPostText('')
-		setAudioBlob(null)
-		setVideoBlob(null)
-		setAudioFile(null)
-		setVideoFile(null)
-		setMediaType('text')
+		clearMedia()
 
 		toast.success('Post created successfully!')
+	}
+
+	const handleTabSubmit = () => {
+		handleSubmit({ preventDefault: () => {} } as React.FormEvent)
 	}
 
 	return (
@@ -156,14 +151,14 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					</TabsList>
 
 					<TabsContent value="text">
-						<TextPostTab onSubmit={() => {}} />
+						<TextPostTab onSubmit={handleTabSubmit} />
 					</TabsContent>
 
 					<TabsContent value="audio">
 						<AudioPostTab
 							onAudioCaptured={handleAudioCaptured}
 							onAudioFileChange={handleAudioFileChange}
-							onSubmit={() => {}}
+							onSubmit={handleTabSubmit}
 						/>
 					</TabsContent>
 
@@ -171,7 +166,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						<VideoPostTab
 							onVideoCaptured={handleVideoCaptured}
 							onVideoFileChange={handleVideoFileChange}
-							onSubmit={() => {}}
+							onSubmit={handleTabSubmit}
 						/>
 					</TabsContent>
 				</Tabs>
