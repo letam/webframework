@@ -13,6 +13,26 @@ interface CreatePostProps {
 	onPostCreated: (post: CreatePostRequest) => void
 }
 
+const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): string => {
+	const baseType = mimeType.split(';')[0] // Remove codec information
+	if (mediaType === 'audio') {
+		return baseType === 'audio/webm'
+			? 'webm'
+			: baseType === 'audio/mp4'
+				? 'm4a'
+				: baseType === 'audio/ogg'
+					? 'ogg'
+					: 'webm' // Default to webm as it's most widely supported
+	}
+	return baseType === 'video/webm'
+		? 'webm'
+		: baseType === 'video/mp4'
+			? 'mp4'
+			: baseType === 'video/ogg'
+				? 'ogg'
+				: 'webm' // Default to webm as it's most widely supported
+}
+
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [postText, setPostText] = useState('')
 	const [mediaType, setMediaType] = useState<'text' | 'audio' | 'video'>('text')
@@ -82,7 +102,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			if (blob) {
 				finalMediaType = 'audio'
 				if (!(blob instanceof File)) {
-					file = new File([blob], `recording_${Date.now()}.mp3`, { type: blob.type })
+					const extension = getMediaExtension(blob.type, 'audio')
+					file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
 				} else {
 					file = blob
 				}
@@ -92,7 +113,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			if (blob) {
 				finalMediaType = 'video'
 				if (!(blob instanceof File)) {
-					file = new File([blob], `recording_${Date.now()}.mp4`, { type: blob.type })
+					const extension = getMediaExtension(blob.type, 'video')
+					file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
 				} else {
 					file = blob
 				}
