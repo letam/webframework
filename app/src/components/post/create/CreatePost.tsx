@@ -95,10 +95,12 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			}
 		}
 		let file: File | null = null
-		// if file is a blob, convert it to a file
+		// Only convert blob to file if it's not already a File
 		if (blob && !(blob instanceof File)) {
 			const fileExtension = finalMediaType === 'audio' ? 'mp3' : 'mp4'
-			file = new File([blob], `recording_${Date.now()}.${fileExtension}`, { type: finalMediaType })
+			file = new File([blob], `recording_${Date.now()}.${fileExtension}`, { type: blob.type })
+		} else if (blob instanceof File) {
+			file = blob
 		}
 
 		// Create the post
