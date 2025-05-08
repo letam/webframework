@@ -48,10 +48,9 @@ class PostViewSet(viewsets.ModelViewSet):
             # pretty print the request data
             import json
 
-            print('Pretty print of request data:')
-            # make a copy of the request data
-            # remove the media file from the request data before logging it
-            if 'media' in request.data:
+            print('Create Post - request data:')
+            request_data = request.data
+            if 'media' in request_data:
                 media = request.data.get('media')
                 print(f'File: {media}')
                 request_data = {k: v for k, v in request.data.items() if k != 'media'}
