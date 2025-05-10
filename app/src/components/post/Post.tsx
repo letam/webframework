@@ -58,6 +58,8 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onTranscribed }) => {
 				username={post.author.username}
 				userAvatar={post.author.avatar}
 				timestamp={post.created}
+				mediaUrl={post.media_type ? mediaUrl : undefined}
+				mediaType={post.media_type}
 			/>
 
 			<div className="ml-12">
