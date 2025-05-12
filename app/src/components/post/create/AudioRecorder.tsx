@@ -2,9 +2,11 @@ import { useState, useRef } from 'react'
 import { Mic, Square, Play, Pause } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
+import { isSafari } from '@/lib/utils/browser'
 
 const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob) => void }) => {
 	const [isRecording, setIsRecording] = useState(false)
+	const [isLoading, setIsLoading] = useState(false)
 	const [audioURL, setAudioURL] = useState<string | null>(null)
 	const [isPlaying, setIsPlaying] = useState(false)
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
@@ -13,6 +15,7 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 
 	const startRecording = async () => {
 		try {
+			setIsLoading(true)
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
 			const mediaRecorder = new MediaRecorder(stream)
 			mediaRecorderRef.current = mediaRecorder
@@ -32,10 +35,21 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 			}
 
 			mediaRecorder.start()
-			setIsRecording(true)
+
+			// delay recording state update by 1 second in safari
+			if (isSafari()) {
+				setTimeout(() => {
+					setIsRecording(true)
+					setIsLoading(false)
+				}, 1000)
+			} else {
+				setIsRecording(true)
+				setIsLoading(false)
+			}
 		} catch (error) {
 			console.error('Error accessing microphone:', error)
 			toast.error('Unable to access microphone. Please check permissions.')
+			setIsLoading(false)
 		}
 	}
 
@@ -75,6 +89,7 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 						size="icon"
 						onClick={startRecording}
 						className="w-10 h-10 rounded-full"
+						disabled={isLoading}
 					>
 						<Mic className="h-5 w-5 text-primary" />
 					</Button>
