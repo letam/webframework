@@ -1,4 +1,5 @@
 import type React from 'react'
+import { useState } from 'react'
 import { Heart, MessageCircle, Share2, Mic, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
@@ -20,13 +21,20 @@ const PostActions: React.FC<PostActionsProps> = ({
 	body,
 	onTranscribe,
 }) => {
+	const [isTranscribing, setIsTranscribing] = useState(false)
+
 	const handleLike = () => {
 		onLike(id)
 	}
 
-	const handleTranscribe = () => {
-		if (onTranscribe) {
-			onTranscribe(id)
+	const handleTranscribe = async () => {
+		if (onTranscribe && !isTranscribing) {
+			setIsTranscribing(true)
+			try {
+				await onTranscribe(id)
+			} finally {
+				setIsTranscribing(false)
+			}
 		}
 	}
 
@@ -78,9 +86,12 @@ const PostActions: React.FC<PostActionsProps> = ({
 					size="sm"
 					className="text-muted-foreground hover:text-primary px-2 sm:px-3"
 					onClick={handleTranscribe}
+					disabled={isTranscribing}
 				>
 					<Mic className="h-4 w-4 sm:mr-1" />
-					<span className="hidden sm:inline">Transcribe</span>
+					<span className="hidden sm:inline">
+						{isTranscribing ? 'Transcribing...' : 'Transcribe'}
+					</span>
 				</Button>
 			)}
 		</div>
