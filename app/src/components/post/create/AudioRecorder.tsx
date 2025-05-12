@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Mic, Square, Play, Pause } from 'lucide-react'
+import { Mic, Square, Play, Pause, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import { isSafari } from '@/lib/utils/browser'
@@ -91,7 +91,11 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 						className="w-10 h-10 rounded-full"
 						disabled={isLoading}
 					>
-						<Mic className="h-5 w-5 text-primary" />
+						{isLoading ? (
+							<Loader2 className="h-5 w-5 text-primary animate-spin" />
+						) : (
+							<Mic className="h-5 w-5 text-primary" />
+						)}
 					</Button>
 				) : (
 					<Button
@@ -105,7 +109,7 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 					</Button>
 				)}
 
-				{audioURL && !isRecording && (
+				{audioURL && !isRecording && !isLoading && (
 					<Button
 						type="button"
 						variant="outline"
@@ -117,9 +121,12 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 					</Button>
 				)}
 
+				{isLoading && (
+					<span className="text-sm text-muted-foreground">Initializing microphone...</span>
+				)}
 				{isRecording && <span className="text-sm text-primary">Recording...</span>}
 
-				{audioURL && !isRecording && (
+				{audioURL && !isRecording && !isLoading && (
 					<span className="text-sm text-muted-foreground">Audio recorded</span>
 				)}
 			</div>
