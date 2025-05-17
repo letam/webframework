@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query'
 import type { Post, CreatePostRequest } from '../../types/post'
 import { SERVER_API_URL, UPLOAD_FILES_TO_S3 } from '../constants'
 
@@ -97,32 +96,6 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 	} catch (error) {
 		console.error('Error creating post:', error)
 		throw error
-	}
-}
-
-export const getPostMediaMimeType = async (post: Post) => {
-	if (!post.media_type) {
-		return null
-	}
-	const response = await fetch(`${SERVER_API_URL}/posts/${post.id}/media/mime-type/`)
-	const mimeType = await response.text()
-	if (mimeType === 'video/x-matroska') {
-		// Hack fix to serve this video in Chrome
-		return 'video/mp4'
-	}
-	return mimeType
-}
-
-export const useGetPostMediaMimeType = (post: Post) => {
-	const { data, isLoading, error } = useQuery({
-		queryKey: ['post-media-mime-type', post.id],
-		queryFn: () => getPostMediaMimeType(post),
-	})
-
-	return {
-		data,
-		isLoading,
-		error,
 	}
 }
 

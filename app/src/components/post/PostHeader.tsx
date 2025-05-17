@@ -3,31 +3,24 @@ import { formatDistanceToNow, format } from 'date-fns'
 import { MoreHorizontal, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { getFileExtension, downloadFile } from '@/lib/utils/file'
+import { downloadFile, getFileExtension } from '@/lib/utils/file'
+import { getMediaUrl } from '@/lib/api/posts'
+import type { Post } from '@/types/post'
 
 interface PostHeaderProps {
-	username: string
-	userAvatar: string
-	timestamp: Date
-	mediaUrl?: string
-	mediaType?: 'audio' | 'video'
+	post: Post
 }
 
-const PostHeader: React.FC<PostHeaderProps> = ({
-	username,
-	userAvatar,
-	timestamp,
-	mediaUrl,
-	mediaType,
-}) => {
-	const timeAgo = formatDistanceToNow(timestamp, { addSuffix: true })
+const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
+	const mediaUrl = getMediaUrl(post)
+	const timeAgo = formatDistanceToNow(post.created, { addSuffix: true })
 
 	const handleDownload = () => {
 		if (!mediaUrl) return
 
-		const extension = getFileExtension(mediaUrl, mediaType)
-		const formattedDateTime = format(timestamp, 'yyyy-MM-dd_HH-mm-ss')
-		const filename = `${username}_${formattedDateTime}.${extension}`
+		const formattedDateTime = format(post.created, 'yyyy-MM-dd_HH-mm-ss')
+		const mediaFileExtension = getFileExtension(post.media || post.media_s3_file_key)
+		const filename = `${post.author.username}_${formattedDateTime}.${mediaFileExtension}`
 
 		downloadFile({ url: mediaUrl, filename })
 	}
@@ -35,15 +28,15 @@ const PostHeader: React.FC<PostHeaderProps> = ({
 	return (
 		<div className="flex gap-3">
 			<Avatar>
-				<AvatarImage src={userAvatar} alt={username} />
-				<AvatarFallback>{username[0]}</AvatarFallback>
+				<AvatarImage src={post.author.avatar} alt={post.author.username} />
+				<AvatarFallback>{post.author.username[0]}</AvatarFallback>
 			</Avatar>
 
 			<div className="grow">
 				<div className="flex items-center gap-2">
-					<p className="font-semibold">{username}</p>
+					<p className="font-semibold">{post.author.username}</p>
 					<span className="text-muted-foreground text-sm">·</span>
-					<p className="text-muted-foreground text-sm" title={timestamp.toLocaleString()}>
+					<p className="text-muted-foreground text-sm" title={post.created.toLocaleString()}>
 						{timeAgo}
 					</p>
 

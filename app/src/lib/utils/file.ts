@@ -1,13 +1,9 @@
 /**
- * Gets the file extension from a path or URL, with fallback to media type
+ * Gets the file extension from a path or URL
  * @param path The file path or URL
- * @param mediaType The type of media (audio or video)
  * @returns The file extension
  */
-export const getFileExtension = (path: string, mediaType?: 'audio' | 'video'): string => {
-	// Default extension based on media type
-	const defaultExtension = mediaType === 'audio' ? 'mp3' : 'mp4'
-
+export const getFileExtension = (path: string): string => {
 	// Try to get extension from URL pathname
 	try {
 		const url = new URL(path)
@@ -18,13 +14,31 @@ export const getFileExtension = (path: string, mediaType?: 'audio' | 'video'): s
 		const extension = path.split('/').pop()?.split('.').pop()
 		if (extension) return extension
 	}
-
-	return defaultExtension
+	throw new Error('No extension found')
 }
 
 interface DownloadFileOptions {
 	url: string
 	filename: string
+}
+
+/**
+ * Gets the MIME type from a file name or URL
+ * @param path The file name or URL
+ * @returns The MIME type
+ */
+export const getMimeTypeFromPath = (path: string | null): string | null => {
+	if (!path) {
+		return null
+	}
+	return getMimeTypeFromExtension(getFileExtension(path))
+}
+
+const getMimeTypeFromExtension = (extension: string): string => {
+	if (extension === 'mp3') {
+		return 'audio/mpeg'
+	}
+	return `video/${extension}`
 }
 
 /**

@@ -5,7 +5,8 @@ import PostActions from './PostActions'
 import { AudioPlayer, VideoPlayer } from './MediaPlayer'
 import type { Post as PostType } from '../../types/post'
 import { toast } from '@/components/ui/sonner'
-import { getMediaUrl, transcribePost, useGetPostMediaMimeType } from '@/lib/api/posts'
+import { getMediaUrl, transcribePost } from '@/lib/api/posts'
+import { getMimeTypeFromPath } from '@/lib/utils/file'
 
 interface PostProps {
 	post: PostType
@@ -26,7 +27,7 @@ function FormatText({ children }: { children: React.ReactNode }): React.ReactEle
 
 export const Post: React.FC<PostProps> = ({ post, onLike, onTranscribed }) => {
 	const mediaUrl = getMediaUrl(post)
-	const mediaMimeTypeService = useGetPostMediaMimeType(post)
+	const mimeType = getMimeTypeFromPath(post.media || post.media_s3_file_key)
 
 	const handleTranscribe = async (id: number) => {
 		try {
@@ -41,26 +42,12 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onTranscribed }) => {
 		}
 	}
 
-	if (post.media_type && mediaMimeTypeService.isLoading) {
-		return <div>Loading...</div>
-	}
-
-	if (post.media_type && mediaMimeTypeService.error) {
-		return <div>Error: {mediaMimeTypeService.error.message}</div>
-	}
-
 	return (
 		<div
 			className="bg-card rounded-lg shadow-xs p-4 border hover:border-primary/20 transition-colors"
 			data-testid={`post-${post.id}`}
 		>
-			<PostHeader
-				username={post.author.username}
-				userAvatar={post.author.avatar}
-				timestamp={post.created}
-				mediaUrl={post.media_type ? mediaUrl : undefined}
-				mediaType={post.media_type}
-			/>
+			<PostHeader post={post} />
 
 			<div className="ml-12">
 				<div className="mt-2">
@@ -71,13 +58,9 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onTranscribed }) => {
 					)}
 				</div>
 
-				{post.media_type === 'audio' && (
-					<AudioPlayer audioUrl={mediaUrl} mimeType={mediaMimeTypeService.data} />
-				)}
+				{post.media_type === 'audio' && <AudioPlayer audioUrl={mediaUrl} mimeType={mimeType} />}
 
-				{post.media_type === 'video' && (
-					<VideoPlayer videoUrl={mediaUrl} mimeType={mediaMimeTypeService.data} />
-				)}
+				{post.media_type === 'video' && <VideoPlayer videoUrl={mediaUrl} mimeType={mimeType} />}
 
 				{post.body && (
 					<div className="mt-2 whitespace-pre-line">
