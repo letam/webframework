@@ -17,7 +17,7 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 		try {
 			setIsLoading(true)
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-			const mediaRecorder = new MediaRecorder(stream)
+			const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' })
 			mediaRecorderRef.current = mediaRecorder
 			audioChunksRef.current = []
 
@@ -28,7 +28,9 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 			}
 
 			mediaRecorder.onstop = () => {
-				const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp3' })
+				const audioBlob = new Blob(audioChunksRef.current, {
+					type: audioChunksRef.current[0]?.type,
+				})
 				const audioUrl = URL.createObjectURL(audioBlob)
 				setAudioURL(audioUrl)
 				onAudioCaptured(audioBlob)

@@ -22,15 +22,7 @@ const VideoRecorder = ({ onVideoCaptured }: { onVideoCaptured: (videoBlob: Blob)
 				videoRef.current.srcObject = stream
 			}
 
-			// Detect best-supported mimeType
-			let supportedMime = ''
-			if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-				supportedMime = 'video/webm;codecs=vp8,opus'
-			} else if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E,mp4a.40.2')) {
-				supportedMime = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2'
-			}
-
-			const mediaRecorder = new MediaRecorder(stream, { mimeType: supportedMime })
+			const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' })
 			mediaRecorderRef.current = mediaRecorder
 			videoChunksRef.current = []
 
@@ -42,7 +34,7 @@ const VideoRecorder = ({ onVideoCaptured }: { onVideoCaptured: (videoBlob: Blob)
 
 			mediaRecorder.onstop = () => {
 				const videoBlob = new Blob(videoChunksRef.current, {
-					type: supportedMime || videoChunksRef.current[0]?.type,
+					type: videoChunksRef.current[0]?.type,
 				})
 				const videoUrl = URL.createObjectURL(videoBlob)
 				setVideoURL(videoUrl)
