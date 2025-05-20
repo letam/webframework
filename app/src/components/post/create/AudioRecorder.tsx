@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { Mic, Square, Play, Pause, Loader2 } from 'lucide-react'
+import fixWebmDuration from 'webm-duration-fix'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import { isSafari } from '@/lib/utils/browser'
@@ -28,12 +29,14 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 			}
 
 			mediaRecorder.onstop = () => {
-				const audioBlob = new Blob(audioChunksRef.current, {
-					type: audioChunksRef.current[0]?.type,
-				})
-				const audioUrl = URL.createObjectURL(audioBlob)
-				setAudioURL(audioUrl)
-				onAudioCaptured(audioBlob)
+				;(async () => {
+					const audioBlob = await fixWebmDuration(
+						new Blob(audioChunksRef.current, { type: audioChunksRef.current[0]?.type })
+					)
+					const audioUrl = URL.createObjectURL(audioBlob)
+					setAudioURL(audioUrl)
+					onAudioCaptured(audioBlob)
+				})()
 			}
 
 			mediaRecorder.start()

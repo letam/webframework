@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { Video, Square, Play, Pause } from 'lucide-react'
+import fixWebmDuration from 'webm-duration-fix'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 
@@ -33,17 +34,19 @@ const VideoRecorder = ({ onVideoCaptured }: { onVideoCaptured: (videoBlob: Blob)
 			}
 
 			mediaRecorder.onstop = () => {
-				const videoBlob = new Blob(videoChunksRef.current, {
-					type: videoChunksRef.current[0]?.type,
-				})
-				const videoUrl = URL.createObjectURL(videoBlob)
-				setVideoURL(videoUrl)
-				onVideoCaptured(videoBlob)
+				;(async () => {
+					const videoBlob = await fixWebmDuration(
+						new Blob(videoChunksRef.current, { type: videoChunksRef.current[0]?.type })
+					)
+					const videoUrl = URL.createObjectURL(videoBlob)
+					setVideoURL(videoUrl)
+					onVideoCaptured(videoBlob)
 
-				// Remove preview
-				if (videoRef.current) {
-					videoRef.current.srcObject = null
-				}
+					// Remove preview
+					if (videoRef.current) {
+						videoRef.current.srcObject = null
+					}
+				})()
 			}
 
 			mediaRecorder.start()
