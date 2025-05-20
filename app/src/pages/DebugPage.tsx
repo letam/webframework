@@ -1,23 +1,7 @@
 import { isIOS, isSafari } from '@/lib/utils/browser'
+import { mimeTypes } from '@/lib/utils/media'
 
 const DebugPage = () => {
-	// Common MIME types to check
-	const mimeTypes = [
-		'video/webm',
-		'video/webm;codecs=vp8',
-		'video/webm;codecs=vp9',
-		'video/webm;codecs=h264',
-		'video/mp4',
-		'video/mp4;codecs=h264',
-		'video/quicktime',
-		'audio/webm',
-		'audio/webm;codecs=opus',
-		'audio/mp4',
-		'audio/mpeg',
-		'audio/ogg',
-		'audio/wav',
-	]
-
 	const supportedMimeTypes = mimeTypes.filter((type) => MediaRecorder.isTypeSupported(type))
 
 	return (

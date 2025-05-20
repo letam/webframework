@@ -4,7 +4,7 @@ import fixWebmDuration from 'webm-duration-fix'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import { isSafari } from '@/lib/utils/browser'
-
+import { supportedAudioMimeType } from '@/lib/utils/media'
 const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob) => void }) => {
 	const [isRecording, setIsRecording] = useState(false)
 	const [isLoading, setIsLoading] = useState(false)
@@ -18,7 +18,7 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 		try {
 			setIsLoading(true)
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-			const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' })
+			const mediaRecorder = new MediaRecorder(stream, { mimeType: supportedAudioMimeType })
 			mediaRecorderRef.current = mediaRecorder
 			audioChunksRef.current = []
 

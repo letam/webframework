@@ -3,6 +3,7 @@ import { Video, Square, Play, Pause } from 'lucide-react'
 import fixWebmDuration from 'webm-duration-fix'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
+import { supportedVideoMimeType } from '@/lib/utils/media'
 
 const VideoRecorder = ({ onVideoCaptured }: { onVideoCaptured: (videoBlob: Blob) => void }) => {
 	const [isRecording, setIsRecording] = useState(false)
@@ -23,7 +24,7 @@ const VideoRecorder = ({ onVideoCaptured }: { onVideoCaptured: (videoBlob: Blob)
 				videoRef.current.srcObject = stream
 			}
 
-			const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9,opus' })
+			const mediaRecorder = new MediaRecorder(stream, { mimeType: supportedVideoMimeType })
 			mediaRecorderRef.current = mediaRecorder
 			videoChunksRef.current = []
 
