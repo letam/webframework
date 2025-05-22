@@ -21,16 +21,32 @@ MEDIA_TYPE_CHOICES = [
 ]
 
 
+class Media(models.Model):
+    file = models.FileField(upload_to=media_file_path)
+    mp3_file = models.FileField(upload_to=media_file_path, blank=True)
+    s3_file_key = models.CharField(max_length=255, blank=True)
+    media_type = models.CharField(max_length=255, choices=MEDIA_TYPE_CHOICES)
+    duration = models.DurationField(null=True, blank=True)  # For storing media duration
+    thumbnail = models.ImageField(upload_to=media_file_path, blank=True)  # For storing thumbnail
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+
+    def convert_to_mp3(self):
+        """Convert the media file to MP3 format."""
+        if not self.file.path.endswith('.mp3'):
+            convert_to_mp3(self.file.path)
+            new_media_file_name = os.path.splitext(self.file.name)[0] + '.mp3'
+            self.mp3_file = new_media_file_name
+            self.save()
+
+
 class Post(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     head = models.CharField(max_length=255, blank=True)
     body = models.TextField(blank=True)
-    media_type = models.CharField(max_length=255, blank=True, choices=MEDIA_TYPE_CHOICES)
-    media = models.FileField(upload_to=media_file_path, blank=True)
-    media_mp3 = models.FileField(upload_to=media_file_path, blank=True)
-    media_s3_file_key = models.CharField(max_length=255, blank=True)
+    media = models.OneToOneField(Media, on_delete=models.SET_NULL, null=True, blank=True)
     parent = models.ForeignKey('Post', on_delete=models.SET_NULL, null=True, blank=True)
 
     class Meta:
@@ -40,31 +56,23 @@ class Post(models.Model):
         return self.head
 
     def save(self, *args, **kwargs):
+        # If this is a new post
         if self.id is None:
-            media = self.media
+            # Store the media file temporarily
+            media_file = self.media
             self.media = None
+
+            # First save the post without media
             super().save(*args, **kwargs)
-            self.media = media
-            if 'force_insert' in kwargs:
-                kwargs.pop('force_insert')
 
-        super().save(*args, **kwargs)
-
-    def convert_media_to_mp3(self):
-        """Convert the media file to MP3 format."""
-        if not self.media.path.endswith('.mp3'):
-            # Convert the media file to MP3 format
-            convert_to_mp3(self.media.path)
-
-            # get new media file name, using os.path.splitext
-            new_media_file_name = os.path.splitext(self.media.name)[0] + '.mp3'
-
-            # save the new mp3 file to the media_mp3 field
-            self.media_mp3 = new_media_file_name
-            self.save()
-
-            # TODO: Fix to delete old media file from file system after update
-            # # remove the old media file from file system
-            # os.remove(old_media_file.path)
-
-            # TODO: Run cleanup script to delete old media files from file system every hour
+            # If there was a media file, create a new Media record
+            if media_file:
+                media = Media(
+                    file=media_file,
+                    media_type=self.media_type if hasattr(self, 'media_type') else 'audio',
+                )
+                media.save()
+                self.media = media
+                super().save(update_fields=['media'])
+        else:
+            super().save(*args, **kwargs)

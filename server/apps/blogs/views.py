@@ -73,17 +73,17 @@ class PostViewSet(viewsets.ModelViewSet):
         """
         post = self.get_object()
 
-        if not post.media and not post.media_mp3:
+        if not post.media:
             return Response(
                 {'error': 'No media file found for this post'}, status=status.HTTP_400_BAD_REQUEST
             )
 
         try:
             # if the media file is not mp3, convert it to mp3
-            media = post.media_mp3 if post.media_mp3 else post.media
+            media = post.media.mp3_file if post.media.mp3_file else post.media.file
             if not media.path.endswith('.mp3'):
-                post.convert_media_to_mp3()
-                media = post.media_mp3
+                post.media.convert_to_mp3()
+                media = post.media.mp3_file
 
             # if the media file is not mp3, return an error
             if not media.path.endswith('.mp3'):
