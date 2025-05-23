@@ -81,12 +81,12 @@ class PostViewSet(viewsets.ModelViewSet):
         try:
             # if the media file is not mp3, convert it to mp3
             media = post.media.mp3_file if post.media.mp3_file else post.media.file
-            if not media.path.endswith('.mp3'):
+            if not media.file.path.endswith('.mp3'):
                 post.media.convert_to_mp3()
                 media = post.media.mp3_file
 
             # if the media file is not mp3, return an error
-            if not media.path.endswith('.mp3'):
+            if not media.file.path.endswith('.mp3'):
                 return Response(
                     {'error': 'Media file is not mp3'}, status=status.HTTP_400_BAD_REQUEST
                 )
@@ -120,7 +120,7 @@ def get_post_media_mime_type(request, post_id):
     if not post.media:
         return HttpResponse(status=status.HTTP_404_NOT_FOUND)
 
-    mime_type = get_file_mime_type(post.media.path)
+    mime_type = get_file_mime_type(post.media.file.path)
     return HttpResponse(mime_type, content_type="text/plain")
 
 
@@ -130,10 +130,10 @@ def stream_post_media(request, post_id):
 
     Reference: https://stackoverflow.com/questions/79423628/django-streaming-video-audio-rangedfileresponse
     """
-    post = Post.objects.get(id=post_id)
+    post = Post.objects.select_related('media').get(id=post_id)
     # TODO: Restrict access to share only to authorized users
 
-    file_size = os.path.getsize(post.media.path)
+    file_size = os.path.getsize(post.media.file.path)
 
     if request.is_secure():
         range_header = request.META.get('HTTPS_RANGE')
@@ -142,7 +142,7 @@ def stream_post_media(request, post_id):
 
     ranges = parse_range_header(range_header)
     if not ranges:
-        return FileResponse(open(post.media.path, 'rb'))
+        return FileResponse(open(post.media.file.path, 'rb'))
 
     if len(ranges.ranges) > 1:
         return Response(
@@ -151,8 +151,8 @@ def stream_post_media(request, post_id):
 
     if len(ranges.ranges) == 1 and (ranges.ranges[0][1] is None or ranges.ranges[0][1] == 2):
         # return the whole file
-        mime_type = get_file_mime_type(post.media.path)
-        response = FileResponse(open(post.media.path, 'rb'), content_type=mime_type)
+        mime_type = get_file_mime_type(post.media.file.path)
+        response = FileResponse(open(post.media.file.path, 'rb'), content_type=mime_type)
         return response
 
     # For simplicity, handle only single range requests
@@ -160,11 +160,11 @@ def stream_post_media(request, post_id):
         start, end = ranges[0]
     except Exception as e:
         logger.info(f'Error getting range for post {post.id}: {str(e)}')
-        mime_type = get_file_mime_type(post.media.path)
-        response = FileResponse(open(post.media.path, 'rb'), content_type=mime_type)
+        mime_type = get_file_mime_type(post.media.file.path)
+        response = FileResponse(open(post.media.file.path, 'rb'), content_type=mime_type)
         return response
 
-    with open(post.media.path, 'rb') as file_to_send:
+    with open(post.media.file.path, 'rb') as file_to_send:
         file_to_send.seek(start)
         data = file_to_send.read(end - start + 1)
 

@@ -27,18 +27,22 @@ interface DownloadFileOptions {
  * @param path The file name or URL
  * @returns The MIME type
  */
-export const getMimeTypeFromPath = (path: string | null): string | null => {
-	if (!path) {
-		return null
+export const getMimeTypeFromPath = (path: string): string => {
+	const extension = path.split('.').pop()?.toLowerCase()
+	switch (extension) {
+		case 'mp3':
+			return 'audio/mpeg'
+		case 'wav':
+			return 'audio/wav'
+		case 'ogg':
+			return 'audio/ogg'
+		case 'mp4':
+			return 'video/mp4'
+		case 'webm':
+			return 'video/webm'
+		default:
+			return 'application/octet-stream'
 	}
-	return getMimeTypeFromExtension(getFileExtension(path))
-}
-
-const getMimeTypeFromExtension = (extension: string): string => {
-	if (extension === 'mp3') {
-		return 'audio/mpeg'
-	}
-	return `video/${extension}`
 }
 
 /**

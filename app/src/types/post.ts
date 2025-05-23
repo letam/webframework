@@ -6,6 +6,18 @@ export interface Author {
 	last_name: string
 }
 
+export interface Media {
+	id: number
+	media_type: 'audio' | 'video'
+	file: string
+	s3_file_key?: string
+	mp3_file?: string
+	duration?: string
+	thumbnail?: string
+	created: Date
+	modified: Date
+}
+
 export interface Post {
 	id: number
 	url: string
@@ -13,10 +25,7 @@ export interface Post {
 	author: Author
 	head: string
 	body: string
-	media?: string
-	media_s3_file_key?: string
-	media_type?: 'audio' | 'video'
-
+	media?: Media
 	likes: number // TODO: Implement
 
 	// Dynamically added by the client

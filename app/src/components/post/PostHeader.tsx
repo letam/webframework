@@ -12,14 +12,14 @@ interface PostHeaderProps {
 }
 
 const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
-	const mediaUrl = getMediaUrl(post)
+	const mediaUrl = post.media ? getMediaUrl(post) : undefined
 	const timeAgo = formatDistanceToNow(post.created, { addSuffix: true })
 
 	const handleDownload = () => {
-		if (!mediaUrl) return
+		if (!mediaUrl || !post.media) return
 
 		const formattedDateTime = format(post.created, 'yyyy-MM-dd_HH-mm-ss')
-		const mediaFileExtension = getFileExtension(post.media || post.media_s3_file_key)
+		const mediaFileExtension = getFileExtension(post.media.file || post.media.s3_file_key)
 		const filename = `${post.author.username}_${formattedDateTime}.${mediaFileExtension}`
 
 		downloadFile({ url: mediaUrl, filename })

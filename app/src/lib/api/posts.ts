@@ -22,7 +22,7 @@ export const getPosts = async (): Promise<Post[]> => {
 		// TODO: Have single endpoint request for all signed urls
 		const dataWithSignedUrl = await Promise.all(
 			data.map(async (post) => {
-				if (post.media_s3_file_key) {
+				if (post.media?.s3_file_key) {
 					const response = (await getPostSignedUrl(post.id)) as { url: string }
 					// TODO: Cache the signed url
 					return { ...post, signedMediaUrl: response.url }
@@ -68,14 +68,15 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 			})
 
 			// create post with file url
-			formData.append('audio_s3_file_key', presignedUrl.file_path)
+			formData.append('media_type', data.media_type || 'audio')
+			formData.append('s3_file_key', presignedUrl.file_path)
 			response = await fetch(`${SERVER_API_URL}/posts/`, {
 				method: 'POST',
 				body: formData,
 			})
 		} else {
 			if (data.media) {
-				formData.append('media_type', data.media_type)
+				formData.append('media_type', data.media_type || 'audio')
 				formData.append('media', data.media)
 			}
 

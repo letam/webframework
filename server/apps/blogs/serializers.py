@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from .models import Post
+from .models import Post, Media
 
 
 User = get_user_model()
@@ -13,8 +13,24 @@ class UserNameSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'first_name', 'last_name']
 
 
+class MediaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Media
+        fields = [
+            'id',
+            'file',
+            'mp3_file',
+            'media_type',
+            'duration',
+            'thumbnail',
+            'created',
+            'modified',
+        ]
+
+
 class PostSerializer(serializers.HyperlinkedModelSerializer):
     author = UserNameSerializer(read_only=True)
+    media = MediaSerializer(read_only=True)
 
     class Meta:
         model = Post
@@ -24,9 +40,7 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
             'author',
             'head',
             'body',
-            'media_type',
             'media',
-            'media_s3_file_key',
             'post_set',
         ]
 
@@ -37,7 +51,5 @@ class PostCreateSerializer(serializers.ModelSerializer):
         fields = [
             'head',
             'body',
-            'media_type',
             'media',
-            'media_s3_file_key',
         ]

@@ -14,20 +14,22 @@ interface PostProps {
 	onTranscribed?: (post: PostType) => void
 }
 
-function FormatText({ children }: { children: React.ReactNode }): React.ReactElement {
-	const content = DOMPurify.sanitize(children as string)
+const FormatText: React.FC<{ children: string }> = ({ children }) => {
+	const content = DOMPurify.sanitize(children)
 		.replace(/\n/g, '<br/>')
 		.replace(
 			/(https?:[^ ]+)( ?)/g,
 			'<a href="$1" target="_blank" rel="noopener noreferrer" style="text-decoration: underline; word-break: break-all;">$1</a>$2'
 		)
-	// biome-ignore lint/security/noDangerouslySetInnerHtml: we intentionally want to use html, but
+	// biome-ignore lint/security/noDangerouslySetInnerHtml: we want to render URLs as href in html
 	return <div dangerouslySetInnerHTML={{ __html: content }} />
 }
 
 export const Post: React.FC<PostProps> = ({ post, onLike, onTranscribed }) => {
-	const mediaUrl = getMediaUrl(post)
-	const mimeType = getMimeTypeFromPath(post.media || post.media_s3_file_key)
+	const mediaUrl = post.media ? getMediaUrl(post) : undefined
+	const mimeType = post.media
+		? getMimeTypeFromPath(post.media.file || post.media.s3_file_key)
+		: undefined
 
 	const handleTranscribe = async (id: number) => {
 		try {
@@ -58,9 +60,13 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onTranscribed }) => {
 					)}
 				</div>
 
-				{post.media_type === 'audio' && <AudioPlayer audioUrl={mediaUrl} mimeType={mimeType} />}
+				{post.media?.media_type === 'audio' && mediaUrl && mimeType && (
+					<AudioPlayer audioUrl={mediaUrl} mimeType={mimeType} />
+				)}
 
-				{post.media_type === 'video' && <VideoPlayer videoUrl={mediaUrl} mimeType={mimeType} />}
+				{post.media?.media_type === 'video' && mediaUrl && mimeType && (
+					<VideoPlayer videoUrl={mediaUrl} mimeType={mimeType} />
+				)}
 
 				{post.body && (
 					<div className="mt-2 whitespace-pre-line">
@@ -72,7 +78,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onTranscribed }) => {
 					id={post.id}
 					likes={post.likes}
 					onLike={onLike}
-					mediaType={post.media_type}
+					mediaType={post.media?.media_type}
 					body={post.body}
 					onTranscribe={handleTranscribe}
 				/>
