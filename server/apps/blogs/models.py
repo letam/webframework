@@ -31,6 +31,23 @@ class Media(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     modified = models.DateTimeField(auto_now=True)
 
+    def save(self, *args, **kwargs):
+        # If this is a new record
+        if self.id is None:
+            # Store the media file temporarily
+            file = self.file
+            self.file = None
+
+            # First save the record without file, so that we can get an id for media_file_path
+            super().save(*args, **kwargs)
+
+            # Set file before re-saving
+            self.file = file
+            if 'force_insert' in kwargs:
+                kwargs.pop('force_insert')
+
+        super().save(*args, **kwargs)
+
     def convert_to_mp3(self):
         """Convert the media file to MP3 format."""
         if not self.file.path.endswith('.mp3'):
@@ -58,7 +75,7 @@ class Post(models.Model):
     def save(self, *args, **kwargs):
         # If this is a new post
         if self.id is None:
-            # Store the media file temporarily
+            # Strip media file from the post--it will be used in separate new Media record
             media_file = self.media
             self.media = None
 
