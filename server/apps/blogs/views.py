@@ -10,7 +10,7 @@ from werkzeug.http import parse_range_header
 from django.http import FileResponse, HttpResponse
 from django.views.decorators.http import require_GET
 
-from .models import Post
+from .models import Post, Media
 from .serializers import PostSerializer, PostCreateSerializer
 from .transcription import transcribe_audio
 from .utils.get_file_mimetype import get_file_mime_type
@@ -41,7 +41,12 @@ class PostViewSet(viewsets.ModelViewSet):
         serializer.save(author_id=user_id)
 
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        media = request.data.get('media')
+        media_type = request.data.get('media_type')
+        request_data = request.data
+        if media:
+            request_data = {k: v for k, v in request.data.items() if k != 'media'}
+        serializer = self.get_serializer(data=request_data)
 
         # Only print the request data in DEBUG mode
         if settings.DEBUG:
@@ -49,16 +54,20 @@ class PostViewSet(viewsets.ModelViewSet):
             import json
 
             print('Create Post - request data:')
-            request_data = request.data
-            if 'media' in request_data:
-                media = request.data.get('media')
-                print(f'File: {media}')
-                request_data = {k: v for k, v in request.data.items() if k != 'media'}
             print(json.dumps(request_data, indent=4))
+            if media:
+                print(f'File: {media}')
 
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
         headers = self.get_success_headers(serializer.data)
+
+        if media:
+            serializer.instance.media = Media.objects.create(
+                file=media,
+                media_type=media_type,
+            )
+            serializer.instance.save()
 
         # Get the created instance and serialize it with PostSerializer
         instance = serializer.instance
