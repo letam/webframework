@@ -98,13 +98,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, mimeType }) 
 	const [isPlaying, setIsPlaying] = useState(false)
 	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const [error, setError] = useState<string | null>(null)
-	const [isLoading, setIsLoading] = useState(true)
+	const [isLoading, setIsLoading] = useState(false)
+	const [isLoaded, setIsLoaded] = useState(false)
+	const videoBlobRef = useRef<Blob | null>(null)
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: executed when videoUrl changes
 	useEffect(() => {
 		setIsPlaying(false)
 		setError(null)
-		setIsLoading(true)
+		setIsLoading(false)
+		setIsLoaded(false)
+		videoBlobRef.current = null
 		const player = videoRef.current
 
 		// Cleanup function
@@ -116,6 +120,36 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, mimeType }) 
 			}
 		}
 	}, [videoUrl])
+
+	const loadVideo = async () => {
+		if (videoBlobRef.current) {
+			// Video is already cached
+			if (videoRef.current) {
+				videoRef.current.src = URL.createObjectURL(videoBlobRef.current)
+			}
+			return
+		}
+
+		setIsLoading(true)
+		setError(null)
+
+		try {
+			const response = await fetch(videoUrl)
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`)
+			}
+			const blob = await response.blob()
+			videoBlobRef.current = blob
+
+			if (videoRef.current) {
+				videoRef.current.src = URL.createObjectURL(blob)
+			}
+		} catch (err) {
+			const errorMessage = err instanceof Error ? err.message : 'Failed to load video'
+			setError(`Failed to load video: ${errorMessage}`)
+			setIsLoading(false)
+		}
+	}
 
 	const handleError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
 		const video = e.target as HTMLVideoElement
@@ -146,15 +180,20 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, mimeType }) 
 
 	const handleLoadedMetadata = () => {
 		setIsLoading(false)
+		setIsLoaded(true)
 		setError(null)
 	}
 
-	const togglePlayback = () => {
+	const togglePlayback = async () => {
 		if (videoRef.current) {
 			if (isPlaying) {
 				videoRef.current.pause()
 				setIsPlaying(false)
 			} else {
+				if (!isLoaded) {
+					await loadVideo()
+				}
+
 				// Reset all other video playback first
 				for (const video of document.querySelectorAll('video')) {
 					if (video !== videoRef.current) {
@@ -190,10 +229,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, mimeType }) 
 				onEnded={handleEnded}
 				onError={handleError}
 				onLoadedMetadata={handleLoadedMetadata}
-				preload="metadata"
 				controls={isPlaying}
 			>
-				<source src={videoUrl} type={mimeType} />
 				<track kind="captions" label="English" />
 				Your browser does not support the video tag.
 			</video>
@@ -227,6 +264,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, mimeType }) 
 							onClick={() => {
 								setError(null)
 								setIsLoading(true)
+								setIsLoaded(false)
+								videoBlobRef.current = null
 								if (videoRef.current) {
 									videoRef.current.load()
 								}
