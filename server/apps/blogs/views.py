@@ -1,4 +1,5 @@
 import os
+import traceback
 
 from django.conf import settings
 from rest_framework import viewsets, status
@@ -114,6 +115,7 @@ class PostViewSet(viewsets.ModelViewSet):
 
         except Exception as e:
             logger.error(f'Error transcribing audio for post {post.id}: {str(e)}')
+            logger.error(traceback.format_exc())
             return Response(
                 {'error': 'An error occurred while transcribing the media file'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
