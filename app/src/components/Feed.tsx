@@ -28,14 +28,10 @@ const Feed: React.FC = () => {
 		return <div className="max-w-2xl mx-auto text-center py-8">Loading posts...</div>
 	}
 
-	if (error) {
-		return (
-			<div className="max-w-2xl mx-auto text-center py-8 text-red-500">Error: {error.message}</div>
-		)
-	}
-
 	return (
 		<div className="max-w-2xl mx-auto">
+			{error && <div className="text-center py-4 text-red-500 mb-4">Error: {error.message}</div>}
+
 			<div className="my-4">
 				<CreatePost onPostCreated={handlePostCreated} />
 			</div>
