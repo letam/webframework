@@ -48,6 +48,42 @@ class Media(models.Model):
 
         super().save(*args, **kwargs)
 
+    def delete(self, *args, **kwargs):
+        # Get the media directory path
+        media_dir = os.path.dirname(self.file.path) if self.file else None
+
+        # Delete the files from storage
+        if self.file:
+            try:
+                if os.path.isfile(self.file.path):
+                    os.remove(self.file.path)
+            except Exception as e:
+                logger.error(f"Error deleting file {self.file.path}: {str(e)}")
+
+        if self.mp3_file:
+            try:
+                if os.path.isfile(self.mp3_file.path):
+                    os.remove(self.mp3_file.path)
+            except Exception as e:
+                logger.error(f"Error deleting mp3 file {self.mp3_file.path}: {str(e)}")
+
+        if self.thumbnail:
+            try:
+                if os.path.isfile(self.thumbnail.path):
+                    os.remove(self.thumbnail.path)
+            except Exception as e:
+                logger.error(f"Error deleting thumbnail {self.thumbnail.path}: {str(e)}")
+
+        # Delete the media directory if it exists
+        if media_dir and os.path.exists(media_dir):
+            try:
+                os.rmdir(media_dir)
+            except Exception as e:
+                logger.error(f"Error deleting media directory {media_dir}: {str(e)}")
+
+        # Delete the record
+        super().delete(*args, **kwargs)
+
     def convert_to_mp3(self):
         """Convert the media file to MP3 format."""
         if not self.file.path.endswith('.mp3'):
