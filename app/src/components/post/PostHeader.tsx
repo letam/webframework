@@ -1,6 +1,7 @@
 import type React from 'react'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, format } from 'date-fns'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { Post } from '@/types/post'
 
 interface PostHeaderProps {
@@ -24,9 +25,18 @@ const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
 					</span>
 					<span className="text-muted-foreground">@{post.author.username}</span>
 				</div>
-				<div className="text-sm text-muted-foreground">
-					{formatDistanceToNow(post.created, { addSuffix: true })}
-				</div>
+				<TooltipProvider>
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<div className="text-sm text-muted-foreground cursor-help">
+								{formatDistanceToNow(post.created, { addSuffix: true })}
+							</div>
+						</TooltipTrigger>
+						<TooltipContent>
+							<p>{format(post.created, 'PPpp')}</p>
+						</TooltipContent>
+					</Tooltip>
+				</TooltipProvider>
 			</div>
 		</div>
 	)
