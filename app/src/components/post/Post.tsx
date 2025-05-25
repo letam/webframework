@@ -2,6 +2,7 @@ import type React from 'react'
 import DOMPurify from 'dompurify'
 import PostHeader from './PostHeader'
 import PostActions from './PostActions'
+import PostMenu from './PostMenu'
 import { AudioPlayer, VideoPlayer } from './MediaPlayer'
 import type { Post as PostType } from '../../types/post'
 import { toast } from '@/components/ui/sonner'
@@ -11,6 +12,7 @@ import { getMimeTypeFromPath } from '@/lib/utils/file'
 interface PostProps {
 	post: PostType
 	onLike: (id: number) => void
+	onDelete: (id: number) => void
 	onTranscribed?: (post: PostType) => void
 }
 
@@ -25,7 +27,7 @@ const FormatText: React.FC<{ children: string }> = ({ children }) => {
 	return <div dangerouslySetInnerHTML={{ __html: content }} />
 }
 
-export const Post: React.FC<PostProps> = ({ post, onLike, onTranscribed }) => {
+export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onTranscribed }) => {
 	const mediaUrl = post.media ? getMediaUrl(post) : undefined
 	const mimeType = post.media
 		? getMimeTypeFromPath(post.media.file || post.media.s3_file_key)
@@ -49,7 +51,10 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onTranscribed }) => {
 			className="bg-card rounded-lg shadow-xs p-4 border hover:border-primary/20 transition-colors"
 			data-testid={`post-${post.id}`}
 		>
-			<PostHeader post={post} />
+			<div className="flex items-center gap-2">
+				<PostHeader post={post} />
+				<PostMenu post={post} onDelete={onDelete} />
+			</div>
 
 			<div className="ml-12">
 				<div className="mt-2">

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { Post, CreatePostRequest } from '../types/post'
-import { getPosts, createPost } from '../lib/api/posts'
+import { getPosts, createPost, deletePost } from '../lib/api/posts'
 
 export const usePosts = () => {
 	const [posts, setPosts] = useState<Post[]>([])
@@ -37,6 +37,16 @@ export const usePosts = () => {
 		)
 	}
 
+	const removePost = async (id: number) => {
+		try {
+			await deletePost(id)
+			setPosts((prevPosts) => prevPosts.filter((post) => post.id !== id))
+		} catch (err) {
+			setError(err instanceof Error ? err : new Error('Failed to delete post'))
+			throw err
+		}
+	}
+
 	useEffect(() => {
 		fetchPosts()
 	}, [fetchPosts])
@@ -48,5 +58,6 @@ export const usePosts = () => {
 		fetchPosts,
 		addPost,
 		updatePost,
+		removePost,
 	}
 }

@@ -3,9 +3,10 @@ import { Post } from './post/Post'
 import CreatePost from './post/create'
 import { usePosts } from '../hooks/usePosts'
 import type { CreatePostRequest, Post as PostType } from '@/types/post'
+import { toast } from '@/components/ui/sonner'
 
 const Feed: React.FC = () => {
-	const { posts, isLoading, error, addPost, updatePost } = usePosts()
+	const { posts, isLoading, error, addPost, updatePost, removePost } = usePosts()
 
 	const handlePostCreated = async (postData: CreatePostRequest) => {
 		try {
@@ -22,6 +23,16 @@ const Feed: React.FC = () => {
 
 	const handlePostTranscribed = (updatedPost: PostType) => {
 		updatePost(updatedPost)
+	}
+
+	const handleDeletePost = async (id: number) => {
+		try {
+			await removePost(id)
+			toast.success('Post deleted successfully')
+		} catch (error) {
+			console.error('Failed to delete post:', error)
+			toast.error('Failed to delete post')
+		}
 	}
 
 	if (isLoading) {
@@ -42,6 +53,7 @@ const Feed: React.FC = () => {
 						key={post.id}
 						post={post}
 						onLike={handleLike}
+						onDelete={handleDeletePost}
 						onTranscribed={handlePostTranscribed}
 					/>
 				))}

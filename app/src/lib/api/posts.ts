@@ -131,3 +131,18 @@ export const transcribePost = async (id: number): Promise<Post> => {
 		throw error
 	}
 }
+
+export const deletePost = async (id: number): Promise<void> => {
+	try {
+		const response = await fetch(`${SERVER_API_URL}/posts/${id}/`, {
+			method: 'DELETE',
+		})
+
+		if (!response.ok) {
+			throw new Error('Failed to delete post')
+		}
+	} catch (error) {
+		console.error('Error deleting post:', error)
+		throw error
+	}
+}
