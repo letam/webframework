@@ -107,3 +107,14 @@ class Post(models.Model):
 
     def __str__(self):
         return self.head
+
+    def delete(self, *args, **kwargs):
+        # Delete the media record
+        if self.media:
+            try:
+                self.media.delete()
+            except Exception as e:
+                logger.error(f"Error deleting media record {self.media.id}: {str(e)}")
+
+        # Delete the record
+        super().delete(*args, **kwargs)

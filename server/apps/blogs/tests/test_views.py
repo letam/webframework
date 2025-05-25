@@ -8,7 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from ..models import Post
+from ..models import Media, Post
 from . import ViewTestCase
 
 User = get_user_model()
@@ -118,6 +118,34 @@ class PostViewSetTests(ViewTestCase):
         post = Post.objects.get(id=response.data['id'])
         self.assertIsNotNone(post.media)
         self.assertEqual(post.id, post.media.id)
+
+    def test_delete_post_cleans_up_media(self):
+        """Test that deleting a post through the API cleans up media files."""
+        # Create a post with media
+        media = Media.objects.create(file=self.test_file, media_type='audio')
+        post = Post.objects.create(author=self.user, head='Test Post', media=media)
+
+        # Authenticate the client
+        self.client.force_authenticate(user=self.user)
+
+        # Get file path before deletion
+        file_path = media.file.path
+
+        # Verify file exists
+        self.assertTrue(os.path.exists(file_path))
+
+        # Delete the post
+        response = self.client.delete(reverse('post-detail', args=[post.id]))
+
+        # Check response
+        self.assertEqual(response.status_code, 204)
+
+        # Verify file is deleted
+        self.assertFalse(os.path.exists(file_path))
+
+        # Verify records are deleted
+        self.assertFalse(Post.objects.filter(id=post.id).exists())
+        self.assertFalse(Media.objects.filter(id=media.id).exists())
 
     def tearDown(self):
         # Clean up the temporary directory
