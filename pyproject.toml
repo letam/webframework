@@ -4,18 +4,6 @@
 # Target Python version
 target-version = "py313" # change to match your Django project's Python version
 
-# Include common linting rules and Django-specific rules
-select = [
-  "E", # pycodestyle errors
-  "F", # pyflakes
-  "I", # isort (import sorting)
-  "DJ", # Django-specific rules
-  "D", # pydocstyle (docstring checks)
-  "B", # flake8-bugbear
-  "N", # pep8-naming
-  "UP", # pyupgrade
-]
-
 # Exclude migrations from strict linting
 exclude = [
   "**/migrations/**",
@@ -30,9 +18,21 @@ fix = true
 # Optional: Restrict to specific paths (e.g., Django apps)
 # extend-include = ["*.py"]
 
-# Quote style
 [tool.ruff.format]
 quote-style = "preserve"
+
+[tool.ruff.lint]
+# Include common linting rules and Django-specific rules
+select = [
+  "E", # pycodestyle errors
+  "F", # pyflakes
+  "I", # isort (import sorting)
+  "DJ", # Django-specific rules
+  "D", # pydocstyle (docstring checks)
+  "B", # flake8-bugbear
+  "N", # pep8-naming
+  "UP", # pyupgrade
+]
 
 # Docstring convention
 [tool.ruff.lint.pydocstyle]
