@@ -65,6 +65,7 @@ class PostViewSet(viewsets.ModelViewSet):
 
         if media:
             serializer.instance.media = Media.objects.create(
+                id=serializer.instance.id,
                 file=media,
                 media_type=media_type,
             )

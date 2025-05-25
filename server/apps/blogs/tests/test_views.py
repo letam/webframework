@@ -90,6 +90,35 @@ class PostViewSetTests(ViewTestCase):
         # Verify no media was created
         self.assertIsNone(post.media)
 
+    def test_media_id_matches_post_id(self):
+        """Test that media ID matches post ID when creating a post with media."""
+        # Authenticate the client
+        self.client.force_authenticate(user=self.user)
+
+        # First create a post without media to take ID 1
+        data_without_media = {
+            'head': 'First Post',
+            'body': 'First post content',
+        }
+        self.client.post(reverse('post-list'), data_without_media)
+
+        # Now create a post with media
+        data_with_media = {
+            'head': 'Second Post',
+            'body': 'Second post content',
+            'media': self.test_file,
+            'media_type': 'audio',
+        }
+        response = self.client.post(reverse('post-list'), data_with_media, format='multipart')
+
+        # Check response
+        self.assertEqual(response.status_code, 201)
+
+        # Verify post and media IDs match
+        post = Post.objects.get(id=response.data['id'])
+        self.assertIsNotNone(post.media)
+        self.assertEqual(post.id, post.media.id)
+
     def tearDown(self):
         # Clean up the temporary directory
         for root, dirs, files in os.walk(self.temp_dir, topdown=False):
