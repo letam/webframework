@@ -1,10 +1,10 @@
-import boto3
-from botocore.config import Config
-from django.http import JsonResponse
-from django.conf import settings
 from datetime import datetime
 
+import boto3
 from apps.blogs.models import Post
+from botocore.config import Config
+from django.conf import settings
+from django.http import JsonResponse
 
 
 def get_s3_client():

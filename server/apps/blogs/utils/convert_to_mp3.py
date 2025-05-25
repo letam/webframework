@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
-import subprocess
+import logging
 import os
 import shutil
-import logging
+import subprocess
 
 logger = logging.getLogger('server.apps.blogs')
 

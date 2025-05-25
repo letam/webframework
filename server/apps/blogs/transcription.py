@@ -1,9 +1,9 @@
-import os
-import openai
 import logging
-from django.conf import settings
-from django.core.files.base import ContentFile
+import os
 import tempfile
+
+import openai
+from django.conf import settings
 
 # Configure logging
 logger = logging.getLogger('server.apps.blogs')

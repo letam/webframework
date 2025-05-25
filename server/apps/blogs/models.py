@@ -1,9 +1,9 @@
+import logging
+import os
+import os.path
+
 from django.conf import settings
 from django.db import models
-import os.path
-import os
-
-import logging
 
 from .utils import convert_to_mp3
 

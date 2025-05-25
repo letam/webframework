@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Post, Media
+from .models import Media, Post
 
 
 @admin.register(Media)

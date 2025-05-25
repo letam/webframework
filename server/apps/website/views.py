@@ -15,7 +15,9 @@ def local_dev_response_from_file_in_app_public_dir(request):
     path_includes_file_ext = request.path.count('.') > 0
     if not path_includes_file_ext:
         return
-    import os, os.path
+    import os
+    import os.path
+
     from django.http import HttpResponse, HttpResponseNotFound
 
     public_dir = 'app/public'
