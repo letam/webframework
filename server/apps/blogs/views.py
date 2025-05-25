@@ -90,18 +90,18 @@ class PostViewSet(viewsets.ModelViewSet):
 
         try:
             # if the media file is not mp3, convert it to mp3
-            media = post.media.mp3_file if post.media.mp3_file else post.media.file
-            if not media.file.path.endswith('.mp3'):
+            field_file = post.media.mp3_file if post.media.mp3_file else post.media.file
+            if not field_file.path.endswith('.mp3'):
                 post.media.convert_to_mp3()
-                media = post.media.mp3_file
+                field_file = post.media.mp3_file
 
             # if the media file is not mp3, return an error
-            if not media.file.path.endswith('.mp3'):
+            if not field_file.path.endswith('.mp3'):
                 return Response(
                     {'error': 'Media file is not mp3'}, status=status.HTTP_400_BAD_REQUEST
                 )
 
-            transcript = transcribe_audio(media)
+            transcript = transcribe_audio(field_file)
             # Update the post with the transcript
             update_kwargs = {
                 'body': transcript,
