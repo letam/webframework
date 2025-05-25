@@ -32,13 +32,13 @@ class Media(models.Model):
     modified = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        # If this is a new record
-        if self.id is None:
-            # Store the media file temporarily
+        # If this is a new record with file and we don't yet have id for media_file_path def
+        if self.id is None and self.file:
+            # Store file temporarily outside of record
             file = self.file
             self.file = None
 
-            # First save the record without file, so that we can get an id for media_file_path
+            # Save record without file, to first generate id for media_file_path
             super().save(*args, **kwargs)
 
             # Set file before re-saving
@@ -71,25 +71,3 @@ class Post(models.Model):
 
     def __str__(self):
         return self.head
-
-    def save(self, *args, **kwargs):
-        # If this is a new post
-        if self.id is None:
-            # Strip media file from the post--it will be used in separate new Media record
-            media_file = self.media
-            self.media = None
-
-            # First save the post without media
-            super().save(*args, **kwargs)
-
-            # If there was a media file, create a new Media record
-            if media_file:
-                media = Media(
-                    file=media_file,
-                    media_type=self.media_type if hasattr(self, 'media_type') else 'audio',
-                )
-                media.save()
-                self.media = media
-                super().save(update_fields=['media'])
-        else:
-            super().save(*args, **kwargs)
