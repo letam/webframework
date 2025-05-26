@@ -8,7 +8,7 @@ import VideoRecorder from './VideoRecorder'
 interface VideoPostTabProps {
 	onVideoCaptured: (blob: Blob) => void
 	onVideoFileChange?: (e: React.ChangeEvent<HTMLInputElement>) => void
-	onSubmit: () => void
+	onSubmit: (e: React.MouseEvent) => void
 }
 
 const VideoPostTab: React.FC<VideoPostTabProps> = ({
@@ -37,7 +37,7 @@ const VideoPostTab: React.FC<VideoPostTabProps> = ({
 			</div>
 
 			<div className="flex justify-end">
-				<Button type="submit" onClick={onSubmit}>
+				<Button type="button" onClick={onSubmit}>
 					Post
 				</Button>
 			</div>

@@ -138,7 +138,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		}
 	}
 
-	const handleTabSubmit = () => {
+	const handleTabSubmit = (e: React.MouseEvent) => {
+		e.preventDefault()
 		handleSubmit({ preventDefault: () => {} } as React.FormEvent)
 	}
 

@@ -7,7 +7,7 @@ import AudioRecorder from './AudioRecorder'
 interface AudioPostTabProps {
 	onAudioCaptured: (blob: Blob) => void
 	onAudioFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
-	onSubmit: () => void
+	onSubmit: (e: React.MouseEvent) => void
 }
 
 const AudioPostTab: React.FC<AudioPostTabProps> = ({
@@ -50,7 +50,7 @@ const AudioPostTab: React.FC<AudioPostTabProps> = ({
 			</div>
 
 			<div className="flex justify-end">
-				<Button type="submit" onClick={onSubmit}>
+				<Button type="button" onClick={onSubmit}>
 					Post
 				</Button>
 			</div>

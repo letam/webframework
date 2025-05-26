@@ -2,13 +2,13 @@ import type React from 'react'
 import { Button } from '@/components/ui/button'
 
 interface TextPostTabProps {
-	onSubmit: () => void
+	onSubmit: (e: React.MouseEvent) => void
 }
 
 const TextPostTab: React.FC<TextPostTabProps> = ({ onSubmit }) => {
 	return (
 		<div className="flex justify-end">
-			<Button type="submit" onClick={onSubmit}>
+			<Button type="button" onClick={onSubmit}>
 				Post
 			</Button>
 		</div>
