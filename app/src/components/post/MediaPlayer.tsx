@@ -10,26 +10,128 @@ interface AudioPlayerProps {
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) => {
 	const [isPlaying, setIsPlaying] = useState(false)
+	const [isLoading, setIsLoading] = useState(false)
+	const [showLoading, setShowLoading] = useState(false)
+	const [isLoaded, setIsLoaded] = useState(false)
+	const [error, setError] = useState<string | null>(null)
 	const audioRef = useRef<HTMLAudioElement | null>(null)
+	const audioBlobRef = useRef<Blob | null>(null)
+	const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: executed when audioUrl changes
 	useEffect(() => {
 		setIsPlaying(false)
+		setError(null)
+		setIsLoading(false)
+		setShowLoading(false)
+		setIsLoaded(false)
+		audioBlobRef.current = null
 		const player = audioRef.current
 
 		return () => {
 			if (player) {
 				player.pause()
+				player.removeAttribute('src')
+				player.load()
+			}
+			if (loadingTimeoutRef.current) {
+				clearTimeout(loadingTimeoutRef.current)
 			}
 		}
 	}, [audioUrl])
 
-	const togglePlayback = () => {
+	useEffect(() => {
+		if (isLoading) {
+			loadingTimeoutRef.current = setTimeout(() => {
+				setShowLoading(true)
+			}, 500)
+		} else {
+			setShowLoading(false)
+			if (loadingTimeoutRef.current) {
+				clearTimeout(loadingTimeoutRef.current)
+			}
+		}
+
+		return () => {
+			if (loadingTimeoutRef.current) {
+				clearTimeout(loadingTimeoutRef.current)
+			}
+		}
+	}, [isLoading])
+
+	const loadAudio = async () => {
+		if (audioBlobRef.current) {
+			// Audio is already cached
+			if (audioRef.current) {
+				audioRef.current.src = URL.createObjectURL(audioBlobRef.current)
+			}
+			return
+		}
+
+		setIsLoading(true)
+		setError(null)
+
+		try {
+			const response = await fetch(audioUrl)
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`)
+			}
+			const blob = await response.blob()
+			audioBlobRef.current = blob
+
+			if (audioRef.current) {
+				audioRef.current.src = URL.createObjectURL(blob)
+			}
+		} catch (err) {
+			const errorMessage = err instanceof Error ? err.message : 'Failed to load audio'
+			setError(`Failed to load audio: ${errorMessage}`)
+			setIsLoading(false)
+		}
+	}
+
+	const handleError = (e: React.SyntheticEvent<HTMLAudioElement, Event>) => {
+		const audio = e.target as HTMLAudioElement
+		const error = audio.error
+		if (error) {
+			let errorMessage = 'Audio playback error: '
+			switch (error.code) {
+				case MediaError.MEDIA_ERR_ABORTED:
+					errorMessage += 'Playback was interrupted. Please try again.'
+					break
+				case MediaError.MEDIA_ERR_NETWORK:
+					errorMessage += 'A network error occurred. Please check your connection.'
+					break
+				case MediaError.MEDIA_ERR_DECODE:
+					errorMessage += 'The audio format is not supported by your browser.'
+					break
+				case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+					errorMessage += 'The audio source is not supported.'
+					break
+				default:
+					errorMessage += 'An unknown error occurred.'
+			}
+			setError(errorMessage)
+			setIsLoading(false)
+			console.error('Audio error details:', error)
+		}
+	}
+
+	const handleLoadedMetadata = () => {
+		setIsLoading(false)
+		setIsLoaded(true)
+		setError(null)
+	}
+
+	const togglePlayback = async () => {
 		if (audioRef.current) {
 			if (isPlaying) {
 				audioRef.current.pause()
 				setIsPlaying(false)
 			} else {
+				if (!isLoaded) {
+					await loadAudio()
+				}
+
 				// Reset all other audio playback first
 				for (const audio of document.querySelectorAll('audio')) {
 					if (audio !== audioRef.current) {
@@ -42,10 +144,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 					.play()
 					.then(() => {
 						setIsPlaying(true)
+						setError(null)
 					})
 					.catch((error) => {
 						console.error('Audio playback error:', error)
 						setIsPlaying(false)
+						setError(`Failed to play audio: ${error.message}`)
 					})
 			}
 		}
@@ -56,7 +160,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 	}
 
 	return (
-		<div className="mt-4 bg-accent/10 rounded-md p-3">
+		<div className="mt-4 bg-accent/10 rounded-md p-3 relative">
 			<div className="flex items-center gap-3">
 				<Button
 					type="button"
@@ -64,6 +168,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 					size="icon"
 					onClick={togglePlayback}
 					className="h-10 w-10 rounded-full"
+					disabled={isLoading}
 				>
 					{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
 				</Button>
@@ -80,11 +185,47 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 					</div>
 				</div>
 
-				<audio ref={audioRef} onEnded={handleEnded} preload="metadata">
-					<source src={audioUrl} type={mimeType} />
+				<audio
+					ref={audioRef}
+					onEnded={handleEnded}
+					onError={handleError}
+					onLoadedMetadata={handleLoadedMetadata}
+					preload="none"
+				>
 					<track kind="captions" label="English" />
 				</audio>
 			</div>
+
+			{showLoading && (
+				<div className="absolute inset-0 flex items-center justify-center bg-accent/10 backdrop-blur-sm">
+					<div className="text-sm text-muted-foreground">Loading audio...</div>
+				</div>
+			)}
+
+			{error && (
+				<div className="absolute inset-0 flex items-center justify-center bg-accent/10 backdrop-blur-sm">
+					<div className="text-sm text-destructive text-center p-4">
+						<p>{error}</p>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							onClick={() => {
+								setError(null)
+								setIsLoading(true)
+								setIsLoaded(false)
+								audioBlobRef.current = null
+								if (audioRef.current) {
+									audioRef.current.load()
+								}
+							}}
+							className="mt-2"
+						>
+							Try Again
+						</Button>
+					</div>
+				</div>
+			)}
 		</div>
 	)
 }
@@ -179,6 +320,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, mimeType }) 
 	}
 
 	const handleLoadedMetadata = () => {
+		console.log('derp loaded metadata')
 		setIsLoading(false)
 		setIsLoaded(true)
 		setError(null)
