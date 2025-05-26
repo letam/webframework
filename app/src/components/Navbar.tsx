@@ -1,6 +1,8 @@
 import { Link } from 'react-router'
-import { Home, User, Menu } from 'lucide-react'
+import { Home, User, Menu, LogOut } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { useAuth } from '@/hooks/useAuth'
+import { logout } from '@/lib/api/auth'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -10,6 +12,17 @@ import {
 import { Button } from '@/components/ui/button'
 
 const Navbar = () => {
+	const { isAuthenticated, refreshAuthStatus } = useAuth()
+
+	const handleLogout = async () => {
+		try {
+			await logout()
+			await refreshAuthStatus()
+		} catch (error) {
+			console.error('Error logging out:', error)
+		}
+	}
+
 	return (
 		<header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur-sm supports-backdrop-filter:bg-background/60">
 			<div className="container flex h-14 items-center justify-between">
@@ -37,6 +50,18 @@ const Navbar = () => {
 								<span>Profile</span>
 							</div>
 						</Link>
+						{isAuthenticated && (
+							<Button
+								variant="ghost"
+								className="transition-colors hover:text-foreground/80 text-foreground/60"
+								onClick={handleLogout}
+							>
+								<div className="flex items-center gap-1">
+									<LogOut className="h-4 w-4" />
+									<span>Logout</span>
+								</div>
+							</Button>
+						)}
 					</nav>
 
 					<ThemeToggle />
@@ -61,6 +86,14 @@ const Navbar = () => {
 									<span>Profile</span>
 								</Link>
 							</DropdownMenuItem>
+							{isAuthenticated && (
+								<DropdownMenuItem onClick={handleLogout}>
+									<div className="flex items-center gap-2">
+										<LogOut className="h-4 w-4" />
+										<span>Logout</span>
+									</div>
+								</DropdownMenuItem>
+							)}
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</div>
