@@ -5,39 +5,68 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Post } from './post/Post'
+import type { Post as PostType } from '@/types/post'
 
 interface ProfileProps {
 	username?: string
 }
 
 const Profile: React.FC<ProfileProps> = ({ username = 'user1' }) => {
-	const posts = [
+	const posts: PostType[] = [
 		{
-			id: '101',
-			text: 'Just shared my thoughts on the latest tech trends in my new podcast episode!',
-			mediaType: 'audio' as const,
-			mediaUrl:
-				'https://citizen-dj.labs.loc.gov/audio/samplepacks/loc-fma/Mushrooms_fma-178531_001_00-00-01.mp3',
-			timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2), // 2 days ago
-			username: 'user1',
-			userAvatar: 'https://ui-avatars.com/api/?name=User&background=7c3aed&color=fff',
+			id: 101,
+			head: 'Just shared my thoughts on the latest tech trends in my new podcast episode!',
+			body: '',
+			media: {
+				id: 1,
+				media_type: 'audio',
+				file: 'https://citizen-dj.labs.loc.gov/audio/samplepacks/loc-fma/Mushrooms_fma-178531_001_00-00-01.mp3',
+				created: new Date(),
+				modified: new Date(),
+			},
+			created: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2), // 2 days ago
+			author: {
+				id: 1,
+				username: 'user1',
+				avatar: 'https://ui-avatars.com/api/?name=User&background=7c3aed&color=fff',
+				first_name: 'John',
+				last_name: 'Doe',
+			},
 			likes: 24,
+			url: `/posts/${101}`,
 		},
 		{
-			id: '102',
-			text: 'Check out this beautiful sunset I captured yesterday!',
-			mediaType: 'video' as const,
-			mediaUrl: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
-			timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5), // 5 days ago
-			username: 'user1',
-			userAvatar: 'https://ui-avatars.com/api/?name=User&background=7c3aed&color=fff',
+			id: 102,
+			head: 'Check out this beautiful sunset I captured yesterday!',
+			body: '',
+			media: {
+				id: 2,
+				media_type: 'video',
+				file: 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4',
+				created: new Date(),
+				modified: new Date(),
+			},
+			created: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5), // 5 days ago
+			author: {
+				id: 1,
+				username: 'user1',
+				avatar: 'https://ui-avatars.com/api/?name=User&background=7c3aed&color=fff',
+				first_name: 'John',
+				last_name: 'Doe',
+			},
 			likes: 37,
+			url: `/posts/${102}`,
 		},
 	]
 
-	const handleLike = (id: string) => {
+	const handleLike = (id: number) => {
 		// In a real app, this would update the like count in the state
 		console.log(`Liked post ${id}`)
+	}
+
+	const handleDelete = (id: number) => {
+		// In a real app, this would delete the post
+		console.log(`Deleted post ${id}`)
 	}
 
 	return (
@@ -113,18 +142,7 @@ const Profile: React.FC<ProfileProps> = ({ username = 'user1' }) => {
 
 				<TabsContent value="posts" className="space-y-4 mt-4">
 					{posts.map((post) => (
-						<Post
-							key={post.id}
-							id={post.id}
-							text={post.text}
-							mediaType={post.mediaType}
-							mediaUrl={post.mediaUrl}
-							timestamp={post.timestamp}
-							username={post.username}
-							userAvatar={post.userAvatar}
-							likes={post.likes}
-							onLike={handleLike}
-						/>
+						<Post key={post.id} post={post} onLike={handleLike} onDelete={handleDelete} />
 					))}
 				</TabsContent>
 
