@@ -3,6 +3,7 @@ import { Home, User, Menu, LogOut } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAuth } from '@/hooks/useAuth'
 import { logout } from '@/lib/api/auth'
+import { LoginModal } from '@/components/LoginModal'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -41,16 +42,18 @@ const Navbar = () => {
 								<span>Home</span>
 							</div>
 						</Link>
-						<Link
-							to="/profile"
-							className="transition-colors hover:text-foreground/80 text-foreground/60"
-						>
-							<div className="flex items-center gap-1">
-								<User className="h-4 w-4" />
-								<span>Profile</span>
-							</div>
-						</Link>
 						{isAuthenticated && (
+							<Link
+								to="/profile"
+								className="transition-colors hover:text-foreground/80 text-foreground/60"
+							>
+								<div className="flex items-center gap-1">
+									<User className="h-4 w-4" />
+									<span>Profile</span>
+								</div>
+							</Link>
+						)}
+						{isAuthenticated ? (
 							<Button
 								variant="ghost"
 								className="transition-colors hover:text-foreground/80 text-foreground/60"
@@ -61,6 +64,8 @@ const Navbar = () => {
 									<span>Logout</span>
 								</div>
 							</Button>
+						) : (
+							<LoginModal />
 						)}
 					</nav>
 
@@ -80,18 +85,24 @@ const Navbar = () => {
 									<span>Home</span>
 								</Link>
 							</DropdownMenuItem>
-							<DropdownMenuItem asChild>
-								<Link to="/profile" className="flex items-center gap-2">
-									<User className="h-4 w-4" />
-									<span>Profile</span>
-								</Link>
-							</DropdownMenuItem>
 							{isAuthenticated && (
+								<DropdownMenuItem asChild>
+									<Link to="/profile" className="flex items-center gap-2">
+										<User className="h-4 w-4" />
+										<span>Profile</span>
+									</Link>
+								</DropdownMenuItem>
+							)}
+							{isAuthenticated ? (
 								<DropdownMenuItem onClick={handleLogout}>
 									<div className="flex items-center gap-2">
 										<LogOut className="h-4 w-4" />
 										<span>Logout</span>
 									</div>
+								</DropdownMenuItem>
+							) : (
+								<DropdownMenuItem asChild>
+									<LoginModal />
 								</DropdownMenuItem>
 							)}
 						</DropdownMenuContent>
