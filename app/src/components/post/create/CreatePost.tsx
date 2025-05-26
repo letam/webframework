@@ -127,13 +127,15 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			media: file,
 		}
 
-		onPostCreated(newPost)
-
-		// Reset form
-		setPostText('')
-		clearMedia()
-
-		toast.success('Post created successfully!')
+		try {
+			await onPostCreated(newPost)
+			// Reset form only on success
+			setPostText('')
+			clearMedia()
+			toast.success('Post created successfully!')
+		} catch (error) {
+			toast.error('Failed to create post')
+		}
 	}
 
 	const handleTabSubmit = () => {
