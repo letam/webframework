@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react'
 import { SERVER_HOST } from '../lib/constants'
+import { clearCsrfTokenCache } from '../lib/utils/fetch'
 
 interface AuthState {
 	isAuthenticated: boolean
@@ -25,16 +26,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 			const response = await fetch(`${SERVER_HOST}/auth/status/`)
 			if (response.ok) {
 				const data = await response.json()
-				setAuthState({
+				const newAuthState = {
 					isAuthenticated: data.is_authenticated,
 					userId: data.user_id,
 					username: data.username,
-				})
+				}
+
+				// Clear CSRF token cache if auth state changes
+				if (newAuthState.isAuthenticated !== authState.isAuthenticated) {
+					clearCsrfTokenCache()
+				}
+
+				setAuthState(newAuthState)
 			}
 		} catch (error) {
 			console.error('Error checking auth status:', error)
 		}
-	}, [])
+	}, [authState.isAuthenticated])
 
 	useEffect(() => {
 		checkAuthStatus()

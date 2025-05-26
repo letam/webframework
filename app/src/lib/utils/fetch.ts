@@ -8,6 +8,11 @@ interface CsrfTokenCache {
 
 let csrfTokenCache: CsrfTokenCache | null = null
 
+// Helper function to clear CSRF token cache
+export const clearCsrfTokenCache = () => {
+	csrfTokenCache = null
+}
+
 // Helper function to get CSRF token with caching
 export const getCsrfToken = async () => {
 	// Check if we have a valid cached token (valid for 1 hour)
