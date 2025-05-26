@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/sonner'
@@ -40,6 +40,15 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [videoBlob, setVideoBlob] = useState<Blob | null>(null)
 	const [audioFile, setAudioFile] = useState<File | null>(null)
 	const [videoFile, setVideoFile] = useState<File | null>(null)
+	const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+	const handleKeyDown = (e: React.KeyboardEvent) => {
+		// Check for Cmd+Enter (macOS) or Ctrl+Enter (Windows/Linux)
+		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+			e.preventDefault()
+			handleSubmit({ preventDefault: () => {} } as React.FormEvent)
+		}
+	}
 
 	const handlePostTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
 		setPostText(e.target.value)
@@ -133,6 +142,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			setPostText('')
 			clearMedia()
 			toast.success('Post created successfully!')
+			// Focus back on text area
+			textareaRef.current?.focus()
 		} catch (error) {
 			toast.error('Failed to create post')
 		}
@@ -147,9 +158,11 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		<div className="bg-card rounded-lg shadow-xs p-4 border">
 			<form onSubmit={handleSubmit}>
 				<Textarea
+					ref={textareaRef}
 					placeholder="What's happening?"
 					value={postText}
 					onChange={handlePostTextChange}
+					onKeyDown={handleKeyDown}
 					className="w-full resize-none mb-4 border-none focus-visible:ring-0 py-2 px-3 text-base"
 				/>
 
