@@ -1,5 +1,6 @@
 import type { Post, CreatePostRequest } from '../../types/post'
 import { SERVER_API_URL, UPLOAD_FILES_TO_S3 } from '../constants'
+import { getFetchOptions } from '../utils/fetch'
 
 export const getPosts = async (): Promise<Post[]> => {
 	try {
@@ -43,16 +44,22 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 		const formData = new FormData()
 		formData.append('body', data.text)
 
+		// // Debug logging
+		// console.log('Creating post with data:', data)
+		// console.log('FormData contents:', {
+		// 	body: formData.get('body'),
+		// 	media: data.media ? 'present' : 'absent',
+		// 	media_type: data.media_type,
+		// })
+
 		// Check environment variable to see if we upload to S3 cloud-compatible storage or local storage
 		if (data.media && UPLOAD_FILES_TO_S3) {
 			// Get presigned url from backend
-			response = await fetch(`${SERVER_API_URL}/uploads/presign/`, {
-				method: 'POST',
-				body: JSON.stringify({
-					file_name: data.media.name,
-					content_type: data.media.type,
-				}),
+			const options = await getFetchOptions('POST', {
+				file_name: data.media.name,
+				content_type: data.media.type,
 			})
+			response = await fetch(`${SERVER_API_URL}/uploads/presign/`, options)
 			// get presigned url from response
 			const presignedUrl = (await response.json()) as { url: string; file_path: string }
 
@@ -70,20 +77,18 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 			// create post with file url
 			formData.append('media_type', data.media_type || 'audio')
 			formData.append('s3_file_key', presignedUrl.file_path)
-			response = await fetch(`${SERVER_API_URL}/posts/`, {
-				method: 'POST',
-				body: formData,
-			})
+			const postOptions = await getFetchOptions('POST', formData)
+
+			response = await fetch(`${SERVER_API_URL}/posts/`, postOptions)
 		} else {
 			if (data.media) {
 				formData.append('media_type', data.media_type || 'audio')
 				formData.append('media', data.media)
 			}
 
-			response = await fetch(`${SERVER_API_URL}/posts/`, {
-				method: 'POST',
-				body: formData,
-			})
+			const postOptions = await getFetchOptions('POST', formData)
+
+			response = await fetch(`${SERVER_API_URL}/posts/`, postOptions)
 		}
 
 		if (!response.ok) {
@@ -113,9 +118,8 @@ export const getMediaUrl = (post: Post): string => {
 
 export const transcribePost = async (id: number): Promise<Post> => {
 	try {
-		const response = await fetch(`${SERVER_API_URL}/posts/${id}/transcribe/`, {
-			method: 'POST',
-		})
+		const options = await getFetchOptions('POST')
+		const response = await fetch(`${SERVER_API_URL}/posts/${id}/transcribe/`, options)
 
 		if (!response.ok) {
 			throw new Error('Failed to transcribe media')
@@ -134,9 +138,8 @@ export const transcribePost = async (id: number): Promise<Post> => {
 
 export const deletePost = async (id: number): Promise<void> => {
 	try {
-		const response = await fetch(`${SERVER_API_URL}/posts/${id}/`, {
-			method: 'DELETE',
-		})
+		const options = await getFetchOptions('DELETE')
+		const response = await fetch(`${SERVER_API_URL}/posts/${id}/`, options)
 
 		if (!response.ok) {
 			throw new Error('Failed to delete post')

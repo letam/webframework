@@ -11,6 +11,7 @@ import { downloadFile, getFileExtension } from '@/lib/utils/file'
 import { getMediaUrl } from '@/lib/api/posts'
 import { format } from 'date-fns'
 import type { Post } from '@/types/post'
+import { useAuth } from '@/hooks/useAuth'
 
 interface PostMenuProps {
 	post: Post
@@ -18,6 +19,9 @@ interface PostMenuProps {
 }
 
 const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete }) => {
+	const { isAuthenticated, userId } = useAuth()
+	const canDelete = isAuthenticated && userId === post.author.id
+
 	const handleDelete = () => {
 		onDelete(post.id)
 	}
@@ -46,13 +50,15 @@ const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete }) => {
 						Download
 					</DropdownMenuItem>
 				)}
-				<DropdownMenuItem
-					className="text-destructive focus:text-destructive"
-					onClick={handleDelete}
-				>
-					<Trash2 className="mr-2 h-4 w-4" />
-					Delete
-				</DropdownMenuItem>
+				{canDelete && (
+					<DropdownMenuItem
+						className="text-destructive focus:text-destructive"
+						onClick={handleDelete}
+					>
+						<Trash2 className="mr-2 h-4 w-4" />
+						Delete
+					</DropdownMenuItem>
+				)}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	)
