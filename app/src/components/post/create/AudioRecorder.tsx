@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/sonner'
 import { isSafari } from '@/lib/utils/browser'
 import { supportedAudioMimeType } from '@/lib/utils/media'
 import { getSettings } from '@/lib/utils/settings'
+import { convertToWav } from '@/lib/utils/audio'
 
 const normalizeAudio = async (audioBlob: Blob): Promise<Blob> => {
 	try {
@@ -69,60 +70,6 @@ const normalizeAudio = async (audioBlob: Blob): Promise<Blob> => {
 	} catch (error) {
 		console.error('Error normalizing audio:', error)
 		return audioBlob // Return original blob if normalization fails
-	}
-}
-
-// Helper function to convert AudioBuffer to WAV format
-const convertToWav = async (audioBuffer: AudioBuffer): Promise<ArrayBuffer> => {
-	const numChannels = audioBuffer.numberOfChannels
-	const sampleRate = audioBuffer.sampleRate
-	const format = 1 // PCM
-	const bitDepth = 16
-	const bytesPerSample = bitDepth / 8
-	const blockAlign = numChannels * bytesPerSample
-	const byteRate = sampleRate * blockAlign
-	const dataSize = audioBuffer.length * blockAlign
-	const buffer = new ArrayBuffer(44 + dataSize)
-	const view = new DataView(buffer)
-
-	// Write WAV header
-	writeString(view, 0, 'RIFF')
-	view.setUint32(4, 36 + dataSize, true)
-	writeString(view, 8, 'WAVE')
-	writeString(view, 12, 'fmt ')
-	view.setUint32(16, 16, true)
-	view.setUint16(20, format, true)
-	view.setUint16(22, numChannels, true)
-	view.setUint32(24, sampleRate, true)
-	view.setUint32(28, byteRate, true)
-	view.setUint16(32, blockAlign, true)
-	view.setUint16(34, bitDepth, true)
-	writeString(view, 36, 'data')
-	view.setUint32(40, dataSize, true)
-
-	// Write audio data
-	const offset = 44
-	const channelData = []
-	for (let i = 0; i < numChannels; i++) {
-		channelData.push(audioBuffer.getChannelData(i))
-	}
-
-	let pos = 0
-	while (pos < audioBuffer.length) {
-		for (let i = 0; i < numChannels; i++) {
-			const sample = Math.max(-1, Math.min(1, channelData[i][pos]))
-			const value = sample < 0 ? sample * 0x8000 : sample * 0x7fff
-			view.setInt16(offset + pos * blockAlign + i * bytesPerSample, value, true)
-		}
-		pos++
-	}
-
-	return buffer
-}
-
-const writeString = (view: DataView, offset: number, string: string) => {
-	for (let i = 0; i < string.length; i++) {
-		view.setUint8(offset + i, string.charCodeAt(i))
 	}
 }
 
