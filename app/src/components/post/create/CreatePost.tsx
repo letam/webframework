@@ -8,22 +8,18 @@ import AudioPostTab from './AudioPostTab'
 import VideoPostTab from './VideoPostTab'
 import MediaPreview from './MediaPreview'
 import type { CreatePostRequest } from '@/types/post'
+import { convertWavToWebM, getAudioExtension } from '@/lib/utils/audio'
+import { getSettings } from '@/lib/utils/settings'
 
 interface CreatePostProps {
 	onPostCreated: (post: CreatePostRequest) => void
 }
 
 const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): string => {
-	const baseType = mimeType.split(';')[0] // Remove codec information
 	if (mediaType === 'audio') {
-		return baseType === 'audio/webm'
-			? 'webm'
-			: baseType === 'audio/mp4'
-				? 'm4a'
-				: baseType === 'audio/ogg'
-					? 'ogg'
-					: 'webm' // Default to webm as it's most widely supported
+		return getAudioExtension(mimeType)
 	}
+	const baseType = mimeType.split(';')[0] // Remove codec information
 	return baseType === 'video/webm'
 		? 'webm'
 		: baseType === 'video/mp4'
@@ -111,8 +107,16 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			if (blob) {
 				finalMediaType = 'audio'
 				if (!(blob instanceof File)) {
-					const extension = getMediaExtension(blob.type, 'audio')
-					file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
+					// Only convert to WebM if normalization is enabled (since normalization converts the blob to WAV)
+					if (getSettings().normalizeAudio) {
+						const webmBlob = await convertWavToWebM(blob)
+						file = new File([webmBlob], `recording_${Date.now()}.webm`, {
+							type: 'audio/webm;codecs=opus',
+						})
+					} else {
+						const extension = getMediaExtension(blob.type, 'audio')
+						file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
+					}
 				} else {
 					file = blob
 				}

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import { isSafari } from '@/lib/utils/browser'
 import { supportedAudioMimeType } from '@/lib/utils/media'
+import { getSettings } from '@/lib/utils/settings'
 
 const normalizeAudio = async (audioBlob: Blob): Promise<Blob> => {
 	try {
@@ -151,10 +152,17 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 			mediaRecorder.onstop = () => {
 				;(async () => {
 					try {
-						let audioBlob = await fixWebmDuration(
-							new Blob(audioChunksRef.current, { type: audioChunksRef.current[0]?.type })
-						)
-						audioBlob = await normalizeAudio(audioBlob)
+						let audioBlob = new Blob(audioChunksRef.current, {
+							type: audioChunksRef.current[0]?.type,
+						})
+
+						// Only normalize if the setting is enabled
+						if (getSettings().normalizeAudio) {
+							audioBlob = await normalizeAudio(audioBlob)
+						} else {
+							audioBlob = await fixWebmDuration(audioBlob)
+						}
+
 						const audioUrl = URL.createObjectURL(audioBlob)
 						setAudioURL(audioUrl)
 						onAudioCaptured(audioBlob)

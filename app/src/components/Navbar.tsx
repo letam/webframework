@@ -1,5 +1,5 @@
 import { Link } from 'react-router'
-import { Home, User, Menu, LogOut } from 'lucide-react'
+import { Home, User, Menu, LogOut, Settings } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAuth } from '@/hooks/useAuth'
 import { logout } from '@/lib/api/auth'
@@ -40,6 +40,15 @@ const Navbar = () => {
 							<div className="flex items-center gap-1">
 								<Home className="h-4 w-4" />
 								<span>Home</span>
+							</div>
+						</Link>
+						<Link
+							to="/settings"
+							className="transition-colors hover:text-foreground/80 text-foreground/60"
+						>
+							<div className="flex items-center gap-1">
+								<Settings className="h-4 w-4" />
+								<span>Settings</span>
 							</div>
 						</Link>
 						{isAuthenticated && (
@@ -83,6 +92,12 @@ const Navbar = () => {
 								<Link to="/" className="flex items-center gap-2">
 									<Home className="h-4 w-4" />
 									<span>Home</span>
+								</Link>
+							</DropdownMenuItem>
+							<DropdownMenuItem asChild>
+								<Link to="/settings" className="flex items-center gap-2">
+									<Settings className="h-4 w-4" />
+									<span>Settings</span>
 								</Link>
 							</DropdownMenuItem>
 							{isAuthenticated && (

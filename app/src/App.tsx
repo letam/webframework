@@ -9,6 +9,7 @@ import Index from './pages/Index'
 import ProfilePage from './pages/ProfilePage'
 import NotFound from './pages/NotFound'
 import DebugPage from './pages/DebugPage'
+import SettingsPage from './components/settings/SettingsPage'
 
 const queryClient = new QueryClient()
 
@@ -23,6 +24,7 @@ const App = () => (
 						<Routes>
 							<Route path="/" element={<Index />} />
 							<Route path="/profile" element={<ProfilePage />} />
+							<Route path="/settings" element={<SettingsPage />} />
 							<Route path="/debug" element={<DebugPage />} />
 							<Route path="*" element={<NotFound />} />
 						</Routes>
