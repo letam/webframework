@@ -75,6 +75,7 @@ const AudioPostTab: React.FC<AudioPostTabProps> = ({
 					ref={audioRecorderRef}
 					onAudioCaptured={onAudioCaptured}
 					disabled={disabled}
+					submitStatus={submitStatus}
 				/>
 
 				<div className="flex items-center space-x-2">

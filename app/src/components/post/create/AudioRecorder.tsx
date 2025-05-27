@@ -111,8 +111,9 @@ const AudioRecorder = forwardRef<
 	{
 		onAudioCaptured: (audioBlob: Blob) => void
 		disabled?: boolean
+		submitStatus?: '' | 'preparing' | 'compressing' | 'submitting'
 	}
->(({ onAudioCaptured, disabled }, ref) => {
+>(({ onAudioCaptured, disabled, submitStatus = '' }, ref) => {
 	const [status, setStatus] = useState<RecordingStatus>('idle')
 	const [showNormalizingMessage, setShowNormalizingMessage] = useState(false)
 	const [audioURL, setAudioURL] = useState<string | null>(null)
@@ -307,7 +308,7 @@ const AudioRecorder = forwardRef<
 				<StatusMessage status={status} showNormalizingMessage={showNormalizingMessage} />
 			</div>
 
-			{audioURL && !isProcessing(status) && (
+			{audioURL && !isProcessing(status) && submitStatus === '' && (
 				<AudioControls
 					audioRef={audioRef}
 					isPlaying={isPlaying}
