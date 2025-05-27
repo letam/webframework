@@ -1,7 +1,125 @@
 import type React from 'react'
 import { useState, useRef, useEffect } from 'react'
-import { Play, Pause } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+
+interface AudioControlsProps {
+	audioRef: React.RefObject<HTMLAudioElement>
+	isPlaying: boolean
+	duration: number
+	currentTime: number
+	onPlayPause: () => void
+	onSeek: (time: number) => void
+	disabled?: boolean
+}
+
+const formatTime = (timeInSeconds: number): string => {
+	const minutes = Math.floor(timeInSeconds / 60)
+	const seconds = Math.floor(timeInSeconds % 60)
+	return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+export const AudioControls: React.FC<AudioControlsProps> = ({
+	audioRef,
+	isPlaying,
+	duration,
+	currentTime,
+	onPlayPause,
+	onSeek,
+	disabled = false,
+}) => {
+	return (
+		<div className="flex flex-col space-y-1">
+			<div className="flex items-center space-x-2">
+				<Button
+					type="button"
+					variant="outline"
+					size="icon"
+					onClick={() => onSeek(currentTime - 5)}
+					className="w-8 h-8 rounded-full"
+					disabled={disabled}
+				>
+					<SkipBack className="h-4 w-4" />
+				</Button>
+				<Button
+					type="button"
+					variant="outline"
+					size="icon"
+					onClick={onPlayPause}
+					onKeyDown={(e) => {
+						if (e.key === 'ArrowLeft') {
+							e.preventDefault()
+							onSeek(currentTime - 1)
+						} else if (e.key === 'ArrowRight') {
+							e.preventDefault()
+							onSeek(currentTime + 1)
+						} else if (e.key === 'Home') {
+							e.preventDefault()
+							onSeek(0)
+						} else if (e.key === 'End') {
+							e.preventDefault()
+							onSeek(duration)
+						}
+					}}
+					className="w-10 h-10 rounded-full"
+					disabled={disabled}
+				>
+					{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+				</Button>
+				<Button
+					type="button"
+					variant="outline"
+					size="icon"
+					onClick={() => onSeek(currentTime + 5)}
+					className="w-8 h-8 rounded-full"
+					disabled={disabled}
+				>
+					<SkipForward className="h-4 w-4" />
+				</Button>
+			</div>
+
+			<div className="flex items-center space-x-2">
+				<span className="text-xs text-muted-foreground">{formatTime(currentTime)}</span>
+				<div
+					className="flex-1 h-1 bg-secondary rounded-full overflow-hidden cursor-pointer relative"
+					onClick={(e) => {
+						const rect = e.currentTarget.getBoundingClientRect()
+						const clickPosition = e.clientX - rect.left
+						const percentage = clickPosition / rect.width
+						const newTime = percentage * duration
+						onSeek(newTime)
+					}}
+					onKeyDown={(e) => {
+						if (e.key === ' ') {
+							e.preventDefault() // Prevent page scroll
+							onPlayPause()
+						} else if (e.key === 'ArrowLeft') {
+							onSeek(currentTime - 1)
+						} else if (e.key === 'ArrowRight') {
+							onSeek(currentTime + 1)
+						} else if (e.key === 'Home') {
+							onSeek(0)
+						} else if (e.key === 'End') {
+							onSeek(duration)
+						}
+					}}
+					role="slider"
+					tabIndex={0}
+					aria-label="Audio progress"
+					aria-valuemin={0}
+					aria-valuemax={duration}
+					aria-valuenow={currentTime}
+				>
+					<div
+						className="h-full bg-primary transition-all duration-100"
+						style={{ width: `${(currentTime / duration) * 100}%` }}
+					/>
+				</div>
+				<span className="text-xs text-muted-foreground">{formatTime(duration)}</span>
+			</div>
+		</div>
+	)
+}
 
 interface AudioPlayerProps {
 	audioUrl: string
@@ -14,9 +132,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 	const [showLoading, setShowLoading] = useState(false)
 	const [isLoaded, setIsLoaded] = useState(false)
 	const [error, setError] = useState<string | null>(null)
+	const [duration, setDuration] = useState<number>(0)
+	const [currentTime, setCurrentTime] = useState<number>(0)
 	const audioRef = useRef<HTMLAudioElement | null>(null)
 	const audioBlobRef = useRef<Blob | null>(null)
 	const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+	const progressIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: executed when audioUrl changes
 	useEffect(() => {
@@ -25,6 +146,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 		setIsLoading(false)
 		setShowLoading(false)
 		setIsLoaded(false)
+		setDuration(0)
+		setCurrentTime(0)
 		audioBlobRef.current = null
 		const player = audioRef.current
 
@@ -36,6 +159,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 			}
 			if (loadingTimeoutRef.current) {
 				clearTimeout(loadingTimeoutRef.current)
+			}
+			if (progressIntervalRef.current) {
+				clearInterval(progressIntervalRef.current)
 			}
 		}
 	}, [audioUrl])
@@ -116,10 +242,33 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 		}
 	}
 
+	const handleTimeUpdate = () => {
+		if (audioRef.current) {
+			const currentTime = audioRef.current.currentTime
+			setCurrentTime(currentTime)
+			// If we're very close to the end, let the ended event handle it
+			if (currentTime >= duration - 0.1) {
+				if (progressIntervalRef.current) {
+					clearInterval(progressIntervalRef.current)
+				}
+			}
+		}
+	}
+
 	const handleLoadedMetadata = () => {
+		if (audioRef.current) {
+			// Add a small buffer to the duration to prevent early cutoff
+			setDuration(audioRef.current.duration + 0.1)
+		}
 		setIsLoading(false)
 		setIsLoaded(true)
 		setError(null)
+	}
+
+	const seekAudio = (seconds: number) => {
+		if (audioRef.current) {
+			audioRef.current.currentTime = Math.max(0, Math.min(seconds, duration))
+		}
 	}
 
 	const togglePlayback = async () => {
@@ -127,6 +276,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 			if (isPlaying) {
 				audioRef.current.pause()
 				setIsPlaying(false)
+				if (progressIntervalRef.current) {
+					clearInterval(progressIntervalRef.current)
+				}
 			} else {
 				if (!isLoaded) {
 					await loadAudio()
@@ -145,6 +297,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 					.then(() => {
 						setIsPlaying(true)
 						setError(null)
+						// Use a shorter interval for smoother progress updates
+						progressIntervalRef.current = setInterval(handleTimeUpdate, 50)
 					})
 					.catch((error) => {
 						console.error('Audio playback error:', error)
@@ -157,44 +311,42 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 
 	const handleEnded = () => {
 		setIsPlaying(false)
+		setCurrentTime(duration) // Set to exact duration
+		if (progressIntervalRef.current) {
+			clearInterval(progressIntervalRef.current)
+		}
 	}
+
+	useEffect(() => {
+		return () => {
+			if (progressIntervalRef.current) {
+				clearInterval(progressIntervalRef.current)
+			}
+		}
+	}, [])
 
 	return (
 		<div className="mt-4 bg-accent/10 rounded-md p-3 relative">
-			<div className="flex items-center gap-3">
-				<Button
-					type="button"
-					variant="outline"
-					size="icon"
-					onClick={togglePlayback}
-					className="h-10 w-10 rounded-full"
-					disabled={isLoading}
-				>
-					{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-				</Button>
+			<AudioControls
+				audioRef={audioRef}
+				isPlaying={isPlaying}
+				duration={duration}
+				currentTime={currentTime}
+				onPlayPause={togglePlayback}
+				onSeek={seekAudio}
+				disabled={isLoading}
+			/>
 
-				<div className="grow">
-					<div className="h-1 bg-primary/20 rounded-full">
-						<div
-							className="h-full bg-primary rounded-full"
-							style={{
-								width: isPlaying ? '100%' : '0',
-								transition: 'width linear 0.1s',
-							}}
-						/>
-					</div>
-				</div>
-
-				<audio
-					ref={audioRef}
-					onEnded={handleEnded}
-					onError={handleError}
-					onLoadedMetadata={handleLoadedMetadata}
-					preload="none"
-				>
-					<track kind="captions" label="English" />
-				</audio>
-			</div>
+			<audio
+				ref={audioRef}
+				onEnded={handleEnded}
+				onError={handleError}
+				onLoadedMetadata={handleLoadedMetadata}
+				onTimeUpdate={handleTimeUpdate}
+				preload="none"
+			>
+				<track kind="captions" label="English" />
+			</audio>
 
 			{showLoading && (
 				<div className="absolute inset-0 flex items-center justify-center bg-accent/10 backdrop-blur-sm">

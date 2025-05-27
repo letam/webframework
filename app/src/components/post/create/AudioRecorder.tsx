@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Mic, Square, Play, Pause, Loader2, SkipBack, SkipForward } from 'lucide-react'
+import { Mic, Square, Loader2 } from 'lucide-react'
 import fixWebmDuration from 'webm-duration-fix'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
@@ -7,6 +7,7 @@ import { isSafari } from '@/lib/utils/browser'
 import { supportedAudioMimeType } from '@/lib/utils/media'
 import { getSettings } from '@/lib/utils/settings'
 import { convertToWav } from '@/lib/utils/audio'
+import { AudioControls } from '@/components/post/MediaPlayer'
 
 type RecordingStatus = 'idle' | 'loading' | 'recording' | 'normalizing' | 'ready'
 
@@ -201,21 +202,23 @@ const AudioRecorder = ({
 		}
 	}
 
-	const formatTime = (timeInSeconds: number): string => {
-		const minutes = Math.floor(timeInSeconds / 60)
-		const seconds = Math.floor(timeInSeconds % 60)
-		return `${minutes}:${seconds.toString().padStart(2, '0')}`
-	}
-
 	const handleTimeUpdate = () => {
 		if (audioRef.current) {
-			setCurrentTime(audioRef.current.currentTime)
+			const currentTime = audioRef.current.currentTime
+			setCurrentTime(currentTime)
+			// If we're very close to the end, let the ended event handle it
+			if (currentTime >= duration - 0.1) {
+				if (progressIntervalRef.current) {
+					clearInterval(progressIntervalRef.current)
+				}
+			}
 		}
 	}
 
 	const handleLoadedMetadata = () => {
 		if (audioRef.current) {
-			setDuration(audioRef.current.duration)
+			// Add a small buffer to the duration to prevent early cutoff
+			setDuration(audioRef.current.duration + 0.1)
 		}
 	}
 
@@ -234,7 +237,8 @@ const AudioRecorder = ({
 				}
 			} else {
 				audioRef.current.play()
-				progressIntervalRef.current = setInterval(handleTimeUpdate, 100)
+				// Use a shorter interval for smoother progress updates
+				progressIntervalRef.current = setInterval(handleTimeUpdate, 50)
 			}
 			setIsPlaying(!isPlaying)
 		}
@@ -242,7 +246,7 @@ const AudioRecorder = ({
 
 	const handlePlaybackEnded = () => {
 		setIsPlaying(false)
-		setCurrentTime(0)
+		setCurrentTime(duration) // Set to exact duration
 		if (progressIntervalRef.current) {
 			clearInterval(progressIntervalRef.current)
 		}
@@ -287,101 +291,19 @@ const AudioRecorder = ({
 					</Button>
 				)}
 
-				{audioURL && !isProcessing(status) && (
-					<div className="flex items-center space-x-2">
-						<Button
-							type="button"
-							variant="outline"
-							size="icon"
-							onClick={() => seekAudio(currentTime - 5)}
-							className="w-8 h-8 rounded-full"
-							disabled={disabled}
-						>
-							<SkipBack className="h-4 w-4" />
-						</Button>
-						<Button
-							type="button"
-							variant="outline"
-							size="icon"
-							onClick={togglePlayback}
-							onKeyDown={(e) => {
-								if (e.key === 'ArrowLeft') {
-									e.preventDefault()
-									seekAudio(currentTime - 1)
-								} else if (e.key === 'ArrowRight') {
-									e.preventDefault()
-									seekAudio(currentTime + 1)
-								} else if (e.key === 'Home') {
-									e.preventDefault()
-									seekAudio(0)
-								} else if (e.key === 'End') {
-									e.preventDefault()
-									seekAudio(duration)
-								}
-							}}
-							className="w-10 h-10 rounded-full"
-							disabled={disabled}
-						>
-							{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-						</Button>
-						<Button
-							type="button"
-							variant="outline"
-							size="icon"
-							onClick={() => seekAudio(currentTime + 5)}
-							className="w-8 h-8 rounded-full"
-							disabled={disabled}
-						>
-							<SkipForward className="h-4 w-4" />
-						</Button>
-					</div>
-				)}
-
 				<StatusMessage status={status} showNormalizingMessage={showNormalizingMessage} />
 			</div>
 
 			{audioURL && !isProcessing(status) && (
-				<div className="flex flex-col space-y-1">
-					<div className="flex items-center space-x-2">
-						<span className="text-xs text-muted-foreground">{formatTime(currentTime)}</span>
-						<div
-							className="flex-1 h-1 bg-secondary rounded-full overflow-hidden cursor-pointer relative"
-							onClick={(e) => {
-								const rect = e.currentTarget.getBoundingClientRect()
-								const clickPosition = e.clientX - rect.left
-								const percentage = clickPosition / rect.width
-								const newTime = percentage * duration
-								seekAudio(newTime)
-							}}
-							onKeyDown={(e) => {
-								if (e.key === ' ') {
-									e.preventDefault() // Prevent page scroll
-									togglePlayback()
-								} else if (e.key === 'ArrowLeft') {
-									seekAudio(currentTime - 1)
-								} else if (e.key === 'ArrowRight') {
-									seekAudio(currentTime + 1)
-								} else if (e.key === 'Home') {
-									seekAudio(0)
-								} else if (e.key === 'End') {
-									seekAudio(duration)
-								}
-							}}
-							role="slider"
-							tabIndex={0}
-							aria-label="Audio progress"
-							aria-valuemin={0}
-							aria-valuemax={duration}
-							aria-valuenow={currentTime}
-						>
-							<div
-								className="h-full bg-primary transition-all duration-100"
-								style={{ width: `${(currentTime / duration) * 100}%` }}
-							/>
-						</div>
-						<span className="text-xs text-muted-foreground">{formatTime(duration)}</span>
-					</div>
-				</div>
+				<AudioControls
+					audioRef={audioRef}
+					isPlaying={isPlaying}
+					duration={duration}
+					currentTime={currentTime}
+					onPlayPause={togglePlayback}
+					onSeek={seekAudio}
+					disabled={disabled}
+				/>
 			)}
 
 			{audioURL && (
