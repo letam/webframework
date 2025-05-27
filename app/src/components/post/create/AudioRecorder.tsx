@@ -304,6 +304,21 @@ const AudioRecorder = ({
 							variant="outline"
 							size="icon"
 							onClick={togglePlayback}
+							onKeyDown={(e) => {
+								if (e.key === 'ArrowLeft') {
+									e.preventDefault()
+									seekAudio(currentTime - 1)
+								} else if (e.key === 'ArrowRight') {
+									e.preventDefault()
+									seekAudio(currentTime + 1)
+								} else if (e.key === 'Home') {
+									e.preventDefault()
+									seekAudio(0)
+								} else if (e.key === 'End') {
+									e.preventDefault()
+									seekAudio(duration)
+								}
+							}}
 							className="w-10 h-10 rounded-full"
 							disabled={disabled}
 						>
@@ -339,7 +354,10 @@ const AudioRecorder = ({
 								seekAudio(newTime)
 							}}
 							onKeyDown={(e) => {
-								if (e.key === 'ArrowLeft') {
+								if (e.key === ' ') {
+									e.preventDefault() // Prevent page scroll
+									togglePlayback()
+								} else if (e.key === 'ArrowLeft') {
 									seekAudio(currentTime - 1)
 								} else if (e.key === 'ArrowRight') {
 									seekAudio(currentTime + 1)
