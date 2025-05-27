@@ -263,7 +263,8 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 			</div>
 
 			{audioURL && (
-				<audio ref={audioRef} src={audioURL} className="hidden" onEnded={handlePlaybackEnded}>
+				<audio ref={audioRef} className="hidden" onEnded={handlePlaybackEnded}>
+					<source src={audioURL} />
 					<track kind="captions" label="English" />
 				</audio>
 			)}
