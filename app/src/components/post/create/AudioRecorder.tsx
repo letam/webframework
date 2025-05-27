@@ -79,11 +79,14 @@ const AudioRecorder = ({
 }: { onAudioCaptured: (audioBlob: Blob) => void; disabled?: boolean }) => {
 	const [isRecording, setIsRecording] = useState(false)
 	const [isLoading, setIsLoading] = useState(false)
+	const [isNormalizing, setIsNormalizing] = useState(false)
+	const [showNormalizingMessage, setShowNormalizingMessage] = useState(false)
 	const [audioURL, setAudioURL] = useState<string | null>(null)
 	const [isPlaying, setIsPlaying] = useState(false)
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const audioChunksRef = useRef<Blob[]>([])
 	const audioRef = useRef<HTMLAudioElement | null>(null)
+	const normalizingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
 	const startRecording = async () => {
 		if (disabled) return
@@ -117,7 +120,16 @@ const AudioRecorder = ({
 
 						// Only normalize if the setting is enabled
 						if (getSettings().normalizeAudio) {
+							setIsNormalizing(true)
+							normalizingTimeoutRef.current = setTimeout(() => {
+								setShowNormalizingMessage(true)
+							}, 500) // Only show message if normalization takes longer than 500ms
 							audioBlob = await normalizeAudio(audioBlob)
+							if (normalizingTimeoutRef.current) {
+								clearTimeout(normalizingTimeoutRef.current)
+							}
+							setIsNormalizing(false)
+							setShowNormalizingMessage(false)
 						} else {
 							audioBlob = await fixWebmDuration(audioBlob)
 						}
@@ -128,6 +140,7 @@ const AudioRecorder = ({
 					} catch (error) {
 						console.error('Error processing audio:', error)
 						toast.error('Error processing audio recording')
+						setIsNormalizing(false)
 					}
 				})()
 			}
@@ -208,7 +221,7 @@ const AudioRecorder = ({
 					</Button>
 				)}
 
-				{audioURL && !isRecording && !isLoading && (
+				{audioURL && !isRecording && !isLoading && !isNormalizing && (
 					<Button
 						type="button"
 						variant="outline"
@@ -225,8 +238,11 @@ const AudioRecorder = ({
 					<span className="text-sm text-muted-foreground">Initializing microphone...</span>
 				)}
 				{isRecording && <span className="text-sm text-primary">Recording...</span>}
+				{showNormalizingMessage && (
+					<span className="text-sm text-muted-foreground">Normalizing audio...</span>
+				)}
 
-				{audioURL && !isRecording && !isLoading && (
+				{audioURL && !isRecording && !isLoading && !isNormalizing && (
 					<span className="text-sm text-muted-foreground">Audio recorded</span>
 				)}
 			</div>
