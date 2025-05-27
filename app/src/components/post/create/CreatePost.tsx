@@ -15,7 +15,7 @@ interface CreatePostProps {
 	onPostCreated: (post: CreatePostRequest) => void
 }
 
-type ProcessingStatus = '' | 'compressing' | 'submitting'
+type SubmitStatus = '' | 'preparing' | 'compressing' | 'submitting'
 
 const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): string => {
 	if (mediaType === 'audio') {
@@ -38,8 +38,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [videoBlob, setVideoBlob] = useState<Blob | null>(null)
 	const [audioFile, setAudioFile] = useState<File | null>(null)
 	const [videoFile, setVideoFile] = useState<File | null>(null)
-	const [isProcessing, setIsProcessing] = useState(false)
-	const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | ''>('')
+	const [submitStatus, setSubmitStatus] = useState<SubmitStatus | ''>('')
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -98,7 +97,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
 
-		if (isProcessing) {
+		if (submitStatus) {
 			return
 		}
 
@@ -107,7 +106,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			return
 		}
 
-		setIsProcessing(true)
+		setSubmitStatus('preparing')
 
 		try {
 			let finalMediaType: 'audio' | 'video' | undefined
@@ -120,7 +119,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					if (!(blob instanceof File)) {
 						// Only convert to WebM if normalization is enabled (since normalization converts the blob to WAV)
 						if (getSettings().normalizeAudio) {
-							setProcessingStatus('compressing')
+							setSubmitStatus('compressing')
 							const webmBlob = await convertWavToWebM(blob)
 							file = new File([webmBlob], `recording_${Date.now()}.webm`, {
 								type: 'audio/webm;codecs=opus',
@@ -146,7 +145,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				}
 			}
 
-			setProcessingStatus('submitting')
+			setSubmitStatus('submitting')
 			const newPost: CreatePostRequest = {
 				text: postText,
 				media_type: finalMediaType,
@@ -163,8 +162,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		} catch (error) {
 			toast.error('Failed to create post')
 		} finally {
-			setIsProcessing(false)
-			setProcessingStatus('')
+			setSubmitStatus('')
 		}
 	}
 
@@ -183,7 +181,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					onChange={handlePostTextChange}
 					onKeyDown={handleKeyDown}
 					className="w-full resize-none mb-4 border-none focus-visible:ring-0 py-2 px-3 text-base"
-					disabled={isProcessing}
+					disabled={!!submitStatus}
 				/>
 
 				<MediaPreview
@@ -197,27 +195,31 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 				<Tabs defaultValue="text" value={mediaType} className="mt-2">
 					<TabsList className="grid w-full grid-cols-3 mb-4">
-						<TabsTrigger value="text" onClick={() => setMediaType('text')} disabled={isProcessing}>
+						<TabsTrigger
+							value="text"
+							onClick={() => setMediaType('text')}
+							disabled={!!submitStatus}
+						>
 							Text
 						</TabsTrigger>
 						<TabsTrigger
 							value="audio"
 							onClick={() => setMediaType('audio')}
-							disabled={isProcessing}
+							disabled={!!submitStatus}
 						>
 							Audio
 						</TabsTrigger>
 						<TabsTrigger
 							value="video"
 							onClick={() => setMediaType('video')}
-							disabled={isProcessing}
+							disabled={!!submitStatus}
 						>
 							Video
 						</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="text">
-						<TextPostTab onSubmit={handleTabSubmit} disabled={isProcessing} />
+						<TextPostTab onSubmit={handleTabSubmit} disabled={!!submitStatus} />
 					</TabsContent>
 
 					<TabsContent value="audio">
@@ -225,9 +227,9 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							onAudioCaptured={handleAudioCaptured}
 							onAudioFileChange={handleAudioFileChange}
 							onSubmit={handleTabSubmit}
-							disabled={isProcessing}
-							processingStatus={
-								mediaType === 'audio' && Boolean(audioBlob || audioFile) ? processingStatus : ''
+							disabled={!!submitStatus}
+							submitStatus={
+								mediaType === 'audio' && Boolean(audioBlob || audioFile) ? submitStatus : ''
 							}
 						/>
 					</TabsContent>
@@ -237,7 +239,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							onVideoCaptured={handleVideoCaptured}
 							onVideoFileChange={handleVideoFileChange}
 							onSubmit={handleTabSubmit}
-							disabled={isProcessing}
+							disabled={!!submitStatus}
 						/>
 					</TabsContent>
 				</Tabs>
