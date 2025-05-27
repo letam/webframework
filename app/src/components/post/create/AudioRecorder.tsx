@@ -8,6 +8,33 @@ import { supportedAudioMimeType } from '@/lib/utils/media'
 import { getSettings } from '@/lib/utils/settings'
 import { convertToWav } from '@/lib/utils/audio'
 
+type RecordingStatus = 'idle' | 'loading' | 'recording' | 'normalizing' | 'ready'
+
+interface StatusMessageProps {
+	status: RecordingStatus
+	showNormalizingMessage: boolean
+}
+
+const isProcessing = (status: RecordingStatus): boolean => {
+	return ['recording', 'loading', 'normalizing'].includes(status)
+}
+
+const StatusMessage = ({ status, showNormalizingMessage }: StatusMessageProps) => {
+	if (status === 'loading') {
+		return <span className="text-sm text-muted-foreground">Initializing microphone...</span>
+	}
+	if (status === 'recording') {
+		return <span className="text-sm text-primary">Recording...</span>
+	}
+	if (status === 'normalizing' && showNormalizingMessage) {
+		return <span className="text-sm text-muted-foreground">Normalizing audio...</span>
+	}
+	if (status === 'ready') {
+		return <span className="text-sm text-muted-foreground">Audio recorded</span>
+	}
+	return null
+}
+
 const normalizeAudio = async (audioBlob: Blob): Promise<Blob> => {
 	try {
 		const audioContext = new AudioContext()
@@ -77,9 +104,7 @@ const AudioRecorder = ({
 	onAudioCaptured,
 	disabled,
 }: { onAudioCaptured: (audioBlob: Blob) => void; disabled?: boolean }) => {
-	const [isRecording, setIsRecording] = useState(false)
-	const [isLoading, setIsLoading] = useState(false)
-	const [isNormalizing, setIsNormalizing] = useState(false)
+	const [status, setStatus] = useState<RecordingStatus>('idle')
 	const [showNormalizingMessage, setShowNormalizingMessage] = useState(false)
 	const [audioURL, setAudioURL] = useState<string | null>(null)
 	const [isPlaying, setIsPlaying] = useState(false)
@@ -92,7 +117,7 @@ const AudioRecorder = ({
 		if (disabled) return
 
 		try {
-			setIsLoading(true)
+			setStatus('loading')
 			// Clean up previous audio state
 			if (audioURL) {
 				URL.revokeObjectURL(audioURL)
@@ -120,15 +145,14 @@ const AudioRecorder = ({
 
 						// Only normalize if the setting is enabled
 						if (getSettings().normalizeAudio) {
-							setIsNormalizing(true)
+							setStatus('normalizing')
 							normalizingTimeoutRef.current = setTimeout(() => {
 								setShowNormalizingMessage(true)
-							}, 500) // Only show message if normalization takes longer than 500ms
+							}, 500)
 							audioBlob = await normalizeAudio(audioBlob)
 							if (normalizingTimeoutRef.current) {
 								clearTimeout(normalizingTimeoutRef.current)
 							}
-							setIsNormalizing(false)
 							setShowNormalizingMessage(false)
 						} else {
 							audioBlob = await fixWebmDuration(audioBlob)
@@ -137,10 +161,12 @@ const AudioRecorder = ({
 						const audioUrl = URL.createObjectURL(audioBlob)
 						setAudioURL(audioUrl)
 						onAudioCaptured(audioBlob)
+						setStatus('ready')
 					} catch (error) {
 						console.error('Error processing audio:', error)
 						toast.error('Error processing audio recording')
-						setIsNormalizing(false)
+						setStatus('idle')
+						setShowNormalizingMessage(false)
 					}
 				})()
 			}
@@ -150,28 +176,25 @@ const AudioRecorder = ({
 			// delay recording state update by 1 second in safari
 			if (isSafari()) {
 				setTimeout(() => {
-					setIsRecording(true)
-					setIsLoading(false)
+					setStatus('recording')
 				}, 1000)
 			} else {
-				setIsRecording(true)
-				setIsLoading(false)
+				setStatus('recording')
 			}
 		} catch (error) {
 			console.error('Error accessing microphone:', error)
 			toast.error('Unable to access microphone. Please check permissions.')
-			setIsLoading(false)
+			setStatus('idle')
 		}
 	}
 
 	const stopRecording = () => {
-		if (mediaRecorderRef.current && isRecording) {
+		if (mediaRecorderRef.current && status === 'recording') {
 			mediaRecorderRef.current.stop()
 			// Stop all audio tracks
 			for (const track of mediaRecorderRef.current.stream.getTracks()) {
 				track.stop()
 			}
-			setIsRecording(false)
 		}
 	}
 
@@ -193,16 +216,16 @@ const AudioRecorder = ({
 	return (
 		<div className="flex flex-col space-y-2">
 			<div className="flex items-center space-x-2">
-				{!isRecording ? (
+				{status !== 'recording' ? (
 					<Button
 						type="button"
 						variant="outline"
 						size="icon"
 						onClick={startRecording}
 						className="w-10 h-10 rounded-full"
-						disabled={isLoading || disabled}
+						disabled={status === 'loading' || disabled}
 					>
-						{isLoading ? (
+						{status === 'loading' ? (
 							<Loader2 className="h-5 w-5 text-primary animate-spin" />
 						) : (
 							<Mic className="h-5 w-5 text-primary" />
@@ -221,7 +244,7 @@ const AudioRecorder = ({
 					</Button>
 				)}
 
-				{audioURL && !isRecording && !isLoading && !isNormalizing && (
+				{audioURL && !isProcessing(status) && (
 					<Button
 						type="button"
 						variant="outline"
@@ -234,17 +257,7 @@ const AudioRecorder = ({
 					</Button>
 				)}
 
-				{isLoading && (
-					<span className="text-sm text-muted-foreground">Initializing microphone...</span>
-				)}
-				{isRecording && <span className="text-sm text-primary">Recording...</span>}
-				{showNormalizingMessage && (
-					<span className="text-sm text-muted-foreground">Normalizing audio...</span>
-				)}
-
-				{audioURL && !isRecording && !isLoading && !isNormalizing && (
-					<span className="text-sm text-muted-foreground">Audio recorded</span>
-				)}
+				<StatusMessage status={status} showNormalizingMessage={showNormalizingMessage} />
 			</div>
 
 			{audioURL && (
