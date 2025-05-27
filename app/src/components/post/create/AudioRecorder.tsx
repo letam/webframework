@@ -16,8 +16,8 @@ interface StatusMessageProps {
 	showNormalizingMessage: boolean
 }
 
-const isProcessing = (status: RecordingStatus): boolean => {
-	return ['recording', 'loading', 'normalizing'].includes(status)
+const isRecordingInProgress = (status: RecordingStatus): boolean => {
+	return status === 'loading' || status === 'recording' || status === 'normalizing'
 }
 
 const StatusMessage = ({ status, showNormalizingMessage }: StatusMessageProps) => {
@@ -112,8 +112,9 @@ const AudioRecorder = forwardRef<
 		onAudioCaptured: (audioBlob: Blob) => void
 		disabled?: boolean
 		submitStatus?: '' | 'preparing' | 'compressing' | 'submitting'
+		isProcessing?: boolean
 	}
->(({ onAudioCaptured, disabled, submitStatus = '' }, ref) => {
+>(({ onAudioCaptured, disabled, submitStatus = '', isProcessing = false }, ref) => {
 	const [status, setStatus] = useState<RecordingStatus>('idle')
 	const [showNormalizingMessage, setShowNormalizingMessage] = useState(false)
 	const [audioURL, setAudioURL] = useState<string | null>(null)
@@ -308,7 +309,7 @@ const AudioRecorder = forwardRef<
 				<StatusMessage status={status} showNormalizingMessage={showNormalizingMessage} />
 			</div>
 
-			{audioURL && !isProcessing(status) && submitStatus === '' && (
+			{audioURL && !isRecordingInProgress(status) && submitStatus === '' && !isProcessing && (
 				<AudioControls
 					audioRef={audioRef}
 					isPlaying={isPlaying}
