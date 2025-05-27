@@ -5,7 +5,10 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import { supportedVideoMimeType } from '@/lib/utils/media'
 
-const VideoRecorder = ({ onVideoCaptured }: { onVideoCaptured: (videoBlob: Blob) => void }) => {
+const VideoRecorder = ({
+	onVideoCaptured,
+	disabled,
+}: { onVideoCaptured: (videoBlob: Blob) => void; disabled?: boolean }) => {
 	const [isRecording, setIsRecording] = useState(false)
 	const [videoURL, setVideoURL] = useState<string | null>(null)
 	const [isPlaying, setIsPlaying] = useState(false)
@@ -15,6 +18,8 @@ const VideoRecorder = ({ onVideoCaptured }: { onVideoCaptured: (videoBlob: Blob)
 	const streamRef = useRef<MediaStream | null>(null)
 
 	const startRecording = async () => {
+		if (disabled) return
+
 		try {
 			const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
 			streamRef.current = stream
@@ -110,6 +115,7 @@ const VideoRecorder = ({ onVideoCaptured }: { onVideoCaptured: (videoBlob: Blob)
 									size="icon"
 									onClick={startRecording}
 									className="bg-white/80 backdrop-blur-xs"
+									disabled={disabled}
 								>
 									<Video className="h-5 w-5 text-primary" />
 								</Button>
@@ -122,6 +128,7 @@ const VideoRecorder = ({ onVideoCaptured }: { onVideoCaptured: (videoBlob: Blob)
 									size="icon"
 									onClick={togglePlayback}
 									className="bg-white/80 backdrop-blur-xs"
+									disabled={disabled}
 								>
 									{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
 								</Button>
@@ -134,6 +141,7 @@ const VideoRecorder = ({ onVideoCaptured }: { onVideoCaptured: (videoBlob: Blob)
 							size="icon"
 							onClick={stopRecording}
 							className="animate-pulse-gentle"
+							disabled={disabled}
 						>
 							<Square className="h-5 w-5" />
 						</Button>

@@ -9,16 +9,18 @@ interface VideoPostTabProps {
 	onVideoCaptured: (blob: Blob) => void
 	onVideoFileChange?: (e: React.ChangeEvent<HTMLInputElement>) => void
 	onSubmit: (e: React.MouseEvent) => void
+	disabled?: boolean
 }
 
 const VideoPostTab: React.FC<VideoPostTabProps> = ({
 	onVideoCaptured,
 	onVideoFileChange,
 	onSubmit,
+	disabled,
 }) => {
 	return (
 		<div className="space-y-4">
-			<VideoRecorder onVideoCaptured={onVideoCaptured} />
+			<VideoRecorder onVideoCaptured={onVideoCaptured} disabled={disabled} />
 
 			<div className="flex flex-col gap-2">
 				<Label htmlFor="video-upload" className="text-sm font-medium cursor-pointer">
@@ -33,11 +35,12 @@ const VideoPostTab: React.FC<VideoPostTabProps> = ({
 					accept="video/*"
 					className="hidden"
 					onChange={onVideoFileChange}
+					disabled={disabled}
 				/>
 			</div>
 
 			<div className="flex justify-end">
-				<Button type="button" onClick={onSubmit}>
+				<Button type="button" onClick={onSubmit} disabled={disabled}>
 					Post
 				</Button>
 			</div>

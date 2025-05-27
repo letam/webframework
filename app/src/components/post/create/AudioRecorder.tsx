@@ -73,7 +73,10 @@ const normalizeAudio = async (audioBlob: Blob): Promise<Blob> => {
 	}
 }
 
-const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob) => void }) => {
+const AudioRecorder = ({
+	onAudioCaptured,
+	disabled,
+}: { onAudioCaptured: (audioBlob: Blob) => void; disabled?: boolean }) => {
 	const [isRecording, setIsRecording] = useState(false)
 	const [isLoading, setIsLoading] = useState(false)
 	const [audioURL, setAudioURL] = useState<string | null>(null)
@@ -83,6 +86,8 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 	const audioRef = useRef<HTMLAudioElement | null>(null)
 
 	const startRecording = async () => {
+		if (disabled) return
+
 		try {
 			setIsLoading(true)
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -175,7 +180,7 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 						size="icon"
 						onClick={startRecording}
 						className="w-10 h-10 rounded-full"
-						disabled={isLoading}
+						disabled={isLoading || disabled}
 					>
 						{isLoading ? (
 							<Loader2 className="h-5 w-5 text-primary animate-spin" />
@@ -190,6 +195,7 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 						size="icon"
 						onClick={stopRecording}
 						className="w-10 h-10 rounded-full animate-pulse-gentle"
+						disabled={disabled}
 					>
 						<Square className="h-5 w-5" />
 					</Button>
@@ -202,6 +208,7 @@ const AudioRecorder = ({ onAudioCaptured }: { onAudioCaptured: (audioBlob: Blob)
 						size="icon"
 						onClick={togglePlayback}
 						className="w-10 h-10 rounded-full"
+						disabled={disabled}
 					>
 						{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
 					</Button>
