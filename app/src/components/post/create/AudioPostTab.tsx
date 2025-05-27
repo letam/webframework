@@ -9,7 +9,7 @@ interface AudioPostTabProps {
 	onAudioFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 	onSubmit: (e: React.MouseEvent) => void
 	disabled?: boolean
-	isProcessing?: boolean
+	processingStatus?: '' | 'compressing' | 'submitting'
 }
 
 const AudioPostTab: React.FC<AudioPostTabProps> = ({
@@ -17,7 +17,7 @@ const AudioPostTab: React.FC<AudioPostTabProps> = ({
 	onAudioFileChange,
 	onSubmit,
 	disabled,
-	isProcessing,
+	processingStatus = '',
 }) => {
 	const audioInputRef = useRef<HTMLInputElement>(null)
 
@@ -56,10 +56,12 @@ const AudioPostTab: React.FC<AudioPostTabProps> = ({
 			</div>
 
 			<div className="flex justify-end items-center gap-2">
-				{isProcessing && (
+				{processingStatus && (
 					<div className="flex items-center gap-2 text-sm text-muted-foreground">
 						<Loader2 className="h-4 w-4 animate-spin" />
-						<span>Processing audio...</span>
+						<span>
+							{processingStatus === 'compressing' ? 'Compressing audio...' : 'Submitting post...'}
+						</span>
 					</div>
 				)}
 				<Button type="button" onClick={onSubmit} disabled={disabled}>

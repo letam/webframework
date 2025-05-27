@@ -10,11 +10,12 @@ import MediaPreview from './MediaPreview'
 import type { CreatePostRequest } from '@/types/post'
 import { convertWavToWebM, getAudioExtension } from '@/lib/utils/audio'
 import { getSettings } from '@/lib/utils/settings'
-import { Loader2 } from 'lucide-react'
 
 interface CreatePostProps {
 	onPostCreated: (post: CreatePostRequest) => void
 }
+
+type ProcessingStatus = '' | 'compressing' | 'submitting'
 
 const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): string => {
 	if (mediaType === 'audio') {
@@ -38,6 +39,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [audioFile, setAudioFile] = useState<File | null>(null)
 	const [videoFile, setVideoFile] = useState<File | null>(null)
 	const [isProcessing, setIsProcessing] = useState(false)
+	const [processingStatus, setProcessingStatus] = useState<ProcessingStatus | ''>('')
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -118,6 +120,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					if (!(blob instanceof File)) {
 						// Only convert to WebM if normalization is enabled (since normalization converts the blob to WAV)
 						if (getSettings().normalizeAudio) {
+							setProcessingStatus('compressing')
 							const webmBlob = await convertWavToWebM(blob)
 							file = new File([webmBlob], `recording_${Date.now()}.webm`, {
 								type: 'audio/webm;codecs=opus',
@@ -143,6 +146,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				}
 			}
 
+			setProcessingStatus('submitting')
 			const newPost: CreatePostRequest = {
 				text: postText,
 				media_type: finalMediaType,
@@ -160,6 +164,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			toast.error('Failed to create post')
 		} finally {
 			setIsProcessing(false)
+			setProcessingStatus('')
 		}
 	}
 
@@ -221,8 +226,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							onAudioFileChange={handleAudioFileChange}
 							onSubmit={handleTabSubmit}
 							disabled={isProcessing}
-							isProcessing={
-								isProcessing && mediaType === 'audio' && Boolean(audioBlob || audioFile)
+							processingStatus={
+								mediaType === 'audio' && Boolean(audioBlob || audioFile) ? processingStatus : ''
 							}
 						/>
 					</TabsContent>
