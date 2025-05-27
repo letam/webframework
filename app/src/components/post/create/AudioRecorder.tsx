@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { Mic, Square, Loader2 } from 'lucide-react'
 import fixWebmDuration from 'webm-duration-fix'
 import { Button } from '@/components/ui/button'
@@ -101,10 +101,18 @@ const normalizeAudio = async (audioBlob: Blob): Promise<Blob> => {
 	}
 }
 
-const AudioRecorder = ({
-	onAudioCaptured,
-	disabled,
-}: { onAudioCaptured: (audioBlob: Blob) => void; disabled?: boolean }) => {
+export interface AudioRecorderRef {
+	stopRecording: () => void
+	getStatus: () => RecordingStatus
+}
+
+const AudioRecorder = forwardRef<
+	AudioRecorderRef,
+	{
+		onAudioCaptured: (audioBlob: Blob) => void
+		disabled?: boolean
+	}
+>(({ onAudioCaptured, disabled }, ref) => {
 	const [status, setStatus] = useState<RecordingStatus>('idle')
 	const [showNormalizingMessage, setShowNormalizingMessage] = useState(false)
 	const [audioURL, setAudioURL] = useState<string | null>(null)
@@ -260,6 +268,11 @@ const AudioRecorder = ({
 		}
 	}, [])
 
+	useImperativeHandle(ref, () => ({
+		stopRecording,
+		getStatus: () => status,
+	}))
+
 	return (
 		<div className="flex flex-col space-y-2">
 			<div className="flex items-center space-x-2">
@@ -320,6 +333,6 @@ const AudioRecorder = ({
 			)}
 		</div>
 	)
-}
+})
 
 export default AudioRecorder

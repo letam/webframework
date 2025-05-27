@@ -1,8 +1,8 @@
 import type React from 'react'
-import { useRef } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { FileAudio, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import AudioRecorder from './AudioRecorder'
+import AudioRecorder, { type AudioRecorderRef } from './AudioRecorder'
 
 interface AudioPostTabProps {
 	onAudioCaptured: (blob: Blob) => void
@@ -20,6 +20,8 @@ const AudioPostTab: React.FC<AudioPostTabProps> = ({
 	processingStatus = '',
 }) => {
 	const audioInputRef = useRef<HTMLInputElement>(null)
+	const audioRecorderRef = useRef<AudioRecorderRef>(null)
+	const [isWaitingForProcessing, setIsWaitingForProcessing] = useState(false)
 
 	const openAudioFileSelector = () => {
 		if (audioInputRef.current) {
@@ -27,10 +29,48 @@ const AudioPostTab: React.FC<AudioPostTabProps> = ({
 		}
 	}
 
+	const handleSubmit = async (e: React.MouseEvent) => {
+		if (isWaitingForProcessing) return
+
+		const status = audioRecorderRef.current?.getStatus()
+		if (status === 'recording') {
+			// Stop recording and wait for processing
+			setIsWaitingForProcessing(true)
+			audioRecorderRef.current?.stopRecording()
+		} else if (status === 'ready') {
+			// Recording is already processed, submit immediately
+			onSubmit(e)
+		}
+	}
+
+	// Watch for recording status changes
+	useEffect(() => {
+		if (!isWaitingForProcessing) return
+
+		const checkStatus = () => {
+			const status = audioRecorderRef.current?.getStatus()
+			if (status === 'ready') {
+				setIsWaitingForProcessing(false)
+				// Submit after processing is complete
+				onSubmit({ preventDefault: () => {} } as React.MouseEvent)
+			} else if (status === 'idle') {
+				// Recording was stopped but failed to process
+				setIsWaitingForProcessing(false)
+			}
+		}
+
+		const interval = setInterval(checkStatus, 100)
+		return () => clearInterval(interval)
+	}, [isWaitingForProcessing, onSubmit])
+
 	return (
 		<div className="space-y-4">
 			<div className="flex flex-col gap-3">
-				<AudioRecorder onAudioCaptured={onAudioCaptured} disabled={disabled} />
+				<AudioRecorder
+					ref={audioRecorderRef}
+					onAudioCaptured={onAudioCaptured}
+					disabled={disabled}
+				/>
 
 				<div className="flex items-center space-x-2">
 					<Button
@@ -56,15 +96,21 @@ const AudioPostTab: React.FC<AudioPostTabProps> = ({
 			</div>
 
 			<div className="flex justify-end items-center gap-2">
-				{processingStatus && (
+				{(processingStatus || isWaitingForProcessing) && (
 					<div className="flex items-center gap-2 text-sm text-muted-foreground">
 						<Loader2 className="h-4 w-4 animate-spin" />
 						<span>
-							{processingStatus === 'compressing' ? 'Compressing audio...' : 'Submitting post...'}
+							{isWaitingForProcessing
+								? audioRecorderRef.current?.getStatus() === 'normalizing'
+									? 'Normalizing audio...'
+									: 'Processing recording...'
+								: processingStatus === 'compressing'
+									? 'Compressing audio...'
+									: 'Submitting post...'}
 						</span>
 					</div>
 				)}
-				<Button type="button" onClick={onSubmit} disabled={disabled}>
+				<Button type="button" onClick={handleSubmit} disabled={disabled || isWaitingForProcessing}>
 					Post
 				</Button>
 			</div>
