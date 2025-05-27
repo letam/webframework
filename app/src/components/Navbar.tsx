@@ -117,7 +117,7 @@ const Navbar = () => {
 								</DropdownMenuItem>
 							) : (
 								<DropdownMenuItem asChild>
-									<LoginModal />
+									<LoginModal triggerClassName="w-full justify-start text-black dark:text-white -ml-2" />
 								</DropdownMenuItem>
 							)}
 						</DropdownMenuContent>

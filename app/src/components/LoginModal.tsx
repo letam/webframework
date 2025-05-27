@@ -20,13 +20,19 @@ import {
 	FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
+import { LogIn } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface LoginFormData extends Record<string, unknown> {
 	username: string
 	password: string
 }
 
-export const LoginModal = () => {
+interface LoginModalProps {
+	triggerClassName?: string
+}
+
+export const LoginModal = ({ triggerClassName }: LoginModalProps) => {
 	const [open, setOpen] = useState(false)
 	const { refreshAuthStatus } = useAuth()
 	const form = useForm<LoginFormData>()
@@ -55,14 +61,25 @@ export const LoginModal = () => {
 	return (
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogTrigger asChild>
-				<Button variant="default">Login</Button>
+				<Button
+					variant="ghost"
+					className={cn(
+						'transition-colors hover:text-foreground/80 text-foreground/60',
+						triggerClassName
+					)}
+				>
+					<div className="flex items-center gap-2">
+						<LogIn className="h-4 w-4" />
+						<span>Login</span>
+					</div>
+				</Button>
 			</DialogTrigger>
-			<DialogContent>
+			<DialogContent className="sm:max-w-[425px]">
 				<DialogHeader>
-					<DialogTitle>Login</DialogTitle>
+					<DialogTitle className="text-2xl font-bold text-center">Welcome Back</DialogTitle>
 				</DialogHeader>
 				<Form {...form}>
-					<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+					<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
 						<FormField
 							control={form.control}
 							name="username"
@@ -70,7 +87,7 @@ export const LoginModal = () => {
 								<FormItem>
 									<FormLabel>Username</FormLabel>
 									<FormControl>
-										<Input {...field} />
+										<Input placeholder="Enter your username" {...field} />
 									</FormControl>
 									<FormMessage />
 								</FormItem>
@@ -83,19 +100,19 @@ export const LoginModal = () => {
 								<FormItem>
 									<FormLabel>Password</FormLabel>
 									<FormControl>
-										<Input type="password" {...field} />
+										<Input type="password" placeholder="Enter your password" {...field} />
 									</FormControl>
 									<FormMessage />
 								</FormItem>
 							)}
 						/>
 						{form.formState.errors.root && (
-							<p className="text-sm font-medium text-destructive">
+							<p className="text-sm font-medium text-destructive text-center">
 								{form.formState.errors.root.message}
 							</p>
 						)}
-						<Button type="submit" className="w-full">
-							Login
+						<Button type="submit" className="w-full bg-primary hover:bg-primary/90">
+							Sign In
 						</Button>
 					</form>
 				</Form>
