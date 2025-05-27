@@ -43,12 +43,15 @@ export const convertWavToWebM = async (wavBlob: Blob): Promise<Blob> => {
 			}
 
 			mediaRecorder.start()
-			// Stop after the audio duration
-			setTimeout(() => {
-				mediaRecorder.stop()
-				source.stop()
-				audioContext.close()
-			}, audioBuffer.duration * 1000)
+			// Stop after the audio duration plus a small buffer
+			setTimeout(
+				() => {
+					mediaRecorder.stop()
+					source.stop()
+					audioContext.close()
+				},
+				audioBuffer.duration * 1000 + 100
+			) // Add 100ms buffer
 		})
 	} catch (error) {
 		console.error('Error converting to WebM:', error)
