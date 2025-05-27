@@ -90,6 +90,13 @@ const AudioRecorder = ({
 
 		try {
 			setIsLoading(true)
+			// Clean up previous audio state
+			if (audioURL) {
+				URL.revokeObjectURL(audioURL)
+				setAudioURL(null)
+			}
+			setIsPlaying(false)
+
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
 			const mediaRecorder = new MediaRecorder(stream, { mimeType: supportedAudioMimeType })
 			mediaRecorderRef.current = mediaRecorder
