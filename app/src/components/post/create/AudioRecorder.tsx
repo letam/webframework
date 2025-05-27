@@ -3,7 +3,7 @@ import { Mic, Square, Loader2 } from 'lucide-react'
 import fixWebmDuration from 'webm-duration-fix'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
-import { isSafari } from '@/lib/utils/browser'
+import { isIOS, isSafari } from '@/lib/utils/browser'
 import { supportedAudioMimeType } from '@/lib/utils/media'
 import { getSettings } from '@/lib/utils/settings'
 import { convertToWav } from '@/lib/utils/audio'
@@ -177,11 +177,11 @@ const AudioRecorder = ({
 
 			mediaRecorder.start()
 
-			// delay recording state update by 1 second in safari
-			if (isSafari()) {
+			// In Safari desktop app, delay recording state update by 500ms since the microphone does not always start recording immediately
+			if (isSafari() && !isIOS()) {
 				setTimeout(() => {
 					setStatus('recording')
-				}, 1000)
+				}, 500)
 			} else {
 				setStatus('recording')
 			}
