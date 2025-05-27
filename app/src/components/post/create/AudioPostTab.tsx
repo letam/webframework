@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useRef } from 'react'
-import { FileAudio } from 'lucide-react'
+import { FileAudio, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import AudioRecorder from './AudioRecorder'
 
@@ -9,6 +9,7 @@ interface AudioPostTabProps {
 	onAudioFileChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 	onSubmit: (e: React.MouseEvent) => void
 	disabled?: boolean
+	isProcessing?: boolean
 }
 
 const AudioPostTab: React.FC<AudioPostTabProps> = ({
@@ -16,6 +17,7 @@ const AudioPostTab: React.FC<AudioPostTabProps> = ({
 	onAudioFileChange,
 	onSubmit,
 	disabled,
+	isProcessing,
 }) => {
 	const audioInputRef = useRef<HTMLInputElement>(null)
 
@@ -53,7 +55,13 @@ const AudioPostTab: React.FC<AudioPostTabProps> = ({
 				</div>
 			</div>
 
-			<div className="flex justify-end">
+			<div className="flex justify-end items-center gap-2">
+				{isProcessing && (
+					<div className="flex items-center gap-2 text-sm text-muted-foreground">
+						<Loader2 className="h-4 w-4 animate-spin" />
+						<span>Processing audio...</span>
+					</div>
+				)}
 				<Button type="button" onClick={onSubmit} disabled={disabled}>
 					Post
 				</Button>

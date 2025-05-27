@@ -190,13 +190,6 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					onClearMedia={clearMedia}
 				/>
 
-				{isProcessing && mediaType === 'audio' && (audioBlob || audioFile) && (
-					<div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mb-4">
-						<Loader2 className="h-4 w-4 animate-spin" />
-						<span>Processing audio...</span>
-					</div>
-				)}
-
 				<Tabs defaultValue="text" value={mediaType} className="mt-2">
 					<TabsList className="grid w-full grid-cols-3 mb-4">
 						<TabsTrigger value="text" onClick={() => setMediaType('text')} disabled={isProcessing}>
@@ -228,6 +221,9 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							onAudioFileChange={handleAudioFileChange}
 							onSubmit={handleTabSubmit}
 							disabled={isProcessing}
+							isProcessing={
+								isProcessing && mediaType === 'audio' && Boolean(audioBlob || audioFile)
+							}
 						/>
 					</TabsContent>
 
