@@ -21,7 +21,15 @@ const VideoRecorder = ({
 		if (disabled) return
 
 		try {
-			const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+			const stream = await navigator.mediaDevices.getUserMedia({
+				video: {
+					facingMode: 'user',
+					// TODO: Allow user to choose video resolution
+					width: { ideal: 640 },
+					height: { ideal: 640 },
+				},
+				audio: true,
+			})
 			streamRef.current = stream
 
 			// Display preview
@@ -103,6 +111,7 @@ const VideoRecorder = ({
 					playsInline
 					src={videoURL || undefined}
 					onEnded={handlePlaybackEnded}
+					style={{ transform: 'scaleX(-1)' }} // Mirror the video for selfie view
 				/>
 
 				<div className="absolute bottom-2 right-2 flex gap-2">
