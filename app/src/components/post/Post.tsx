@@ -19,10 +19,10 @@ interface PostProps {
 const FormatText: React.FC<{ children: string }> = ({ children }) => {
 	const content = DOMPurify.sanitize(children)
 		.replace(/\n/g, '<br/>')
-		.replace(
-			/(https?:[^ ]+)( ?)/g,
-			'<a href="$1" target="_blank" rel="noopener noreferrer" style="text-decoration: underline; word-break: break-all;">$1</a>$2'
-		)
+		.replace(/((?:https?:\/\/)?(?:www\.)?[^ ]+)( ?)/g, (match, url, space) => {
+			const href = url.startsWith('www.') ? `http://${url}` : url
+			return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="text-decoration: underline; word-break: break-all;">${url}</a>${space}`
+		})
 	// biome-ignore lint/security/noDangerouslySetInnerHtml: we want to render URLs as href in html
 	return <div dangerouslySetInnerHTML={{ __html: content }} />
 }
