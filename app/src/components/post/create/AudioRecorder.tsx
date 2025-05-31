@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
-import { Mic, Square, Loader2 } from 'lucide-react'
+import { Mic, Square, Loader2, Pause, Play } from 'lucide-react'
 import fixWebmDuration from 'webm-duration-fix'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
@@ -301,62 +301,62 @@ const AudioRecorder = forwardRef<
 
 	return (
 		<div className="flex flex-col space-y-2">
-			<div className="flex items-center space-x-2">
-				{status !== 'recording' ? (
-					<Button
-						type="button"
-						variant="outline"
-						size="icon"
-						onClick={startRecording}
-						className="w-10 h-10 rounded-full"
-						disabled={status === 'loading' || disabled}
-					>
-						{status === 'loading' ? (
-							<Loader2 className="h-5 w-5 text-primary animate-spin" />
-						) : (
-							<Mic className="h-5 w-5 text-primary" />
-						)}
-					</Button>
-				) : (
-					<Button
-						type="button"
-						variant="destructive"
-						size="icon"
-						onClick={stopRecording}
-						className="w-10 h-10 rounded-full animate-pulse-gentle"
-						disabled={disabled}
-					>
-						<Square className="h-5 w-5" />
-					</Button>
-				)}
-
-				<StatusMessage status={status} showNormalizingMessage={showNormalizingMessage} />
-			</div>
-
-			{audioURL && !isRecordingInProgress(status) && submitStatus === '' && !isProcessing && (
-				<AudioControls
-					audioRef={audioRef}
-					isPlaying={isPlaying}
-					duration={duration}
-					currentTime={currentTime}
-					onPlayPause={togglePlayback}
-					onSeek={seekAudio}
-					disabled={disabled}
-				/>
-			)}
-
-			{audioURL && (
+			<div className="flex flex-col">
 				<audio
 					ref={audioRef}
-					className="hidden"
+					className={`w-full ${status === 'recording' || audioURL ? 'h-10' : 'h-0 opacity-0'}`}
+					controls={status !== 'recording'}
+					src={audioURL || undefined}
 					onEnded={handlePlaybackEnded}
-					onTimeUpdate={handleTimeUpdate}
-					onLoadedMetadata={handleLoadedMetadata}
 				>
-					<source src={audioURL} />
 					<track kind="captions" label="English" />
 				</audio>
-			)}
+
+				<div className="flex justify-end gap-2 mt-2">
+					{status !== 'recording' ? (
+						<>
+							{!audioURL && (
+								<Button
+									type="button"
+									variant="outline"
+									size="icon"
+									onClick={startRecording}
+									className="w-10 h-10 rounded-full"
+									disabled={disabled}
+								>
+									<Mic className="h-5 w-5 text-primary dark:text-white" />
+								</Button>
+							)}
+
+							{audioURL && (
+								<Button
+									type="button"
+									variant="outline"
+									size="icon"
+									onClick={togglePlayback}
+									className="w-10 h-10 rounded-full"
+									disabled={disabled}
+								>
+									{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+								</Button>
+							)}
+						</>
+					) : (
+						<Button
+							type="button"
+							variant="destructive"
+							size="icon"
+							onClick={stopRecording}
+							className="w-10 h-10 rounded-full animate-pulse-gentle"
+							disabled={disabled}
+						>
+							<Square className="h-5 w-5" />
+						</Button>
+					)}
+				</div>
+			</div>
+
+			{status === 'recording' && <span className="text-sm text-primary">Recording audio...</span>}
 		</div>
 	)
 })

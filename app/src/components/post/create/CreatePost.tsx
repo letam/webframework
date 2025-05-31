@@ -3,7 +3,7 @@ import { useState, useRef } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
-import { Mic, Video, Image, Loader2 } from 'lucide-react'
+import { Mic, Video, Image, Loader2, Upload } from 'lucide-react'
 import AudioRecorder, { type AudioRecorderRef } from './AudioRecorder'
 import VideoRecorder, { type VideoRecorderRef } from './VideoRecorder'
 import MediaPreview from './MediaPreview'
@@ -223,37 +223,18 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				/>
 
 				<div className="flex flex-col gap-4">
-					<div className="flex items-center gap-2">
+					<div className="flex flex-wrap gap-2 justify-end">
 						<Button
 							type="button"
 							variant="outline"
 							size="sm"
-							className="flex-1"
-							onClick={openAudioFileSelector}
-							disabled={!!submitStatus}
-						>
-							<Mic className="h-4 w-4 mr-2" />
-							Upload Audio
-						</Button>
-						<input
-							type="file"
-							ref={audioInputRef}
-							className="hidden"
-							accept="audio/*"
-							onChange={handleAudioFileChange}
-							disabled={!!submitStatus}
-						/>
-
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							className="flex-1"
+							className="flex items-center gap-2"
 							onClick={openVideoFileSelector}
 							disabled={!!submitStatus}
 						>
-							<Video className="h-4 w-4 mr-2" />
-							Upload Video
+							<Upload className="h-4 w-4" />
+							<Video className="h-4 w-4" />
+							<span className="hidden sm:inline">Upload Video</span>
 						</Button>
 						<input
 							type="file"
@@ -261,6 +242,27 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							className="hidden"
 							accept="video/*"
 							onChange={handleVideoFileChange}
+							disabled={!!submitStatus}
+						/>
+
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							className="flex items-center gap-2"
+							onClick={openAudioFileSelector}
+							disabled={!!submitStatus}
+						>
+							<Upload className="h-4 w-4" />
+							<Mic className="h-4 w-4" />
+							<span className="hidden sm:inline">Upload Audio</span>
+						</Button>
+						<input
+							type="file"
+							ref={audioInputRef}
+							className="hidden"
+							accept="audio/*"
+							onChange={handleAudioFileChange}
 							disabled={!!submitStatus}
 						/>
 					</div>

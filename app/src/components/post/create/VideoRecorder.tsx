@@ -182,13 +182,13 @@ const VideoRecorder = forwardRef<
 									variant="outline"
 									size="icon"
 									onClick={startRecording}
-									className="bg-white/80 backdrop-blur-xs"
+									className="w-10 h-10 rounded-full"
 									disabled={disabled}
 								>
 									{isIOS() ? (
-										<Upload className="h-5 w-5 text-primary" />
+										<Upload className="h-5 w-5 text-primary dark:text-white" />
 									) : (
-										<Video className="h-5 w-5 text-primary" />
+										<Video className="h-5 w-5 text-primary dark:text-white" />
 									)}
 								</Button>
 							)}
@@ -199,7 +199,7 @@ const VideoRecorder = forwardRef<
 									variant="outline"
 									size="icon"
 									onClick={togglePlayback}
-									className="bg-white/80 backdrop-blur-xs"
+									className="w-10 h-10 rounded-full"
 									disabled={disabled}
 								>
 									{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
@@ -212,7 +212,7 @@ const VideoRecorder = forwardRef<
 							variant="destructive"
 							size="icon"
 							onClick={stopRecording}
-							className="animate-pulse-gentle"
+							className="w-10 h-10 rounded-full animate-pulse-gentle"
 							disabled={disabled}
 						>
 							<Square className="h-5 w-5" />
