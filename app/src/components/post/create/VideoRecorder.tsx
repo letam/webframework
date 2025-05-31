@@ -185,11 +185,7 @@ const VideoRecorder = forwardRef<
 									className="w-10 h-10 rounded-full"
 									disabled={disabled}
 								>
-									{isIOS() ? (
-										<Upload className="h-5 w-5 text-primary dark:text-white" />
-									) : (
-										<Video className="h-5 w-5 text-primary dark:text-white" />
-									)}
+									<Video className="h-5 w-5 text-primary dark:text-white" />
 								</Button>
 							)}
 
