@@ -1,9 +1,10 @@
 import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
-import { Video, Square, Play, Pause } from 'lucide-react'
+import { Video, Square, Play, Pause, Upload } from 'lucide-react'
 import fixWebmDuration from 'webm-duration-fix'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import { supportedVideoMimeType } from '@/lib/utils/media'
+import { isIOS } from '@/lib/utils/browser'
 
 export interface VideoRecorderRef {
 	reset: () => void
@@ -23,6 +24,7 @@ const VideoRecorder = forwardRef<
 	const videoChunksRef = useRef<Blob[]>([])
 	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const streamRef = useRef<MediaStream | null>(null)
+	const fileInputRef = useRef<HTMLInputElement>(null)
 
 	const reset = () => {
 		setIsRecording(false)
@@ -50,8 +52,28 @@ const VideoRecorder = forwardRef<
 		reset,
 	}))
 
+	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0]
+		if (!file) return
+
+		try {
+			const videoUrl = URL.createObjectURL(file)
+			setVideoURL(videoUrl)
+			onVideoCaptured(file)
+		} catch (error) {
+			console.error('Error processing video file:', error)
+			toast.error('Error processing video file')
+		}
+	}
+
 	const startRecording = async () => {
 		if (disabled) return
+
+		// On iOS, use native camera input
+		if (isIOS()) {
+			fileInputRef.current?.click()
+			return
+		}
 
 		try {
 			const stream = await navigator.mediaDevices.getUserMedia({
@@ -163,7 +185,11 @@ const VideoRecorder = forwardRef<
 									className="bg-white/80 backdrop-blur-xs"
 									disabled={disabled}
 								>
-									<Video className="h-5 w-5 text-primary" />
+									{isIOS() ? (
+										<Upload className="h-5 w-5 text-primary" />
+									) : (
+										<Video className="h-5 w-5 text-primary" />
+									)}
 								</Button>
 							)}
 
@@ -196,6 +222,17 @@ const VideoRecorder = forwardRef<
 			</div>
 
 			{isRecording && <span className="text-sm text-primary">Recording video...</span>}
+
+			{/* Hidden file input for iOS */}
+			<input
+				ref={fileInputRef}
+				type="file"
+				accept="video/*"
+				capture="user"
+				className="hidden"
+				onChange={handleFileChange}
+				disabled={disabled}
+			/>
 		</div>
 	)
 })
