@@ -68,6 +68,10 @@ const VideoRecorder = forwardRef<
 			// Display preview
 			if (videoRef.current) {
 				videoRef.current.srcObject = stream
+				// Ensure the video starts playing
+				await videoRef.current.play().catch((error) => {
+					console.error('Error playing video preview:', error)
+				})
 			}
 
 			const mediaRecorder = new MediaRecorder(stream, { mimeType: supportedVideoMimeType })
@@ -138,7 +142,7 @@ const VideoRecorder = forwardRef<
 				<video
 					ref={videoRef}
 					className={`w-full rounded-md ${isRecording || !videoURL ? 'h-60 bg-black/10' : 'h-auto'}`}
-					autoPlay={isRecording}
+					autoPlay
 					muted={isRecording}
 					loop={false}
 					playsInline
