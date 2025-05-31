@@ -160,11 +160,11 @@ const VideoRecorder = forwardRef<
 
 	return (
 		<div className="flex flex-col space-y-2">
-			<div className="relative">
+			<div className="flex flex-col">
 				<video
 					ref={videoRef}
 					className={`w-full rounded-md ${isRecording || videoURL ? 'h-60' : 'h-0 opacity-0'}`}
-					autoPlay
+					autoPlay={isRecording}
 					muted={isRecording}
 					loop={false}
 					playsInline
@@ -173,7 +173,7 @@ const VideoRecorder = forwardRef<
 					style={{ transform: 'scaleX(-1)' }} // Mirror the video for selfie view
 				/>
 
-				<div className="absolute bottom-2 right-2 flex gap-2">
+				<div className="flex justify-end gap-2 mt-2">
 					{!isRecording ? (
 						<>
 							{!videoURL && (
