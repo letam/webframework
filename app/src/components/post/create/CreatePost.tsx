@@ -1,11 +1,11 @@
 import type React from 'react'
 import { useState, useRef } from 'react'
 import { Textarea } from '@/components/ui/textarea'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/sonner'
-import TextPostTab from './TextPostTab'
-import AudioPostTab from './AudioPostTab'
-import VideoPostTab from './VideoPostTab'
+import { Button } from '@/components/ui/button'
+import { Mic, Video, Image, Loader2 } from 'lucide-react'
+import AudioRecorder, { type AudioRecorderRef } from './AudioRecorder'
+import VideoRecorder from './VideoRecorder'
 import MediaPreview from './MediaPreview'
 import type { CreatePostRequest } from '@/types/post'
 import { convertWavToWebM, getAudioExtension } from '@/lib/utils/audio'
@@ -39,7 +39,11 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [audioFile, setAudioFile] = useState<File | null>(null)
 	const [videoFile, setVideoFile] = useState<File | null>(null)
 	const [submitStatus, setSubmitStatus] = useState<SubmitStatus | ''>('')
+	const [isProcessing, setIsProcessing] = useState(false)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
+	const audioRecorderRef = useRef<AudioRecorderRef>(null)
+	const audioInputRef = useRef<HTMLInputElement>(null)
+	const videoInputRef = useRef<HTMLInputElement>(null)
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		// Check for Cmd+Enter (macOS) or Ctrl+Enter (Windows/Linux)
@@ -166,9 +170,24 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		}
 	}
 
-	const handleTabSubmit = (e: React.MouseEvent) => {
-		e.preventDefault()
-		handleSubmit({ preventDefault: () => {} } as React.FormEvent)
+	const openAudioFileSelector = () => {
+		audioInputRef.current?.click()
+	}
+
+	const openVideoFileSelector = () => {
+		videoInputRef.current?.click()
+	}
+
+	const handleAudioSubmit = (e: React.MouseEvent) => {
+		if (isProcessing) return
+
+		const status = audioRecorderRef.current?.getStatus()
+		if (status === 'recording') {
+			setIsProcessing(true)
+			audioRecorderRef.current?.stopRecording()
+		} else if (status === 'ready') {
+			handleSubmit({ preventDefault: () => {} } as React.FormEvent)
+		}
 	}
 
 	return (
@@ -193,56 +212,81 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					onClearMedia={clearMedia}
 				/>
 
-				<Tabs defaultValue="text" value={mediaType} className="mt-2">
-					<TabsList className="grid w-full grid-cols-3 mb-4">
-						<TabsTrigger
-							value="text"
-							onClick={() => setMediaType('text')}
+				<div className="flex flex-col gap-4">
+					<div className="flex items-center gap-2">
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							className="flex-1"
+							onClick={openAudioFileSelector}
 							disabled={!!submitStatus}
 						>
-							Text
-						</TabsTrigger>
-						<TabsTrigger
-							value="audio"
-							onClick={() => setMediaType('audio')}
+							<Mic className="h-4 w-4 mr-2" />
+							Upload Audio
+						</Button>
+						<input
+							type="file"
+							ref={audioInputRef}
+							className="hidden"
+							accept="audio/*"
+							onChange={handleAudioFileChange}
 							disabled={!!submitStatus}
-						>
-							Audio
-						</TabsTrigger>
-						<TabsTrigger
-							value="video"
-							onClick={() => setMediaType('video')}
-							disabled={!!submitStatus}
-						>
-							Video
-						</TabsTrigger>
-					</TabsList>
+						/>
 
-					<TabsContent value="text">
-						<TextPostTab onSubmit={handleTabSubmit} disabled={!!submitStatus} />
-					</TabsContent>
+						<Button
+							type="button"
+							variant="outline"
+							size="sm"
+							className="flex-1"
+							onClick={openVideoFileSelector}
+							disabled={!!submitStatus}
+						>
+							<Video className="h-4 w-4 mr-2" />
+							Upload Video
+						</Button>
+						<input
+							type="file"
+							ref={videoInputRef}
+							className="hidden"
+							accept="video/*"
+							onChange={handleVideoFileChange}
+							disabled={!!submitStatus}
+						/>
+					</div>
 
-					<TabsContent value="audio">
-						<AudioPostTab
+					<div className="space-y-4">
+						<AudioRecorder
+							ref={audioRecorderRef}
 							onAudioCaptured={handleAudioCaptured}
-							onAudioFileChange={handleAudioFileChange}
-							onSubmit={handleTabSubmit}
 							disabled={!!submitStatus}
 							submitStatus={
 								mediaType === 'audio' && Boolean(audioBlob || audioFile) ? submitStatus : ''
 							}
+							isProcessing={isProcessing}
 						/>
-					</TabsContent>
 
-					<TabsContent value="video">
-						<VideoPostTab
-							onVideoCaptured={handleVideoCaptured}
-							onVideoFileChange={handleVideoFileChange}
-							onSubmit={handleTabSubmit}
-							disabled={!!submitStatus}
-						/>
-					</TabsContent>
-				</Tabs>
+						<VideoRecorder onVideoCaptured={handleVideoCaptured} disabled={!!submitStatus} />
+					</div>
+
+					<div className="flex justify-end items-center gap-2">
+						{submitStatus && (
+							<div className="flex items-center gap-2 text-sm text-muted-foreground">
+								<Loader2 className="h-4 w-4 animate-spin" />
+								<span>
+									{submitStatus === 'compressing'
+										? 'Compressing media...'
+										: submitStatus === 'preparing'
+											? 'Preparing post...'
+											: 'Submitting post...'}
+								</span>
+							</div>
+						)}
+						<Button type="submit" disabled={!!submitStatus}>
+							Post
+						</Button>
+					</div>
+				</div>
 			</form>
 		</div>
 	)
