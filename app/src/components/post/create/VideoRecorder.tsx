@@ -163,7 +163,7 @@ const VideoRecorder = forwardRef<
 			<div className="relative">
 				<video
 					ref={videoRef}
-					className={`w-full rounded-md ${isRecording || !videoURL ? 'h-60 bg-black/10' : 'h-auto'}`}
+					className={`w-full rounded-md ${isRecording || videoURL ? 'h-60' : 'h-0 opacity-0'}`}
 					autoPlay
 					muted={isRecording}
 					loop={false}
