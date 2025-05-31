@@ -104,6 +104,7 @@ const normalizeAudio = async (audioBlob: Blob): Promise<Blob> => {
 export interface AudioRecorderRef {
 	stopRecording: () => void
 	getStatus: () => RecordingStatus
+	reset: () => void
 }
 
 const AudioRecorder = forwardRef<
@@ -126,6 +127,28 @@ const AudioRecorder = forwardRef<
 	const audioRef = useRef<HTMLAudioElement | null>(null)
 	const normalizingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 	const progressIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+
+	const reset = () => {
+		setStatus('idle')
+		setShowNormalizingMessage(false)
+		if (audioURL) {
+			URL.revokeObjectURL(audioURL)
+			setAudioURL(null)
+		}
+		setIsPlaying(false)
+		setDuration(0)
+		setCurrentTime(0)
+		audioChunksRef.current = []
+		if (mediaRecorderRef.current) {
+			mediaRecorderRef.current = null
+		}
+		if (normalizingTimeoutRef.current) {
+			clearTimeout(normalizingTimeoutRef.current)
+		}
+		if (progressIntervalRef.current) {
+			clearInterval(progressIntervalRef.current)
+		}
+	}
 
 	const startRecording = async () => {
 		if (disabled) return
@@ -273,6 +296,7 @@ const AudioRecorder = forwardRef<
 	useImperativeHandle(ref, () => ({
 		stopRecording,
 		getStatus: () => status,
+		reset,
 	}))
 
 	return (

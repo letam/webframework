@@ -5,7 +5,7 @@ import { toast } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { Mic, Video, Image, Loader2 } from 'lucide-react'
 import AudioRecorder, { type AudioRecorderRef } from './AudioRecorder'
-import VideoRecorder from './VideoRecorder'
+import VideoRecorder, { type VideoRecorderRef } from './VideoRecorder'
 import MediaPreview from './MediaPreview'
 import type { CreatePostRequest } from '@/types/post'
 import { convertWavToWebM, getAudioExtension } from '@/lib/utils/audio'
@@ -42,6 +42,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [isProcessing, setIsProcessing] = useState(false)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const audioRecorderRef = useRef<AudioRecorderRef>(null)
+	const videoRecorderRef = useRef<VideoRecorderRef>(null)
 	const audioInputRef = useRef<HTMLInputElement>(null)
 	const videoInputRef = useRef<HTMLInputElement>(null)
 
@@ -96,6 +97,15 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		setAudioFile(null)
 		setVideoFile(null)
 		setMediaType('text')
+		// Reset audio recorder state
+		if (audioRecorderRef.current) {
+			audioRecorderRef.current.reset()
+		}
+		// Reset video recorder state
+		if (videoRecorderRef.current) {
+			videoRecorderRef.current.reset()
+		}
+		setIsProcessing(false)
 	}
 
 	const handleSubmit = async (e: React.FormEvent) => {
@@ -266,7 +276,11 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							isProcessing={isProcessing}
 						/>
 
-						<VideoRecorder onVideoCaptured={handleVideoCaptured} disabled={!!submitStatus} />
+						<VideoRecorder
+							ref={videoRecorderRef}
+							onVideoCaptured={handleVideoCaptured}
+							disabled={!!submitStatus}
+						/>
 					</div>
 
 					<div className="flex justify-end items-center gap-2">

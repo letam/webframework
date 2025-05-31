@@ -1,14 +1,21 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
 import { Video, Square, Play, Pause } from 'lucide-react'
 import fixWebmDuration from 'webm-duration-fix'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import { supportedVideoMimeType } from '@/lib/utils/media'
 
-const VideoRecorder = ({
-	onVideoCaptured,
-	disabled,
-}: { onVideoCaptured: (videoBlob: Blob) => void; disabled?: boolean }) => {
+export interface VideoRecorderRef {
+	reset: () => void
+}
+
+const VideoRecorder = forwardRef<
+	VideoRecorderRef,
+	{
+		onVideoCaptured: (videoBlob: Blob) => void
+		disabled?: boolean
+	}
+>(({ onVideoCaptured, disabled }, ref) => {
 	const [isRecording, setIsRecording] = useState(false)
 	const [videoURL, setVideoURL] = useState<string | null>(null)
 	const [isPlaying, setIsPlaying] = useState(false)
@@ -16,6 +23,32 @@ const VideoRecorder = ({
 	const videoChunksRef = useRef<Blob[]>([])
 	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const streamRef = useRef<MediaStream | null>(null)
+
+	const reset = () => {
+		setIsRecording(false)
+		if (videoURL) {
+			URL.revokeObjectURL(videoURL)
+			setVideoURL(null)
+		}
+		setIsPlaying(false)
+		videoChunksRef.current = []
+		if (mediaRecorderRef.current) {
+			mediaRecorderRef.current = null
+		}
+		if (streamRef.current) {
+			for (const track of streamRef.current.getTracks()) {
+				track.stop()
+			}
+			streamRef.current = null
+		}
+		if (videoRef.current) {
+			videoRef.current.srcObject = null
+		}
+	}
+
+	useImperativeHandle(ref, () => ({
+		reset,
+	}))
 
 	const startRecording = async () => {
 		if (disabled) return
@@ -161,6 +194,6 @@ const VideoRecorder = ({
 			{isRecording && <span className="text-sm text-primary">Recording video...</span>}
 		</div>
 	)
-}
+})
 
 export default VideoRecorder
