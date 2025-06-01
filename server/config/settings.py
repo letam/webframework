@@ -13,11 +13,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
-import environ
-import os
 import logging
 import logging.config
+import os
 from pathlib import Path
+
+import environ
 
 # Configure logging
 LOGGING = {
@@ -250,6 +251,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Logging
 # https://docs.djangoproject.com/en/5.1/topics/logging/
 import copy
+
 from django.utils.log import DEFAULT_LOGGING
 
 LOGGING = copy.deepcopy(DEFAULT_LOGGING)
@@ -462,6 +464,8 @@ else:
                 "'sha256-3FCgTKTk3allIr51SmmUMsCl5xih+z//3swOXTPQq6o='",
                 "'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='",
                 "'sha256-7lAG9nNPimWNBky6j9qnn0jfFzu5wK96KOj/UzoG0hg='",
+                "'sha256-CIxDM5jnsGiKqXs2v7NKCY5MzdR9gu6TtiMJrDw29AY='",
+                "'sha256-9yCaDE0ZqnMqIHIqv/lrx+VJOh16ZKpxkH4PoBNWe2s='",
             ],
         }
     )
