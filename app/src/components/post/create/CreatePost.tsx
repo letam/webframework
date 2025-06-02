@@ -268,21 +268,25 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					</div>
 
 					<div className="space-y-4">
-						<AudioRecorder
-							ref={audioRecorderRef}
-							onAudioCaptured={handleAudioCaptured}
-							disabled={!!submitStatus}
-							submitStatus={
-								mediaType === 'audio' && Boolean(audioBlob || audioFile) ? submitStatus : ''
-							}
-							isProcessing={isProcessing}
-						/>
+						<div className="flex justify-center items-center">
+							<AudioRecorder
+								ref={audioRecorderRef}
+								onAudioCaptured={handleAudioCaptured}
+								disabled={!!submitStatus}
+								submitStatus={
+									mediaType === 'audio' && Boolean(audioBlob || audioFile) ? submitStatus : ''
+								}
+								isProcessing={isProcessing}
+							/>
+						</div>
 
-						<VideoRecorder
-							ref={videoRecorderRef}
-							onVideoCaptured={handleVideoCaptured}
-							disabled={!!submitStatus}
-						/>
+						<div className="flex justify-center items-center">
+							<VideoRecorder
+								ref={videoRecorderRef}
+								onVideoCaptured={handleVideoCaptured}
+								disabled={!!submitStatus}
+							/>
+						</div>
 					</div>
 
 					<div className="flex justify-end items-center gap-2">

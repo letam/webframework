@@ -163,7 +163,7 @@ const VideoRecorder = forwardRef<
 			<div className="flex flex-col">
 				<video
 					ref={videoRef}
-					className={`w-full rounded-md ${isRecording || videoURL ? 'h-60' : 'h-0 opacity-0'}`}
+					className={`w-full rounded-md ${isRecording || videoURL ? 'h-60' : 'h-0 opacity-0 hidden'}`}
 					autoPlay={isRecording}
 					muted={isRecording}
 					loop={false}
