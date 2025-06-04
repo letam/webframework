@@ -29,7 +29,7 @@ def get_presigned_url(request):
         file_path = f'post/audio/{user_id}/{file_name}'
 
         # check if file path is already used in the database
-        if Post.objects.filter(audio_s3_file_key=file_path).exists():
+        if Post.objects.filter(media__s3_file_key=file_path).exists():
             # add a timestamp to the file_name while (attempting to) respecting the file extension
             file_name = (
                 file_name.rsplit('.', 1)[0]
@@ -74,5 +74,5 @@ def _get_presigned_url_for_file_path(file_path):
 
 def get_presigned_url_for_post(request, post_id):
     post = Post.objects.get(id=post_id)
-    signed_url = _get_presigned_url_for_file_path(post.audio_s3_file_key)
+    signed_url = _get_presigned_url_for_file_path(post.media.s3_file_key)
     return JsonResponse({'url': signed_url})
