@@ -89,7 +89,7 @@ sed -i.bak 's/FLY_APP_NAME/your_app_name/g' server/config/settings.py && find sc
 
 2. Run app deployment script:
 ```
-./scripts/deploy-fly.io-sqlite.sh $app_name
+./scripts/deploy-fly.io-sqlite.sh <app_name>
 ```
 
 ### Config Type 2: Deploy using HA configuration with Postgres database:
@@ -101,7 +101,7 @@ sed -i.bak 's/FLY_APP_NAME/your_app_name/g' server/config/settings.py && find sc
 
 2. Run app deployment script:
 ```
-./scripts/deploy-fly.io-postgres.sh
+./scripts/deploy-fly.io-postgres.sh <app_name>
 ```
 
 ### To use Cloudflare R2 object storage for user uploads (Required for Config Type 2):
