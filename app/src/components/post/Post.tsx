@@ -77,7 +77,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onTranscribe
 				)}
 
 				{post.body && (
-					<div className="mt-2 whitespace-pre-line">
+					<div className="mt-2">
 						<FormatText>{post.body}</FormatText>
 					</div>
 				)}
