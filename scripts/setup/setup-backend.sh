@@ -26,26 +26,21 @@ log() {
 
 log "Setting up backend server..."
 
-# Check if Python 3 is installed
-if ! command -v python3 &> /dev/null; then
-    echo "Error: Python 3 is not installed. Please install Python 3 first."
-    echo "Install from https://www.python.org/downloads/"
-    exit 1
+# Check if uv is installed
+if ! command -v uv &> /dev/null; then
+    log "Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+else
+    log "uv is already installed. Yay."
 fi
 
-# Create and activate virtual environment
-log "Creating Python virtual environment..."
-python3 -m venv venv
-source venv/bin/activate
-
-# Upgrade pip and install requirements
-log "Installing project requirements..."
-pip install -U pip
-pip install -r requirements.txt
+# Install Python dependencies with uv
+log "Installing Python dependencies with uv..."
+uv sync
 
 # Run migrations
 log "Running database migrations..."
-python server/manage.py migrate
+uv run python server/manage.py migrate
 
 log "Backend setup completed successfully!"
-log "To start the backend server, run: python server/manage.py runserver_plus"
+log "To start the backend server, run: uv run python server/manage.py runserver_plus"

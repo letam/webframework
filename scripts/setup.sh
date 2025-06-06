@@ -74,7 +74,7 @@ run_setup "Frontend Setup" "$SCRIPT_DIR/setup/setup-frontend.sh"
 log ""
 log "=== Setup Complete ==="
 log "To start the development servers:"
-log "1. In one terminal, run: python server/manage.py runserver_plus"
+log "1. In one terminal, run: uv run python server/manage.py runserver_plus"
 log "2. In another terminal, run: cd app && bun dev"
 log "Then access the web app at: http://localhost:8000"
 

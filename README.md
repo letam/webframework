@@ -8,7 +8,10 @@ Includes some functionality for a basic public micro-blogging app.
 - [Django web framework](https://www.djangoproject.com/)
 - [React UI library](https://react.dev/)
 - [Vite web dev frontend build tool](https://vite.dev/)
+
+### Package Managers
 - [Bun](https://bun.sh)
+- [uv](https://docs.astral.sh/uv/)
 
 ## Setup for Local Development
 
@@ -25,7 +28,7 @@ Includes some functionality for a basic public micro-blogging app.
 4. Start the development servers:
 	- In one terminal:
 		```
-		python server/manage.py runserver_plus
+		uv run python server/manage.py runserver_plus
 		```
 	- In another terminal:
 		```
