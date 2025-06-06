@@ -3,25 +3,9 @@
 # Exit on error
 set -e
 
-# Parse command line arguments
-VERBOSE=0
-while getopts "v" opt; do
-    case $opt in
-        v)
-            VERBOSE=1
-            ;;
-        \?)
-            echo "Invalid option: -$OPTARG" >&2
-            exit 1
-            ;;
-    esac
-done
-
 # Function to log messages
 log() {
-    if [ "$VERBOSE" -eq 1 ]; then
-        echo "$1"
-    fi
+    echo "$1"
 }
 
 log "Setting up backend server..."
