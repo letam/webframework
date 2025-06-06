@@ -109,9 +109,7 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
-if DEBUG:
-    ALLOWED_HOSTS = []
-else:
+if not DEBUG:
     ALLOWED_HOSTS = [
         '127.0.0.1',
         'localhost',
@@ -349,8 +347,8 @@ REST_FRAMEWORK = {
 # Handle server headers required for Cross-Origin Resource Sharing (CORS)
 # https://pypi.org/project/django-cors-headers/
 CORS_ALLOWED_ORIGINS = [
+    'http://127.0.0.1:8000',
     # 'http://localhost:8080',
-    # 'http://127.0.0.1:9000'
 ]
 if DEBUG:
     CORS_ALLOWED_ORIGINS.extend(
@@ -358,12 +356,6 @@ if DEBUG:
             'http://localhost:3000',
             'http://localhost:5173',
             'http://127.0.0.1:5173',
-        ]
-    )
-else:
-    CORS_ALLOWED_ORIGINS.extend(
-        [
-            'http://127.0.0.1:8000',
         ]
     )
 
@@ -443,7 +435,7 @@ if DEBUG:
             ],
             'style-src': [SELF, UNSAFE_INLINE, 'http://localhost:5173/src/index.css'],
             'style-src-elem': [SELF, UNSAFE_INLINE, 'http://localhost:5173/src/index.css'],
-            'connect-src': [SELF, 'ws://localhost:5173'],
+            'connect-src': [SELF, 'http://localhost:8000', 'ws://localhost:5173'],
             'img-src': [SELF, 'localhost:5173', 'https://ui-avatars.com/api/'],
             'media-src': [
                 *CONTENT_SECURITY_POLICY_DIRECTIVES.get('media-src', []),
