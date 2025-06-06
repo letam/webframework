@@ -8,6 +8,7 @@ Includes some functionality for a basic public micro-blogging app.
 - [Django web framework](https://www.djangoproject.com/)
 - [React UI library](https://react.dev/)
 - [Vite web dev frontend build tool](https://vite.dev/)
+- [Bun](https://bun.sh)
 
 ## Setup for Local Development
 
@@ -36,15 +37,12 @@ Includes some functionality for a basic public micro-blogging app.
 	python server/manage.py migrate
 	```
 
-7. Run other setup scripts
-	```
-	python server/manage.py init_users
-	```
-
-8. Run the development server (using django-extensions and werkzeug)
+7. Run the development server (using django-extensions and werkzeug)
 	```
 	python server/manage.py runserver_plus
 	```
+
+The web app during development is served via http://localhost:8000, but you may not see anything until after you set up and start the frontend server.
 
 ### Frontend server
 
@@ -53,9 +51,9 @@ Includes some functionality for a basic public micro-blogging app.
 	cd app
 	```
 
-2. Install npm packages:
+2. Install npm packages (via bun):
 	```
-	npm i
+	bun i
 	```
 
 3. Create `.env` file for frontend code
@@ -65,8 +63,12 @@ Includes some functionality for a basic public micro-blogging app.
 
 4. Start frontend dev server
 	```
-	npm run dev
+	bun dev
 	```
+
+### Accessing development server
+
+Remember to access the local web app via http://localhost:8000
 
 ## Setup for Production
 
