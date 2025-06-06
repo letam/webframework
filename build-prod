@@ -3,6 +3,12 @@
 # Build project for production
 
 
+## Use gsed on macOS
+SED_CMD="sed"
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    SED_CMD="gsed"
+fi
+
 ## Check if server/.env is setup correctly for production build
 
 if [ ! -f "server/.env" ]; then
@@ -12,6 +18,9 @@ if [ ! -f "server/.env" ]; then
     read -p "Do you want to create a new .env file? (y/n): " create_new_env
     if [ "$create_new_env" == "y" ]; then
         cp server/.env.production.sample server/.env
+        mkdir -p data
+        $SED_CMD -i "s|^DATABASE_URL=.*|DATABASE_URL=sqlite:///data/db.sqlite3|" server/.env
+        $SED_CMD -i "s|^MEDIA_ROOT=.*|MEDIA_ROOT=data/uploads|" server/.env
     else
         echo "Please ensure that .env is setup correctly for production build."
         exit 1
@@ -27,12 +36,8 @@ fi
 
 ## Build Backend
 
-source venv/bin/activate
-cd server
-python manage.py migrate
-python manage.py collectstatic --noinput
-deactivate
-cd - >/dev/null
+uv run python server/manage.py migrate
+uv run python server/manage.py collectstatic --noinput
 
 
 ## Build Frontend
@@ -48,7 +53,12 @@ rm -rf "$STATIC_APP_DIR"
 mv app/dist "$STATIC_APP_DIR"
 
 
-### Setup server's website dist index.html template
+### Setup to serve fully integrated index.html template
 WEBSITE_TEMPLATE_DIST_DIR="server/apps/website/templates/website/dist"
 mkdir -p "$WEBSITE_TEMPLATE_DIST_DIR"
 cp -p "$STATIC_APP_DIR/index.html" "$WEBSITE_TEMPLATE_DIST_DIR/index.html"
+
+### Remove development-related code from index.html
+$SED_CMD -i '\|content="https://lovable.dev|d' "$WEBSITE_TEMPLATE_DIST_DIR/index.html"
+$SED_CMD -i '\|cdn.gpteng.co/gptengineer.js|d' "$WEBSITE_TEMPLATE_DIST_DIR/index.html"
+$SED_CMD -i '/IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT!/d' "$WEBSITE_TEMPLATE_DIST_DIR/index.html"

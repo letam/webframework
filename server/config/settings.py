@@ -459,6 +459,7 @@ else:
                 "'sha256-CIxDM5jnsGiKqXs2v7NKCY5MzdR9gu6TtiMJrDw29AY='",
                 "'sha256-9yCaDE0ZqnMqIHIqv/lrx+VJOh16ZKpxkH4PoBNWe2s='",
             ],
+            'connect-src': [SELF, 'http://127.0.0.1:8000'],
         }
     )
 
