@@ -16,11 +16,17 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # Prevents Python from buffering stdout and stderr
 ENV PYTHONUNBUFFERED=1
 
-# Install psycopg2 dependencies.
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+# Update package lists
+RUN apt-get update
+
+# Install psycopg2 dependencies
+RUN apt-get install -y libpq-dev gcc
+
+# Install curl (and certificates) for uv installation
+RUN apt-get install -y --no-install-recommends curl ca-certificates
+
+# Clean up apt package lists
+RUN rm -rf /var/lib/apt/lists/*
 
 # Create the app directory
 RUN mkdir -p /code
@@ -28,15 +34,16 @@ RUN mkdir -p /code
 # Set the working directory inside the container
 WORKDIR /code
 
-# Install backend dependencies
+# Install uv (https://docs.astral.sh/uv/guides/integration/docker/#installing-uv)
+ADD https://astral.sh/uv/0.7.11/install.sh /uv-installer.sh
+RUN sh /uv-installer.sh && rm /uv-installer.sh
+ENV PATH="/root/.local/bin/:$PATH"
 
-# Upgrade pip
-RUN pip install --upgrade pip
+# Compile requirements.txt dependencies from pyproject.toml
+COPY pyproject.toml /code/
+RUN uv pip compile pyproject.toml -o requirements.txt
 
-# Copy the Django project and install dependencies
-COPY requirements.txt /code
-
-# Run this command to install all dependencies
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend files to the container
