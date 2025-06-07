@@ -14,6 +14,7 @@ log "Setting up frontend server..."
 if ! command -v bun &> /dev/null; then
     log "Installing Bun..."
     curl -fsSL https://bun.sh/install | bash
+    export PATH="$HOME/.bun/bin:$PATH"
 else
     log "Bun is already installed. Yay."
 fi
@@ -34,5 +35,10 @@ if [ ! -f .env ]; then
     cp .env.development.local.sample .env
 fi
 
-log "Frontend setup completed successfully!"
+log ""
+log "🚀 Frontend setup completed successfully!"
 log "To start the frontend server, run: bun dev"
+log ""
+log "If you see the error 'command not found: bun', then either"
+log "run the command in a new terminal,"
+log 'or first execute the command: source export PATH="$HOME/.bun/bin:$PATH"'

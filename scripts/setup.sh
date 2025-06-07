@@ -35,13 +35,15 @@ log "Starting full project setup..."
 
 # Run backend setup
 run_setup "Backend Setup" "$SCRIPT_DIR/setup/setup-backend.sh"
+log ""
 
 # Run frontend setup
 run_setup "Frontend Setup" "$SCRIPT_DIR/setup/setup-frontend.sh"
+log ""
 
 log ""
 log "=== Setup Complete ==="
-log "To start the development servers:"
-log "1. In one terminal, run: uv run python server/manage.py runserver_plus"
+log "🚀 To start the development servers:"
+log "1. In a new terminal, run: uv run python server/manage.py runserver_plus"
 log "2. In another terminal, run: cd app && bun dev"
 log "Then access the web app at: http://localhost:8000"
