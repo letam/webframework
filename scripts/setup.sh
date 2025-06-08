@@ -32,6 +32,13 @@ cd "$PROJECT_ROOT" || {
 }
 
 log "Starting full project setup..."
+log ""
+
+# Run macOS setup
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    run_setup "macOS Setup" "$SCRIPT_DIR/setup/setup-mac.sh"
+    log ""
+fi
 
 # Run backend setup
 run_setup "Backend Setup" "$SCRIPT_DIR/setup/setup-backend.sh"
