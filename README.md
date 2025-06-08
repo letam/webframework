@@ -43,7 +43,7 @@ The web app during development is served via http://localhost:8000
 
 2. Build app for production
 	```
-	./build-prod
+	./scripts/build-prod.sh
 	```
 
 ## Deploying to fly.io
