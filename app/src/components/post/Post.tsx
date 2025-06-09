@@ -21,10 +21,10 @@ const FormatText: React.FC<{ children: string }> = ({ children }) => {
 		.replace(/\n/g, '<br/>')
 		.replace(/((?:https?:\/\/|www\.)[^\s<>"']+)/g, (_match, url) => {
 			const href = url.startsWith('www.') ? `http://${url}` : url
-			return `<a href="${href}" target="_blank" rel="noopener noreferrer" style="text-decoration: underline; word-break: break-all;">${url}</a>`
+			return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-primary underline break-words whitespace-pre-wrap inline-block max-w-full">${url}</a>`
 		})
 	// biome-ignore lint/security/noDangerouslySetInnerHtml: we want to render URLs as href in html
-	return <div dangerouslySetInnerHTML={{ __html: content }} />
+	return <div className="break-words" dangerouslySetInnerHTML={{ __html: content }} />
 }
 
 export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onTranscribed }) => {
