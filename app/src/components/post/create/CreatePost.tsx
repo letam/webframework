@@ -4,7 +4,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { Mic, Video, Image, Loader2, Upload } from 'lucide-react'
-import AudioRecorder, { type AudioRecorderRef } from './AudioRecorder'
+import { AudioRecorderModal } from './AudioRecorder'
 import VideoRecorder, { type VideoRecorderRef } from './VideoRecorder'
 import MediaPreview from './MediaPreview'
 import type { CreatePostRequest } from '@/types/post'
@@ -40,8 +40,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [videoFile, setVideoFile] = useState<File | null>(null)
 	const [submitStatus, setSubmitStatus] = useState<SubmitStatus | ''>('')
 	const [isProcessing, setIsProcessing] = useState(false)
+	const [isAudioModalOpen, setIsAudioModalOpen] = useState(false)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
-	const audioRecorderRef = useRef<AudioRecorderRef>(null)
 	const videoRecorderRef = useRef<VideoRecorderRef>(null)
 	const audioInputRef = useRef<HTMLInputElement>(null)
 	const videoInputRef = useRef<HTMLInputElement>(null)
@@ -97,10 +97,6 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		setAudioFile(null)
 		setVideoFile(null)
 		setMediaType('text')
-		// Reset audio recorder state
-		if (audioRecorderRef.current) {
-			audioRecorderRef.current.reset()
-		}
 		// Reset video recorder state
 		if (videoRecorderRef.current) {
 			videoRecorderRef.current.reset()
@@ -188,18 +184,6 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		videoInputRef.current?.click()
 	}
 
-	const handleAudioSubmit = (e: React.MouseEvent) => {
-		if (isProcessing) return
-
-		const status = audioRecorderRef.current?.getStatus()
-		if (status === 'recording') {
-			setIsProcessing(true)
-			audioRecorderRef.current?.stopRecording()
-		} else if (status === 'ready') {
-			handleSubmit({ preventDefault: () => {} } as React.FormEvent)
-		}
-	}
-
 	return (
 		<div className="bg-card rounded-lg shadow-xs p-4 border">
 			<form onSubmit={handleSubmit} className="flex flex-col gap-6">
@@ -227,7 +211,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						type="button"
 						variant="outline"
 						className="flex items-center gap-2 py-4"
-						onClick={() => {}}
+						onClick={() => setIsAudioModalOpen(true)}
 						disabled={!!submitStatus}
 					>
 						<Mic className="h-5 w-5" />
@@ -301,6 +285,15 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					Post
 				</Button>
 			</form>
+
+			<AudioRecorderModal
+				open={isAudioModalOpen}
+				onOpenChange={setIsAudioModalOpen}
+				onAudioCaptured={(blob) => {
+					handleAudioCaptured(blob)
+					setIsAudioModalOpen(false)
+				}}
+			/>
 		</div>
 	)
 }

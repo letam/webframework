@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
-import { Mic, Square, Loader2, Pause, Play } from 'lucide-react'
+import { useState, useRef, useEffect, useImperativeHandle } from 'react'
+import { Square, Pause, Play, Loader2, Mic } from 'lucide-react'
 import fixWebmDuration from 'webm-duration-fix'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
@@ -8,8 +8,37 @@ import { supportedAudioMimeType } from '@/lib/utils/media'
 import { getSettings } from '@/lib/utils/settings'
 import { convertToWav } from '@/lib/utils/audio'
 import { AudioControls } from '@/components/post/MediaPlayer'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
-type RecordingStatus = 'idle' | 'loading' | 'recording' | 'normalizing' | 'ready'
+interface AudioRecorderModalProps {
+	onAudioCaptured: (audioBlob: Blob) => void
+	open: boolean
+	onOpenChange: (open: boolean) => void
+}
+
+export const AudioRecorderModal: React.FC<AudioRecorderModalProps> = ({
+	onAudioCaptured,
+	open,
+	onOpenChange,
+}) => {
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="sm:max-w-[425px] h-[300px] flex flex-col">
+				<DialogHeader className="text-center py-2">
+					<DialogTitle className="flex items-center justify-center gap-2">
+						<Mic className="h-5 w-5" />
+						Record Audio
+					</DialogTitle>
+				</DialogHeader>
+				<div className="flex-1 flex flex-col">
+					<AudioRecorder onAudioCaptured={onAudioCaptured} autoStart={true} />
+				</div>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
+type RecordingStatus = 'idle' | 'loading' | 'recording' | 'paused' | 'normalizing' | 'ready'
 
 interface StatusMessageProps {
 	status: RecordingStatus
@@ -17,21 +46,53 @@ interface StatusMessageProps {
 }
 
 const isRecordingInProgress = (status: RecordingStatus): boolean => {
-	return status === 'loading' || status === 'recording' || status === 'normalizing'
+	return (
+		status === 'loading' ||
+		status === 'recording' ||
+		status === 'paused' ||
+		status === 'normalizing'
+	)
 }
 
 const StatusMessage = ({ status, showNormalizingMessage }: StatusMessageProps) => {
 	if (status === 'loading') {
-		return <span className="text-sm text-muted-foreground">Initializing microphone...</span>
+		return (
+			<div className="flex items-center justify-center gap-2 text-base">
+				<Loader2 className="h-5 w-5 animate-spin" />
+				<span className="text-muted-foreground">Initializing microphone...</span>
+			</div>
+		)
 	}
 	if (status === 'recording') {
-		return <span className="text-sm text-primary">Recording...</span>
+		return (
+			<div className="flex items-center justify-center gap-2 text-base">
+				<div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
+				<span className="text-primary font-medium">Recording...</span>
+			</div>
+		)
+	}
+	if (status === 'paused') {
+		return (
+			<div className="flex items-center justify-center gap-2 text-base">
+				<Pause className="h-5 w-5 text-muted-foreground" />
+				<span className="text-muted-foreground font-medium">Recording paused</span>
+			</div>
+		)
 	}
 	if (status === 'normalizing' && showNormalizingMessage) {
-		return <span className="text-sm text-muted-foreground">Normalizing audio...</span>
+		return (
+			<div className="flex items-center justify-center gap-2 text-base">
+				<Loader2 className="h-5 w-5 animate-spin" />
+				<span className="text-muted-foreground">Normalizing audio...</span>
+			</div>
+		)
 	}
 	if (status === 'ready') {
-		return <span className="text-sm text-muted-foreground">Audio recorded</span>
+		return (
+			<div className="flex items-center justify-center gap-2 text-base">
+				<span className="text-muted-foreground font-medium">Audio recorded</span>
+			</div>
+		)
 	}
 	return null
 }
@@ -105,17 +166,26 @@ export interface AudioRecorderRef {
 	stopRecording: () => void
 	getStatus: () => RecordingStatus
 	reset: () => void
+	startRecording: () => Promise<void>
 }
 
-const AudioRecorder = forwardRef<
-	AudioRecorderRef,
-	{
-		onAudioCaptured: (audioBlob: Blob) => void
-		disabled?: boolean
-		submitStatus?: '' | 'preparing' | 'compressing' | 'submitting'
-		isProcessing?: boolean
-	}
->(({ onAudioCaptured, disabled, submitStatus = '', isProcessing = false }, ref) => {
+interface AudioRecorderProps {
+	onAudioCaptured: (audioBlob: Blob) => void
+	disabled?: boolean
+	submitStatus?: '' | 'preparing' | 'compressing' | 'submitting'
+	isProcessing?: boolean
+	autoStart?: boolean
+	ref?: React.Ref<AudioRecorderRef>
+}
+
+const AudioRecorder = ({
+	onAudioCaptured,
+	disabled,
+	submitStatus = '',
+	isProcessing = false,
+	autoStart = false,
+	ref,
+}: AudioRecorderProps) => {
 	const [status, setStatus] = useState<RecordingStatus>('idle')
 	const [showNormalizingMessage, setShowNormalizingMessage] = useState(false)
 	const [audioURL, setAudioURL] = useState<string | null>(null)
@@ -127,6 +197,12 @@ const AudioRecorder = forwardRef<
 	const audioRef = useRef<HTMLAudioElement | null>(null)
 	const normalizingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 	const progressIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+
+	useEffect(() => {
+		if (autoStart && status === 'idle') {
+			startRecording()
+		}
+	}, [autoStart, status])
 
 	const reset = () => {
 		setStatus('idle')
@@ -225,8 +301,18 @@ const AudioRecorder = forwardRef<
 		}
 	}
 
-	const stopRecording = () => {
+	const pauseRecording = () => {
 		if (mediaRecorderRef.current && status === 'recording') {
+			mediaRecorderRef.current.pause()
+			setStatus('paused')
+		} else if (mediaRecorderRef.current && status === 'paused') {
+			mediaRecorderRef.current.resume()
+			setStatus('recording')
+		}
+	}
+
+	const stopRecording = () => {
+		if (mediaRecorderRef.current && (status === 'recording' || status === 'paused')) {
 			mediaRecorderRef.current.stop()
 			// Stop all audio tracks
 			for (const track of mediaRecorderRef.current.stream.getTracks()) {
@@ -297,68 +383,81 @@ const AudioRecorder = forwardRef<
 		stopRecording,
 		getStatus: () => status,
 		reset,
+		startRecording,
 	}))
 
 	return (
-		<div className="flex flex-col space-y-2">
-			<div className="flex flex-col">
-				<audio
-					ref={audioRef}
-					className={`w-full ${status === 'recording' || audioURL ? 'h-10' : 'h-0 opacity-0'}`}
-					controls={status !== 'recording'}
-					src={audioURL || undefined}
-					onEnded={handlePlaybackEnded}
-				>
-					<track kind="captions" label="English" />
-				</audio>
+		<div className="flex flex-col h-full">
+			<div className="flex-1 flex items-center justify-center">
+				<StatusMessage status={status} showNormalizingMessage={showNormalizingMessage} />
+			</div>
 
-				<div className="flex justify-end gap-2 mt-2">
-					{status !== 'recording' ? (
-						<>
-							{!audioURL && (
-								<Button
-									type="button"
-									variant="outline"
-									size="icon"
-									onClick={startRecording}
-									className="w-10 h-10 rounded-full"
-									disabled={disabled}
-								>
-									<Mic className="h-5 w-5 text-primary dark:text-white" />
-								</Button>
-							)}
+			{status === 'ready' && audioURL && (
+				<div className="flex flex-col gap-2 mb-4">
+					<audio
+						ref={audioRef}
+						src={audioURL}
+						onTimeUpdate={handleTimeUpdate}
+						onEnded={handlePlaybackEnded}
+						onLoadedMetadata={() => {
+							if (audioRef.current) {
+								setDuration(audioRef.current.duration)
+							}
+						}}
+					>
+						<track kind="captions" label="English" />
+					</audio>
+					<AudioControls
+						audioRef={audioRef}
+						duration={duration}
+						currentTime={currentTime}
+						isPlaying={isPlaying}
+						onSeek={seekAudio}
+						onPlayPause={togglePlayback}
+					/>
+				</div>
+			)}
 
-							{audioURL && (
-								<Button
-									type="button"
-									variant="outline"
-									size="icon"
-									onClick={togglePlayback}
-									className="w-10 h-10 rounded-full"
-									disabled={disabled}
-								>
-									{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-								</Button>
+			<div className="flex justify-center gap-4 mt-auto">
+				{(status === 'recording' || status === 'paused') && (
+					<>
+						<Button
+							type="button"
+							variant="outline"
+							size="lg"
+							onClick={pauseRecording}
+							disabled={isProcessing || !!submitStatus}
+							className="flex items-center gap-2 px-8"
+							autoFocus={status === 'recording'}
+						>
+							{status === 'recording' ? (
+								<>
+									<Pause className="h-5 w-5" />
+									<span>Pause</span>
+								</>
+							) : (
+								<>
+									<Play className="h-5 w-5" />
+									<span>Resume</span>
+								</>
 							)}
-						</>
-					) : (
+						</Button>
 						<Button
 							type="button"
 							variant="destructive"
-							size="icon"
+							size="lg"
 							onClick={stopRecording}
-							className="w-10 h-10 rounded-full animate-pulse-gentle"
-							disabled={disabled}
+							disabled={isProcessing || !!submitStatus}
+							className="flex items-center gap-2 px-8"
 						>
 							<Square className="h-5 w-5" />
+							<span>Stop Recording</span>
 						</Button>
-					)}
-				</div>
+					</>
+				)}
 			</div>
-
-			{status === 'recording' && <span className="text-sm text-primary">Recording audio...</span>}
 		</div>
 	)
-})
+}
 
 export default AudioRecorder
