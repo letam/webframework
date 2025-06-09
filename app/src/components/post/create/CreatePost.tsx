@@ -46,6 +46,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const audioInputRef = useRef<HTMLInputElement>(null)
 	const videoInputRef = useRef<HTMLInputElement>(null)
 
+	const hasNoMedia = !audioBlob && !audioFile && !videoBlob && !videoFile
+
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		// Check for Cmd+Enter (macOS) or Ctrl+Enter (Windows/Linux)
 		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -197,73 +199,77 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					disabled={!!submitStatus}
 				/>
 
-				<MediaPreview
-					mediaType={mediaType}
-					audioBlob={audioBlob}
-					audioFile={audioFile}
-					videoBlob={videoBlob}
-					videoFile={videoFile}
-					onClearMedia={clearMedia}
-				/>
-
-				<div className="grid grid-cols-2 gap-3 mb-4">
-					<Button
-						type="button"
-						variant="outline"
-						className="flex items-center gap-2 py-4"
-						onClick={() => setIsAudioModalOpen(true)}
-						disabled={!!submitStatus}
-					>
-						<Mic className="h-5 w-5" />
-						<span className="text-base font-medium">Record Audio</span>
-					</Button>
-					<Button
-						type="button"
-						variant="outline"
-						className="flex items-center gap-2 py-4"
-						onClick={() => {}}
-						disabled={!!submitStatus}
-					>
-						<Video className="h-5 w-5" />
-						<span className="text-base font-medium">Record Video</span>
-					</Button>
-					<Button
-						type="button"
-						variant="outline"
-						className="flex items-center gap-2 py-4"
-						onClick={openAudioFileSelector}
-						disabled={!!submitStatus}
-					>
-						<Image className="h-5 w-5" />
-						<span className="text-base font-medium">Photo</span>
-					</Button>
-					<Button
-						type="button"
-						variant="outline"
-						className="flex items-center gap-2 py-4"
-						onClick={openVideoFileSelector}
-						disabled={!!submitStatus}
-					>
-						<Upload className="h-5 w-5" />
-						<span className="text-base font-medium">Upload</span>
-					</Button>
-					<input
-						type="file"
-						ref={audioInputRef}
-						className="hidden"
-						accept="audio/*"
-						onChange={handleAudioFileChange}
-						disabled={!!submitStatus}
-					/>
-					<input
-						type="file"
-						ref={videoInputRef}
-						className="hidden"
-						accept="video/*"
-						onChange={handleVideoFileChange}
-						disabled={!!submitStatus}
+				<div className={submitStatus ? 'hidden' : ''}>
+					<MediaPreview
+						mediaType={mediaType}
+						audioBlob={audioBlob}
+						audioFile={audioFile}
+						videoBlob={videoBlob}
+						videoFile={videoFile}
+						onClearMedia={clearMedia}
 					/>
 				</div>
+
+				{hasNoMedia && (
+					<div className="grid grid-cols-2 gap-3 mb-4">
+						<Button
+							type="button"
+							variant="outline"
+							className="flex items-center gap-2 py-4"
+							onClick={() => setIsAudioModalOpen(true)}
+							disabled={!!submitStatus}
+						>
+							<Mic className="h-5 w-5" />
+							<span className="text-base font-medium">Record Audio</span>
+						</Button>
+						<Button
+							type="button"
+							variant="outline"
+							className="flex items-center gap-2 py-4"
+							onClick={() => {}}
+							disabled={!!submitStatus}
+						>
+							<Video className="h-5 w-5" />
+							<span className="text-base font-medium">Record Video</span>
+						</Button>
+						<Button
+							type="button"
+							variant="outline"
+							className="flex items-center gap-2 py-4"
+							onClick={openAudioFileSelector}
+							disabled={!!submitStatus}
+						>
+							<Image className="h-5 w-5" />
+							<span className="text-base font-medium">Photo</span>
+						</Button>
+						<Button
+							type="button"
+							variant="outline"
+							className="flex items-center gap-2 py-4"
+							onClick={openVideoFileSelector}
+							disabled={!!submitStatus}
+						>
+							<Upload className="h-5 w-5" />
+							<span className="text-base font-medium">Upload</span>
+						</Button>
+						<input
+							type="file"
+							ref={audioInputRef}
+							className="hidden"
+							accept="audio/*"
+							onChange={handleAudioFileChange}
+							disabled={!!submitStatus}
+						/>
+						<input
+							type="file"
+							ref={videoInputRef}
+							className="hidden"
+							accept="video/*"
+							onChange={handleVideoFileChange}
+							disabled={!!submitStatus}
+						/>
+					</div>
+				)}
 
 				{submitStatus && (
 					<div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
