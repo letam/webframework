@@ -1,4 +1,4 @@
-import { isIOS, isSafari } from '@/lib/utils/browser'
+import { isDesktop, isFirefox, isIOS, isSafari } from '@/lib/utils/browser'
 import { mimeTypes } from '@/lib/utils/media'
 
 const DebugPage = () => {
@@ -34,6 +34,11 @@ const DebugPage = () => {
 				</div>
 
 				<div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+					<h2 className="text-lg font-semibold mb-2">isDesktop() Result</h2>
+					<pre className="whitespace-pre-wrap">{isDesktop().toString()}</pre>
+				</div>
+
+				<div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
 					<h2 className="text-lg font-semibold mb-2">isIOS() Result</h2>
 					<pre className="whitespace-pre-wrap">{isIOS().toString()}</pre>
 				</div>
@@ -41,6 +46,11 @@ const DebugPage = () => {
 				<div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
 					<h2 className="text-lg font-semibold mb-2">isSafari() Result</h2>
 					<pre className="whitespace-pre-wrap">{isSafari().toString()}</pre>
+				</div>
+
+				<div className="p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
+					<h2 className="text-lg font-semibold mb-2">isFirefox() Result</h2>
+					<pre className="whitespace-pre-wrap">{isFirefox().toString()}</pre>
 				</div>
 			</div>
 		</div>

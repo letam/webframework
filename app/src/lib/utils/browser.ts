@@ -7,6 +7,17 @@ declare global {
 	}
 }
 
+export const isDesktop = (): boolean => {
+	// Modern detection using navigator.userAgentData
+	if (navigator.userAgentData?.platform) {
+		return ['Windows', 'macOS', 'Linux'].includes(navigator.userAgentData.platform)
+	}
+
+	// Fallback to user agent string check
+	const userAgent = navigator.userAgent
+	return !/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
+}
+
 export const isIOS = (): boolean => {
 	// Modern detection using navigator.userAgentData
 	if (navigator.userAgentData?.platform) {
@@ -38,4 +49,9 @@ export const isSafari = (): boolean => {
 	// Fallback to user agent string check
 	const userAgent = navigator.userAgent
 	return /Safari/.test(userAgent) && !/Chrome/.test(userAgent)
+}
+
+export const isFirefox = (): boolean => {
+	const userAgent = navigator.userAgent
+	return /Firefox/.test(userAgent) && !/Seamonkey/.test(userAgent)
 }

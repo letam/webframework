@@ -1,11 +1,19 @@
+import { isDesktop, isFirefox, isSafari } from '@/lib/utils/browser'
+
 const SETTINGS_KEY = 'app-settings'
 
 interface AppSettings {
 	normalizeAudio: boolean
 }
 
+// Determine if audio normalization should be enabled by default
+const shouldNormalizeAudioByDefault = (): boolean => {
+	if (!isDesktop()) return false
+	return isFirefox() || isSafari()
+}
+
 const defaultSettings: AppSettings = {
-	normalizeAudio: true, // Default to true for better audio quality
+	normalizeAudio: shouldNormalizeAudioByDefault(),
 }
 
 export const getSettings = (): AppSettings => {
