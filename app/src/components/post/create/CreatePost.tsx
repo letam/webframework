@@ -202,10 +202,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	return (
 		<div className="bg-card rounded-lg shadow-xs p-4 border">
-			<form onSubmit={handleSubmit}>
+			<form onSubmit={handleSubmit} className="flex flex-col gap-6">
 				<Textarea
 					ref={textareaRef}
-					placeholder="What's happening?"
+					placeholder="What's on your mind? Share your thoughts, upload media, or record something..."
 					value={postText}
 					onChange={handlePostTextChange}
 					onKeyDown={handleKeyDown}
@@ -222,91 +222,84 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					onClearMedia={clearMedia}
 				/>
 
-				<div className="flex flex-col gap-4">
-					<div className="flex flex-wrap gap-2 justify-end">
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							className="flex items-center gap-2"
-							onClick={openVideoFileSelector}
-							disabled={!!submitStatus}
-						>
-							<Upload className="h-4 w-4" />
-							<Video className="h-4 w-4" />
-							<span className="hidden sm:inline">Upload Video</span>
-						</Button>
-						<input
-							type="file"
-							ref={videoInputRef}
-							className="hidden"
-							accept="video/*"
-							onChange={handleVideoFileChange}
-							disabled={!!submitStatus}
-						/>
-
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							className="flex items-center gap-2"
-							onClick={openAudioFileSelector}
-							disabled={!!submitStatus}
-						>
-							<Upload className="h-4 w-4" />
-							<Mic className="h-4 w-4" />
-							<span className="hidden sm:inline">Upload Audio</span>
-						</Button>
-						<input
-							type="file"
-							ref={audioInputRef}
-							className="hidden"
-							accept="audio/*"
-							onChange={handleAudioFileChange}
-							disabled={!!submitStatus}
-						/>
-					</div>
-
-					<div className="space-y-4">
-						<div className="flex justify-center items-center">
-							<AudioRecorder
-								ref={audioRecorderRef}
-								onAudioCaptured={handleAudioCaptured}
-								disabled={!!submitStatus}
-								submitStatus={
-									mediaType === 'audio' && Boolean(audioBlob || audioFile) ? submitStatus : ''
-								}
-								isProcessing={isProcessing}
-							/>
-						</div>
-
-						<div className="flex justify-center items-center">
-							<VideoRecorder
-								ref={videoRecorderRef}
-								onVideoCaptured={handleVideoCaptured}
-								disabled={!!submitStatus}
-							/>
-						</div>
-					</div>
-
-					<div className="flex justify-end items-center gap-2">
-						{submitStatus && (
-							<div className="flex items-center gap-2 text-sm text-muted-foreground">
-								<Loader2 className="h-4 w-4 animate-spin" />
-								<span>
-									{submitStatus === 'compressing'
-										? 'Compressing media...'
-										: submitStatus === 'preparing'
-											? 'Preparing post...'
-											: 'Submitting post...'}
-								</span>
-							</div>
-						)}
-						<Button type="submit" disabled={!!submitStatus}>
-							Post
-						</Button>
-					</div>
+				<div className="grid grid-cols-2 gap-3 mb-4">
+					<Button
+						type="button"
+						variant="outline"
+						className="flex items-center gap-2 py-4"
+						onClick={() => {}}
+						disabled={!!submitStatus}
+					>
+						<Mic className="h-5 w-5" />
+						<span className="text-base font-medium">Record Audio</span>
+					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						className="flex items-center gap-2 py-4"
+						onClick={() => {}}
+						disabled={!!submitStatus}
+					>
+						<Video className="h-5 w-5" />
+						<span className="text-base font-medium">Record Video</span>
+					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						className="flex items-center gap-2 py-4"
+						onClick={openAudioFileSelector}
+						disabled={!!submitStatus}
+					>
+						<Image className="h-5 w-5" />
+						<span className="text-base font-medium">Photo</span>
+					</Button>
+					<Button
+						type="button"
+						variant="outline"
+						className="flex items-center gap-2 py-4"
+						onClick={openVideoFileSelector}
+						disabled={!!submitStatus}
+					>
+						<Upload className="h-5 w-5" />
+						<span className="text-base font-medium">Upload</span>
+					</Button>
+					<input
+						type="file"
+						ref={audioInputRef}
+						className="hidden"
+						accept="audio/*"
+						onChange={handleAudioFileChange}
+						disabled={!!submitStatus}
+					/>
+					<input
+						type="file"
+						ref={videoInputRef}
+						className="hidden"
+						accept="video/*"
+						onChange={handleVideoFileChange}
+						disabled={!!submitStatus}
+					/>
 				</div>
+
+				{submitStatus && (
+					<div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+						<Loader2 className="h-4 w-4 animate-spin" />
+						<span>
+							{submitStatus === 'compressing'
+								? 'Compressing media...'
+								: submitStatus === 'preparing'
+									? 'Preparing post...'
+									: 'Submitting post...'}
+						</span>
+					</div>
+				)}
+				<Button
+					type="submit"
+					disabled={!!submitStatus}
+					className="w-full py-4 text-base font-medium"
+				>
+					Post
+				</Button>
 			</form>
 		</div>
 	)
