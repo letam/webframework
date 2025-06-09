@@ -7,7 +7,6 @@ import { isIOS, isSafari } from '@/lib/utils/browser'
 import { supportedAudioMimeType } from '@/lib/utils/media'
 import { getSettings } from '@/lib/utils/settings'
 import { convertToWav } from '@/lib/utils/audio'
-import { AudioControls } from '@/components/post/MediaPlayer'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface AudioRecorderModalProps {
@@ -189,14 +188,9 @@ const AudioRecorder = ({
 	const [status, setStatus] = useState<RecordingStatus>('idle')
 	const [showNormalizingMessage, setShowNormalizingMessage] = useState(false)
 	const [audioURL, setAudioURL] = useState<string | null>(null)
-	const [isPlaying, setIsPlaying] = useState(false)
-	const [duration, setDuration] = useState<number>(0)
-	const [currentTime, setCurrentTime] = useState<number>(0)
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const audioChunksRef = useRef<Blob[]>([])
-	const audioRef = useRef<HTMLAudioElement | null>(null)
 	const normalizingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-	const progressIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
 	useEffect(() => {
 		if (autoStart && status === 'idle') {
@@ -211,18 +205,12 @@ const AudioRecorder = ({
 			URL.revokeObjectURL(audioURL)
 			setAudioURL(null)
 		}
-		setIsPlaying(false)
-		setDuration(0)
-		setCurrentTime(0)
 		audioChunksRef.current = []
 		if (mediaRecorderRef.current) {
 			mediaRecorderRef.current = null
 		}
 		if (normalizingTimeoutRef.current) {
 			clearTimeout(normalizingTimeoutRef.current)
-		}
-		if (progressIntervalRef.current) {
-			clearInterval(progressIntervalRef.current)
 		}
 	}
 
@@ -236,7 +224,6 @@ const AudioRecorder = ({
 				URL.revokeObjectURL(audioURL)
 				setAudioURL(null)
 			}
-			setIsPlaying(false)
 
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
 			const mediaRecorder = new MediaRecorder(stream, { mimeType: supportedAudioMimeType })
@@ -321,62 +308,11 @@ const AudioRecorder = ({
 		}
 	}
 
-	const handleTimeUpdate = () => {
-		if (audioRef.current) {
-			const currentTime = audioRef.current.currentTime
-			setCurrentTime(currentTime)
-			// If we're very close to the end, let the ended event handle it
-			if (currentTime >= duration - 0.1) {
-				if (progressIntervalRef.current) {
-					clearInterval(progressIntervalRef.current)
-				}
-			}
-		}
-	}
-
-	const handleLoadedMetadata = () => {
-		if (audioRef.current) {
-			// Add a small buffer to the duration to prevent early cutoff
-			setDuration(audioRef.current.duration + 0.1)
-		}
-	}
-
-	const seekAudio = (seconds: number) => {
-		if (audioRef.current) {
-			audioRef.current.currentTime = Math.max(0, Math.min(seconds, duration))
-		}
-	}
-
-	const togglePlayback = () => {
-		if (audioRef.current) {
-			if (isPlaying) {
-				audioRef.current.pause()
-				if (progressIntervalRef.current) {
-					clearInterval(progressIntervalRef.current)
-				}
-			} else {
-				audioRef.current.play()
-				// Use a shorter interval for smoother progress updates
-				progressIntervalRef.current = setInterval(handleTimeUpdate, 50)
-			}
-			setIsPlaying(!isPlaying)
-		}
-	}
-
-	const handlePlaybackEnded = () => {
-		setIsPlaying(false)
-		setCurrentTime(duration) // Set to exact duration
-		if (progressIntervalRef.current) {
-			clearInterval(progressIntervalRef.current)
-		}
-	}
-
 	useEffect(() => {
 		return () => {
-			if (progressIntervalRef.current) {
-				clearInterval(progressIntervalRef.current)
-			}
+			reset()
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [])
 
 	useImperativeHandle(ref, () => ({
@@ -391,32 +327,6 @@ const AudioRecorder = ({
 			<div className="flex-1 flex items-center justify-center">
 				<StatusMessage status={status} showNormalizingMessage={showNormalizingMessage} />
 			</div>
-
-			{status === 'ready' && audioURL && (
-				<div className="flex flex-col gap-2 mb-4">
-					<audio
-						ref={audioRef}
-						src={audioURL}
-						onTimeUpdate={handleTimeUpdate}
-						onEnded={handlePlaybackEnded}
-						onLoadedMetadata={() => {
-							if (audioRef.current) {
-								setDuration(audioRef.current.duration)
-							}
-						}}
-					>
-						<track kind="captions" label="English" />
-					</audio>
-					<AudioControls
-						audioRef={audioRef}
-						duration={duration}
-						currentTime={currentTime}
-						isPlaying={isPlaying}
-						onSeek={seekAudio}
-						onPlayPause={togglePlayback}
-					/>
-				</div>
-			)}
 
 			<div className="flex justify-center gap-4 mt-auto">
 				{(status === 'recording' || status === 'paused') && (
