@@ -4,6 +4,7 @@ const SETTINGS_KEY = 'app-settings'
 
 interface AppSettings {
 	normalizeAudio: boolean
+	videoQuality: 'low' | 'high'
 }
 
 // Determine if audio normalization should be enabled by default
@@ -14,6 +15,7 @@ const shouldNormalizeAudioByDefault = (): boolean => {
 
 const defaultSettings: AppSettings = {
 	normalizeAudio: shouldNormalizeAudioByDefault(),
+	videoQuality: 'low',
 }
 
 export const getSettings = (): AppSettings => {

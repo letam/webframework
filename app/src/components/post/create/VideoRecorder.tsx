@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/sonner'
 import { supportedVideoMimeType } from '@/lib/utils/media'
 import { isIOS } from '@/lib/utils/browser'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { getSettings } from '@/lib/utils/settings'
 
 export interface VideoRecorderRef {
 	reset: () => void
@@ -112,13 +113,23 @@ const VideoRecorder = forwardRef<
 		}
 
 		try {
+			const settings = getSettings()
+			const videoConstraints = {
+				facingMode: 'user',
+				...(settings.videoQuality === 'high'
+					? {
+							width: { ideal: 1280 },
+							height: { ideal: 720 },
+						}
+					: {
+							width: { ideal: 854 },
+							height: { ideal: 480 },
+						}),
+				aspectRatio: 16 / 9,
+			}
+
 			const stream = await navigator.mediaDevices.getUserMedia({
-				video: {
-					facingMode: 'user',
-					// TODO: Allow user to choose video resolution
-					width: { ideal: 640 },
-					height: { ideal: 640 },
-				},
+				video: videoConstraints,
 				audio: true,
 			})
 			streamRef.current = stream
@@ -132,7 +143,10 @@ const VideoRecorder = forwardRef<
 				})
 			}
 
-			const mediaRecorder = new MediaRecorder(stream, { mimeType: supportedVideoMimeType })
+			const mediaRecorder = new MediaRecorder(stream, {
+				mimeType: supportedVideoMimeType,
+				videoBitsPerSecond: settings.videoQuality === 'high' ? 2500000 : 1000000, // 2.5 Mbps for high, 1 Mbps for low
+			})
 			mediaRecorderRef.current = mediaRecorder
 			videoChunksRef.current = []
 
