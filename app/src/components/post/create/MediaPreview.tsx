@@ -25,11 +25,13 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({
 	const [duration, setDuration] = useState<number>(0)
 	const [currentTime, setCurrentTime] = useState<number>(0)
 	const [audioUrl, setAudioUrl] = useState<string | null>(null)
+	const [videoUrl, setVideoUrl] = useState<string | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const audioRef = useRef<HTMLAudioElement | null>(null)
+	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const progressIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
-	// Create and cleanup audio URL
+	// Create and cleanup media URLs
 	useEffect(() => {
 		if (mediaType === 'audio') {
 			const source = audioBlob || audioFile
@@ -49,8 +51,18 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({
 					setAudioUrl(null)
 				}
 			}
+		} else if (mediaType === 'video') {
+			const source = videoBlob || videoFile
+			if (source) {
+				const url = URL.createObjectURL(source)
+				setVideoUrl(url)
+				return () => {
+					URL.revokeObjectURL(url)
+					setVideoUrl(null)
+				}
+			}
 		}
-	}, [mediaType, audioBlob, audioFile])
+	}, [mediaType, audioBlob, audioFile, videoBlob, videoFile])
 
 	// Cleanup interval on unmount
 	useEffect(() => {
@@ -209,9 +221,26 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({
 			)}
 
 			{mediaType === 'video' && (videoBlob || videoFile) && (
-				<div className="flex items-center space-x-2 text-sm text-muted-foreground">
-					{videoFile ? <FileVideo className="h-4 w-4" /> : <Video className="h-4 w-4" />}
-					<span>{videoFile ? videoFile.name : 'Video recording'}</span>
+				<div className="flex flex-col gap-2">
+					<div className="flex items-center space-x-2 text-sm text-muted-foreground">
+						{videoFile ? <FileVideo className="h-4 w-4" /> : <Video className="h-4 w-4" />}
+						<span>{videoFile ? videoFile.name : 'Video recording'}</span>
+					</div>
+					{videoUrl && (
+						<div className="relative aspect-video w-full overflow-hidden rounded-md bg-black">
+							<video
+								ref={videoRef}
+								src={videoUrl}
+								controls
+								className="w-full h-full object-contain"
+								onPlay={() => setIsPlaying(true)}
+								onPause={() => setIsPlaying(false)}
+								onEnded={() => setIsPlaying(false)}
+							>
+								<track kind="captions" label="English" />
+							</video>
+						</div>
+					)}
 				</div>
 			)}
 		</div>

@@ -5,7 +5,7 @@ import { toast } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
 import { Mic, Video, Image, Loader2, Upload } from 'lucide-react'
 import { AudioRecorderModal } from './AudioRecorder'
-import VideoRecorder, { type VideoRecorderRef } from './VideoRecorder'
+import { VideoRecorderModal } from './VideoRecorder'
 import MediaPreview from './MediaPreview'
 import type { CreatePostRequest } from '@/types/post'
 import { convertWavToWebM, getAudioExtension } from '@/lib/utils/audio'
@@ -39,10 +39,9 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [audioFile, setAudioFile] = useState<File | null>(null)
 	const [videoFile, setVideoFile] = useState<File | null>(null)
 	const [submitStatus, setSubmitStatus] = useState<SubmitStatus | ''>('')
-	const [isProcessing, setIsProcessing] = useState(false)
 	const [isAudioModalOpen, setIsAudioModalOpen] = useState(false)
+	const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
-	const videoRecorderRef = useRef<VideoRecorderRef>(null)
 	const audioInputRef = useRef<HTMLInputElement>(null)
 	const videoInputRef = useRef<HTMLInputElement>(null)
 
@@ -99,11 +98,6 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		setAudioFile(null)
 		setVideoFile(null)
 		setMediaType('text')
-		// Reset video recorder state
-		if (videoRecorderRef.current) {
-			videoRecorderRef.current.reset()
-		}
-		setIsProcessing(false)
 	}
 
 	const handleSubmit = async (e: React.FormEvent) => {
@@ -226,7 +220,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							type="button"
 							variant="outline"
 							className="flex items-center gap-2 py-4"
-							onClick={() => {}}
+							onClick={() => setIsVideoModalOpen(true)}
 							disabled={!!submitStatus}
 						>
 							<Video className="h-5 w-5" />
@@ -298,6 +292,15 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				onAudioCaptured={(blob) => {
 					handleAudioCaptured(blob)
 					setIsAudioModalOpen(false)
+				}}
+			/>
+
+			<VideoRecorderModal
+				open={isVideoModalOpen}
+				onOpenChange={setIsVideoModalOpen}
+				onVideoCaptured={(blob) => {
+					handleVideoCaptured(blob)
+					setIsVideoModalOpen(false)
 				}}
 			/>
 		</div>

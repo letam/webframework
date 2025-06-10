@@ -1,13 +1,42 @@
-import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
-import { Video, Square, Play, Pause, Upload } from 'lucide-react'
+import { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
+import { Video, Square, Play, Pause } from 'lucide-react'
 import fixWebmDuration from 'webm-duration-fix'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import { supportedVideoMimeType } from '@/lib/utils/media'
 import { isIOS } from '@/lib/utils/browser'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 export interface VideoRecorderRef {
 	reset: () => void
+}
+
+interface VideoRecorderModalProps {
+	onVideoCaptured: (videoBlob: Blob) => void
+	open: boolean
+	onOpenChange: (open: boolean) => void
+}
+
+export const VideoRecorderModal: React.FC<VideoRecorderModalProps> = ({
+	onVideoCaptured,
+	open,
+	onOpenChange,
+}) => {
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="sm:max-w-[425px] h-[400px] flex flex-col">
+				<DialogHeader className="text-center py-2">
+					<DialogTitle className="flex items-center justify-center gap-2">
+						<Video className="h-5 w-5" />
+						Record Video
+					</DialogTitle>
+				</DialogHeader>
+				<div className="flex-1 flex flex-col">
+					<VideoRecorder onVideoCaptured={onVideoCaptured} autoStart={true} />
+				</div>
+			</DialogContent>
+		</Dialog>
+	)
 }
 
 const VideoRecorder = forwardRef<
@@ -15,8 +44,9 @@ const VideoRecorder = forwardRef<
 	{
 		onVideoCaptured: (videoBlob: Blob) => void
 		disabled?: boolean
+		autoStart?: boolean
 	}
->(({ onVideoCaptured, disabled }, ref) => {
+>(({ onVideoCaptured, disabled, autoStart = false }, ref) => {
 	const [isRecording, setIsRecording] = useState(false)
 	const [videoURL, setVideoURL] = useState<string | null>(null)
 	const [isPlaying, setIsPlaying] = useState(false)
@@ -25,6 +55,12 @@ const VideoRecorder = forwardRef<
 	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const streamRef = useRef<MediaStream | null>(null)
 	const fileInputRef = useRef<HTMLInputElement>(null)
+
+	useEffect(() => {
+		if (autoStart && !isRecording && !videoURL) {
+			startRecording()
+		}
+	}, [autoStart, isRecording, videoURL])
 
 	const reset = () => {
 		setIsRecording(false)
@@ -159,65 +195,93 @@ const VideoRecorder = forwardRef<
 	}
 
 	return (
-		<div className="flex flex-col space-y-2">
-			<div className="flex flex-col">
-				<video
-					ref={videoRef}
-					className={`w-full rounded-md ${isRecording || videoURL ? 'h-60' : 'h-0 opacity-0 hidden'}`}
-					autoPlay={isRecording}
-					muted={isRecording}
-					loop={false}
-					playsInline
-					src={videoURL || undefined}
-					onEnded={handlePlaybackEnded}
-					style={{ transform: 'scaleX(-1)' }} // Mirror the video for selfie view
-				/>
+		<div className="flex flex-col h-full">
+			<div className="flex-1 flex flex-col">
+				<div className="relative w-full max-w-[320px] mx-auto aspect-video bg-black rounded-md overflow-hidden">
+					<video
+						ref={videoRef}
+						className={`w-full h-full ${isRecording || videoURL ? 'object-cover' : 'hidden'}`}
+						autoPlay={isRecording}
+						muted={isRecording}
+						loop={false}
+						playsInline
+						src={videoURL || undefined}
+						onEnded={handlePlaybackEnded}
+						style={{ transform: 'scaleX(-1)' }} // Mirror the video for selfie view
+					/>
+					{!isRecording && !videoURL && (
+						<div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+							<Video className="h-12 w-12 opacity-50" />
+						</div>
+					)}
+				</div>
 
-				<div className="flex justify-end gap-2 mt-2">
+				<div className="flex justify-center gap-4 mt-4">
 					{!isRecording ? (
 						<>
 							{!videoURL && (
 								<Button
 									type="button"
 									variant="outline"
-									size="icon"
+									size="lg"
 									onClick={startRecording}
-									className="w-10 h-10 rounded-full"
+									className="flex items-center gap-2 px-8"
 									disabled={disabled}
 								>
-									<Video className="h-5 w-5 text-primary dark:text-white" />
+									<Video className="h-5 w-5" />
+									<span>Start Recording</span>
 								</Button>
 							)}
 
 							{videoURL && (
-								<Button
-									type="button"
-									variant="outline"
-									size="icon"
-									onClick={togglePlayback}
-									className="w-10 h-10 rounded-full"
-									disabled={disabled}
-								>
-									{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-								</Button>
+								<>
+									<Button
+										type="button"
+										variant="outline"
+										size="lg"
+										onClick={togglePlayback}
+										className="flex items-center gap-2 px-8"
+										disabled={disabled}
+									>
+										{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+										<span>{isPlaying ? 'Pause' : 'Play'}</span>
+									</Button>
+									<Button
+										type="button"
+										variant="outline"
+										size="lg"
+										onClick={reset}
+										className="flex items-center gap-2 px-8"
+										disabled={disabled}
+									>
+										<Video className="h-5 w-5" />
+										<span>Record Again</span>
+									</Button>
+								</>
 							)}
 						</>
 					) : (
 						<Button
 							type="button"
 							variant="destructive"
-							size="icon"
+							size="lg"
 							onClick={stopRecording}
-							className="w-10 h-10 rounded-full animate-pulse-gentle"
+							className="flex items-center gap-2 px-8 animate-pulse-gentle"
 							disabled={disabled}
 						>
 							<Square className="h-5 w-5" />
+							<span>Stop Recording</span>
 						</Button>
 					)}
 				</div>
 			</div>
 
-			{isRecording && <span className="text-sm text-primary">Recording video...</span>}
+			{isRecording && (
+				<div className="flex items-center justify-center gap-2 mt-4 text-sm text-primary">
+					<div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
+					<span>Recording video...</span>
+				</div>
+			)}
 
 			{/* Hidden file input for iOS */}
 			<input
