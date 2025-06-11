@@ -458,6 +458,7 @@ else:
                 "'sha256-7lAG9nNPimWNBky6j9qnn0jfFzu5wK96KOj/UzoG0hg='",
                 "'sha256-CIxDM5jnsGiKqXs2v7NKCY5MzdR9gu6TtiMJrDw29AY='",
                 "'sha256-9yCaDE0ZqnMqIHIqv/lrx+VJOh16ZKpxkH4PoBNWe2s='",
+                "'sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo='",
             ],
             'connect-src': [SELF, 'http://127.0.0.1:8000'],
         }
