@@ -14,7 +14,7 @@ interface PostProps {
 	post: PostType
 	onLike: (id: number) => void
 	onDelete: (id: number) => void
-	onEdit: (id: number, head: string, body: string) => Promise<void>
+	onEdit: (id: number, head: string, body: string, transcript?: string) => Promise<void>
 	onTranscribed?: (post: PostType) => void
 }
 

@@ -77,6 +77,25 @@ class PostViewSet(viewsets.ModelViewSet):
 
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+
+        # Extract transcript from request data if it exists
+        transcript = request.data.pop('transcript', None)
+
+        # Update the post
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        # Update transcript if provided and post has media
+        if transcript is not None and instance.media:
+            instance.media.transcript = transcript
+            instance.media.save(update_fields=['transcript'])
+
+        return Response(serializer.data)
+
     @action(detail=True, methods=['post'])
     def transcribe(self, request, pk=None):
         """

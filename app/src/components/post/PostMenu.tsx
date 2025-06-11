@@ -18,7 +18,7 @@ import { EditPostModal } from './EditPostModal'
 interface PostMenuProps {
 	post: Post
 	onDelete: (id: number) => void
-	onEdit: (id: number, head: string, body: string) => Promise<void>
+	onEdit: (id: number, head: string, body: string, transcript?: string) => Promise<void>
 }
 
 const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete, onEdit }) => {

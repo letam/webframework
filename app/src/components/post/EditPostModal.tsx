@@ -17,7 +17,7 @@ interface EditPostModalProps {
 	post: Post
 	open: boolean
 	onOpenChange: (open: boolean) => void
-	onSave: (postId: number, head: string, body: string) => Promise<void>
+	onSave: (postId: number, head: string, body: string, transcript?: string) => Promise<void>
 }
 
 export const EditPostModal: React.FC<EditPostModalProps> = ({
@@ -28,13 +28,14 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 }) => {
 	const [head, setHead] = useState(post.head)
 	const [body, setBody] = useState(post.body)
+	const [transcript, setTranscript] = useState(post.media?.transcript || '')
 	const [isSubmitting, setIsSubmitting] = useState(false)
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
 		setIsSubmitting(true)
 		try {
-			await onSave(post.id, head, body)
+			await onSave(post.id, head, body, transcript)
 			onOpenChange(false)
 		} catch (error) {
 			console.error('Failed to update post:', error)
@@ -69,6 +70,18 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 							className="min-h-[100px]"
 						/>
 					</div>
+					{post.media && (
+						<div className="space-y-2">
+							<Label htmlFor="transcript">Transcript</Label>
+							<Textarea
+								id="transcript"
+								value={transcript}
+								onChange={(e) => setTranscript(e.target.value)}
+								placeholder="Enter media transcript"
+								className="min-h-[100px]"
+							/>
+						</div>
+					)}
 					<DialogFooter>
 						<Button
 							type="button"

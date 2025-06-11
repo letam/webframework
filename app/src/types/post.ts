@@ -43,4 +43,5 @@ export interface CreatePostRequest {
 export interface UpdatePostRequest {
 	head?: string
 	body?: string
+	transcript?: string
 }
