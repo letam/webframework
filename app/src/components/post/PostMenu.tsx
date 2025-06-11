@@ -14,6 +14,7 @@ import { format } from 'date-fns'
 import type { Post } from '@/types/post'
 import { useAuth } from '@/hooks/useAuth'
 import { EditPostModal } from './EditPostModal'
+import { DeleteConfirmationDialog } from './DeleteConfirmationDialog'
 
 interface PostMenuProps {
 	post: Post
@@ -26,9 +27,15 @@ const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete, onEdit }) => {
 	const canDelete = isAuthenticated && userId === post.author.id
 	const canEdit = isAuthenticated && userId === post.author.id
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
 	const handleDelete = () => {
+		setIsDeleteDialogOpen(true)
+	}
+
+	const handleConfirmDelete = () => {
 		onDelete(post.id)
+		setIsDeleteDialogOpen(false)
 	}
 
 	const handleEdit = () => {
@@ -83,6 +90,14 @@ const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete, onEdit }) => {
 				open={isEditModalOpen}
 				onOpenChange={setIsEditModalOpen}
 				onSave={onEdit}
+			/>
+
+			<DeleteConfirmationDialog
+				open={isDeleteDialogOpen}
+				onOpenChange={setIsDeleteDialogOpen}
+				onConfirm={handleConfirmDelete}
+				title="Delete Post"
+				description="This action cannot be undone. This will permanently delete your post."
 			/>
 		</>
 	)
