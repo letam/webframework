@@ -51,13 +51,23 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 		}
 	}
 
+	// Handle keyboard shortcuts
+	const handleKeyDown = (e: React.KeyboardEvent) => {
+		if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+			e.preventDefault()
+			handleSubmit(e)
+		} else if (e.key === 'Enter' && e.target instanceof HTMLInputElement) {
+			e.preventDefault()
+		}
+	}
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-[425px]">
 				<DialogHeader>
 					<DialogTitle>Edit Post</DialogTitle>
 				</DialogHeader>
-				<form onSubmit={handleSubmit} className="space-y-4">
+				<form onSubmit={handleSubmit} className="space-y-4" onKeyDown={handleKeyDown}>
 					<div className="space-y-2">
 						<Label htmlFor="head">Title</Label>
 						<Input
@@ -65,6 +75,7 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 							value={head}
 							onChange={(e) => setHead(e.target.value)}
 							placeholder="Enter post title"
+							onKeyDown={handleKeyDown}
 						/>
 					</div>
 					<div className="space-y-2">
@@ -75,6 +86,7 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 							onChange={(e) => setBody(e.target.value)}
 							placeholder="Enter post content"
 							className="min-h-[100px]"
+							onKeyDown={handleKeyDown}
 						/>
 					</div>
 					{post.media && (
@@ -86,20 +98,22 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 								onChange={(e) => setTranscript(e.target.value)}
 								placeholder="Enter media transcript"
 								className="min-h-[100px]"
+								onKeyDown={handleKeyDown}
 							/>
 						</div>
 					)}
-					<DialogFooter>
+					<DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-4 sm:gap-2">
+						<Button type="submit" disabled={isSubmitting} className="order-1 sm:order-2">
+							{isSubmitting ? 'Saving...' : 'Save Changes'}
+						</Button>
 						<Button
 							type="button"
-							variant="outline"
+							variant="ghost"
 							onClick={() => onOpenChange(false)}
 							disabled={isSubmitting}
+							className="order-2 sm:order-1"
 						>
 							Cancel
-						</Button>
-						<Button type="submit" disabled={isSubmitting}>
-							{isSubmitting ? 'Saving...' : 'Save Changes'}
 						</Button>
 					</DialogFooter>
 				</form>
