@@ -1,10 +1,11 @@
 import type React from 'react'
 import DOMPurify from 'dompurify'
+import { cn } from '@/lib/utils'
 import PostHeader from './PostHeader'
 import PostActions from './PostActions'
 import PostMenu from './PostMenu'
-import { AudioPlayer, VideoPlayer } from './MediaPlayer'
 import type { Post as PostType } from '../../types/post'
+import { AudioPlayer, VideoPlayer } from './MediaPlayer'
 import { toast } from '@/components/ui/sonner'
 import { getMediaUrl, transcribePost } from '@/lib/api/posts'
 import { getMimeTypeFromPath } from '@/lib/utils/file'
@@ -16,15 +17,23 @@ interface PostProps {
 	onTranscribed?: (post: PostType) => void
 }
 
-const FormatText: React.FC<{ children: string }> = ({ children }) => {
+const FormatText: React.FC<{ children: string; className?: string }> = ({
+	children,
+	className,
+}) => {
 	const content = DOMPurify.sanitize(children)
 		.replace(/\n/g, '<br/>')
 		.replace(/((?:https?:\/\/|www\.)[^\s<>"']+)/g, (_match, url) => {
 			const href = url.startsWith('www.') ? `http://${url}` : url
 			return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="text-primary underline break-words whitespace-pre-wrap inline-block max-w-full">${url}</a>`
 		})
-	// biome-ignore lint/security/noDangerouslySetInnerHtml: we want to render URLs as href in html
-	return <div className="break-words" dangerouslySetInnerHTML={{ __html: content }} />
+	return (
+		<div
+			className={cn('break-words', className)}
+			// biome-ignore lint/security/noDangerouslySetInnerHtml: we want to render URLs as href in html
+			dangerouslySetInnerHTML={{ __html: content }}
+		/>
+	)
 }
 
 export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onTranscribed }) => {
@@ -59,7 +68,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onTranscribe
 			<div className="ml-12">
 				<div className="mt-2">
 					{post.head && (
-						<div className="mt-1">
+						<div className="mt-1 text-lg font-bold">
 							<FormatText>{post.head}</FormatText>
 						</div>
 					)}
