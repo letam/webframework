@@ -10,6 +10,7 @@ interface PostActionsProps {
 	onLike: (id: number) => void
 	mediaType?: 'audio' | 'video'
 	body?: string
+	transcript?: string
 	onTranscribe?: (id: number) => void
 }
 
@@ -19,6 +20,7 @@ const PostActions: React.FC<PostActionsProps> = ({
 	onLike,
 	mediaType,
 	body,
+	transcript,
 	onTranscribe,
 }) => {
 	const [isTranscribing, setIsTranscribing] = useState(false)
@@ -80,7 +82,7 @@ const PostActions: React.FC<PostActionsProps> = ({
 				</Button>
 			)}
 
-			{mediaType && !body && onTranscribe && (
+			{mediaType && !transcript && onTranscribe && (
 				<Button
 					variant="ghost"
 					size="sm"

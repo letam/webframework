@@ -63,6 +63,12 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onTranscribe
 							<FormatText>{post.head}</FormatText>
 						</div>
 					)}
+
+					{post.body && (
+						<div className="mt-2">
+							<FormatText>{post.body}</FormatText>
+						</div>
+					)}
 				</div>
 
 				{post.media?.media_type === 'audio' && mediaUrl && mimeType && (
@@ -73,9 +79,9 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onTranscribe
 					<VideoPlayer videoUrl={mediaUrl} mimeType={mimeType} />
 				)}
 
-				{post.body && (
+				{post.media?.transcript && (
 					<div className="mt-2">
-						<FormatText>{post.body}</FormatText>
+						<FormatText>{post.media.transcript}</FormatText>
 					</div>
 				)}
 
@@ -85,6 +91,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onTranscribe
 					onLike={onLike}
 					mediaType={post.media?.media_type}
 					body={post.body}
+					transcript={post.media?.transcript}
 					onTranscribe={handleTranscribe}
 				/>
 			</div>

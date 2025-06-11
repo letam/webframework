@@ -22,14 +22,15 @@ MEDIA_TYPE_CHOICES = [
 
 
 class Media(models.Model):
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
     file = models.FileField(upload_to=media_file_path)
     mp3_file = models.FileField(upload_to=media_file_path, blank=True)
     s3_file_key = models.CharField(max_length=255, blank=True)
     media_type = models.CharField(max_length=255, choices=MEDIA_TYPE_CHOICES)
-    duration = models.DurationField(null=True, blank=True)  # For storing media duration
-    thumbnail = models.ImageField(upload_to=media_file_path, blank=True)  # For storing thumbnail
-    created = models.DateTimeField(auto_now_add=True)
-    modified = models.DateTimeField(auto_now=True)
+    duration = models.DurationField(null=True, blank=True)
+    thumbnail = models.ImageField(upload_to=media_file_path, blank=True)
+    transcript = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
         # If this is a new record with file and we don't yet have id for media_file_path def

@@ -17,13 +17,14 @@ class MediaSerializer(serializers.ModelSerializer):
         model = Media
         fields = [
             'id',
+            'created',
+            'modified',
             'file',
             'mp3_file',
             'media_type',
             'duration',
             'thumbnail',
-            'created',
-            'modified',
+            'transcript',
         ]
 
 

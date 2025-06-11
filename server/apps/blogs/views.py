@@ -103,14 +103,9 @@ class PostViewSet(viewsets.ModelViewSet):
                 )
 
             transcript = transcribe_audio(field_file)
-            # Update the post with the transcript
-            update_kwargs = {
-                'body': transcript,
-            }
-            Post.objects.filter(id=post.id).update(**update_kwargs)
+            post.media.transcript = transcript
+            post.media.save(update_fields=['transcript'])
 
-            # Refresh the post instance to get updated data
-            post.refresh_from_db()
             serializer = self.get_serializer(post)
             return Response(serializer.data)
 
