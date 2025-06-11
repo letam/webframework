@@ -1,4 +1,4 @@
-import type { Post, CreatePostRequest } from '../../types/post'
+import type { Post, CreatePostRequest, UpdatePostRequest } from '../../types/post'
 import { SERVER_API_URL, UPLOAD_FILES_TO_S3 } from '../constants'
 import { getFetchOptions } from '../utils/fetch'
 
@@ -146,6 +146,22 @@ export const deletePost = async (id: number): Promise<void> => {
 		}
 	} catch (error) {
 		console.error('Error deleting post:', error)
+		throw error
+	}
+}
+
+export const updatePost = async (id: number, data: UpdatePostRequest): Promise<Post> => {
+	try {
+		const options = await getFetchOptions('PATCH', Object.fromEntries(Object.entries(data)))
+		const response = await fetch(`${SERVER_API_URL}/posts/${id}/`, options)
+
+		if (!response.ok) {
+			throw new Error('Failed to update post')
+		}
+		const post: Post = await response.json()
+		return { ...post, created: new Date(post.created), modified: new Date(post.modified) }
+	} catch (error) {
+		console.error('Error updating post:', error)
 		throw error
 	}
 }

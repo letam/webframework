@@ -14,6 +14,7 @@ interface PostProps {
 	post: PostType
 	onLike: (id: number) => void
 	onDelete: (id: number) => void
+	onEdit: (id: number, head: string, body: string) => Promise<void>
 	onTranscribed?: (post: PostType) => void
 }
 
@@ -36,7 +37,7 @@ const FormatText: React.FC<{ children: string; className?: string }> = ({
 	)
 }
 
-export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onTranscribed }) => {
+export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTranscribed }) => {
 	const mediaUrl = post.media ? getMediaUrl(post) : undefined
 	const mimeType = post.media
 		? getMimeTypeFromPath(post.media.file || post.media.s3_file_key)
@@ -62,7 +63,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onTranscribe
 		>
 			<div className="flex items-center gap-2">
 				<PostHeader post={post} />
-				<PostMenu post={post} onDelete={onDelete} />
+				<PostMenu post={post} onDelete={onDelete} onEdit={onEdit} />
 			</div>
 
 			<div className="ml-12">

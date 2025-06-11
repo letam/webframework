@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import type { Post, CreatePostRequest } from '../types/post'
-import { getPosts, createPost, deletePost } from '../lib/api/posts'
+import type { Post, CreatePostRequest, UpdatePostRequest } from '../types/post'
+import { getPosts, createPost, deletePost, updatePost } from '../lib/api/posts'
 
 export const usePosts = () => {
 	const [posts, setPosts] = useState<Post[]>([])
@@ -31,10 +31,16 @@ export const usePosts = () => {
 		}
 	}
 
-	const updatePost = (updatedPost: Post) => {
-		setPosts((prevPosts) =>
-			prevPosts.map((post) => (post.id === updatedPost.id ? updatedPost : post))
-		)
+	const editPost = async (id: number, data: UpdatePostRequest) => {
+		try {
+			const updatedPost = await updatePost(id, data)
+			setPosts((prevPosts) =>
+				prevPosts.map((post) => (post.id === updatedPost.id ? updatedPost : post))
+			)
+		} catch (err) {
+			setError(err instanceof Error ? err : new Error('Failed to update post'))
+			throw err
+		}
 	}
 
 	const removePost = async (id: number) => {
@@ -57,7 +63,8 @@ export const usePosts = () => {
 		error,
 		fetchPosts,
 		addPost,
-		updatePost,
+		editPost,
 		removePost,
+		setPosts,
 	}
 }

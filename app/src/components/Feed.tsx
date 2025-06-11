@@ -6,7 +6,7 @@ import type { CreatePostRequest, Post as PostType } from '@/types/post'
 import { toast } from '@/components/ui/sonner'
 
 const Feed: React.FC = () => {
-	const { posts, isLoading, error, addPost, updatePost, removePost } = usePosts()
+	const { posts, isLoading, error, addPost, editPost, removePost, setPosts } = usePosts()
 
 	const handlePostCreated = async (postData: CreatePostRequest) => {
 		try {
@@ -22,7 +22,9 @@ const Feed: React.FC = () => {
 	}
 
 	const handlePostTranscribed = (updatedPost: PostType) => {
-		updatePost(updatedPost)
+		setPosts((prevPosts) =>
+			prevPosts.map((post) => (post.id === updatedPost.id ? updatedPost : post))
+		)
 	}
 
 	const handleDeletePost = async (id: number) => {
@@ -32,6 +34,20 @@ const Feed: React.FC = () => {
 		} catch (error) {
 			console.error('Failed to delete post:', error)
 			toast.error('Failed to delete post')
+		}
+	}
+
+	const handleEditPost = async (id: number, head: string, body: string) => {
+		try {
+			const post = posts.find((p) => p.id === id)
+			if (!post) {
+				throw new Error('Post not found')
+			}
+			editPost(id, { head, body })
+			toast.success('Post updated successfully')
+		} catch (error) {
+			console.error('Failed to update post:', error)
+			toast.error('Failed to update post')
 		}
 	}
 
@@ -54,6 +70,7 @@ const Feed: React.FC = () => {
 						post={post}
 						onLike={handleLike}
 						onDelete={handleDeletePost}
+						onEdit={handleEditPost}
 						onTranscribed={handlePostTranscribed}
 					/>
 				))}

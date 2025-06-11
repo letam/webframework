@@ -39,3 +39,8 @@ export interface CreatePostRequest {
 	media_type?: 'audio' | 'video'
 	media?: File
 }
+
+export interface UpdatePostRequest {
+	head?: string
+	body?: string
+}

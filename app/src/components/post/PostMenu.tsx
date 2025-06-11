@@ -1,5 +1,6 @@
 import type React from 'react'
-import { MoreHorizontal, Trash2, Download } from 'lucide-react'
+import { useState } from 'react'
+import { MoreHorizontal, Trash2, Download, Pencil } from 'lucide-react'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -12,18 +13,26 @@ import { getMediaUrl } from '@/lib/api/posts'
 import { format } from 'date-fns'
 import type { Post } from '@/types/post'
 import { useAuth } from '@/hooks/useAuth'
+import { EditPostModal } from './EditPostModal'
 
 interface PostMenuProps {
 	post: Post
 	onDelete: (id: number) => void
+	onEdit: (id: number, head: string, body: string) => Promise<void>
 }
 
-const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete }) => {
+const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete, onEdit }) => {
 	const { isAuthenticated, userId } = useAuth()
 	const canDelete = isAuthenticated && userId === post.author.id
+	const canEdit = isAuthenticated && userId === post.author.id
+	const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
 	const handleDelete = () => {
 		onDelete(post.id)
+	}
+
+	const handleEdit = () => {
+		setIsEditModalOpen(true)
 	}
 
 	const handleDownload = () => {
@@ -37,30 +46,45 @@ const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete }) => {
 	}
 
 	return (
-		<DropdownMenu>
-			<DropdownMenuTrigger asChild>
-				<Button variant="ghost" size="icon" className="ml-auto h-8 w-8">
-					<MoreHorizontal className="h-4 w-4" />
-				</Button>
-			</DropdownMenuTrigger>
-			<DropdownMenuContent align="end">
-				{post.media && (
-					<DropdownMenuItem onClick={handleDownload}>
-						<Download className="mr-2 h-4 w-4" />
-						Download
-					</DropdownMenuItem>
-				)}
-				{canDelete && (
-					<DropdownMenuItem
-						className="text-destructive focus:text-destructive"
-						onClick={handleDelete}
-					>
-						<Trash2 className="mr-2 h-4 w-4" />
-						Delete
-					</DropdownMenuItem>
-				)}
-			</DropdownMenuContent>
-		</DropdownMenu>
+		<>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button variant="ghost" size="icon" className="ml-auto h-8 w-8">
+						<MoreHorizontal className="h-4 w-4" />
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end">
+					{post.media && (
+						<DropdownMenuItem onClick={handleDownload}>
+							<Download className="mr-2 h-4 w-4" />
+							Download
+						</DropdownMenuItem>
+					)}
+					{canEdit && (
+						<DropdownMenuItem onClick={handleEdit}>
+							<Pencil className="mr-2 h-4 w-4" />
+							Edit
+						</DropdownMenuItem>
+					)}
+					{canDelete && (
+						<DropdownMenuItem
+							className="text-destructive focus:text-destructive"
+							onClick={handleDelete}
+						>
+							<Trash2 className="mr-2 h-4 w-4" />
+							Delete
+						</DropdownMenuItem>
+					)}
+				</DropdownMenuContent>
+			</DropdownMenu>
+
+			<EditPostModal
+				post={post}
+				open={isEditModalOpen}
+				onOpenChange={setIsEditModalOpen}
+				onSave={onEdit}
+			/>
+		</>
 	)
 }
 

@@ -1,0 +1,89 @@
+import type React from 'react'
+import { useState } from 'react'
+import {
+	Dialog,
+	DialogContent,
+	DialogHeader,
+	DialogTitle,
+	DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import type { Post } from '@/types/post'
+
+interface EditPostModalProps {
+	post: Post
+	open: boolean
+	onOpenChange: (open: boolean) => void
+	onSave: (postId: number, head: string, body: string) => Promise<void>
+}
+
+export const EditPostModal: React.FC<EditPostModalProps> = ({
+	post,
+	open,
+	onOpenChange,
+	onSave,
+}) => {
+	const [head, setHead] = useState(post.head)
+	const [body, setBody] = useState(post.body)
+	const [isSubmitting, setIsSubmitting] = useState(false)
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault()
+		setIsSubmitting(true)
+		try {
+			await onSave(post.id, head, body)
+			onOpenChange(false)
+		} catch (error) {
+			console.error('Failed to update post:', error)
+		} finally {
+			setIsSubmitting(false)
+		}
+	}
+
+	return (
+		<Dialog open={open} onOpenChange={onOpenChange}>
+			<DialogContent className="sm:max-w-[425px]">
+				<DialogHeader>
+					<DialogTitle>Edit Post</DialogTitle>
+				</DialogHeader>
+				<form onSubmit={handleSubmit} className="space-y-4">
+					<div className="space-y-2">
+						<Label htmlFor="head">Title</Label>
+						<Input
+							id="head"
+							value={head}
+							onChange={(e) => setHead(e.target.value)}
+							placeholder="Enter post title"
+						/>
+					</div>
+					<div className="space-y-2">
+						<Label htmlFor="body">Content</Label>
+						<Textarea
+							id="body"
+							value={body}
+							onChange={(e) => setBody(e.target.value)}
+							placeholder="Enter post content"
+							className="min-h-[100px]"
+						/>
+					</div>
+					<DialogFooter>
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => onOpenChange(false)}
+							disabled={isSubmitting}
+						>
+							Cancel
+						</Button>
+						<Button type="submit" disabled={isSubmitting}>
+							{isSubmitting ? 'Saving...' : 'Save Changes'}
+						</Button>
+					</DialogFooter>
+				</form>
+			</DialogContent>
+		</Dialog>
+	)
+}
