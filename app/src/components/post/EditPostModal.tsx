@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
 	Dialog,
 	DialogContent,
@@ -30,6 +30,13 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 	const [body, setBody] = useState(post.body)
 	const [transcript, setTranscript] = useState(post.media?.transcript || '')
 	const [isSubmitting, setIsSubmitting] = useState(false)
+
+	// Update state when post changes
+	useEffect(() => {
+		setHead(post.head)
+		setBody(post.body)
+		setTranscript(post.media?.transcript || '')
+	}, [post])
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
