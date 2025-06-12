@@ -293,7 +293,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							type="file"
 							ref={uploadInputRef}
 							className="hidden"
-							accept="audio/*, video/*, image/*"
+							accept={
+								'audio/mp3, audio/wav, audio/mp4, audio/x-m4a, audio/aiff, audio/x-m4b' +
+								', video/*, image/*'
+							}
 							onChange={handleUploadFileChange}
 							disabled={!!submitStatus}
 						/>
