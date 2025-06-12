@@ -1,15 +1,16 @@
 import type React from 'react'
-import { X, FileAudio, FileVideo, Video } from 'lucide-react'
+import { X, FileAudio, FileVideo, Video, Image } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AudioControls } from '@/components/post/MediaPlayer'
 import { useState, useRef, useEffect } from 'react'
 
 interface MediaPreviewProps {
-	mediaType: 'audio' | 'video' | 'text'
+	mediaType: 'audio' | 'video' | 'image' | 'text'
 	audioBlob: Blob | null
 	audioFile: File | null
 	videoBlob: Blob | null
 	videoFile: File | null
+	imageFile: File | null
 	onClearMedia: () => void
 }
 
@@ -19,6 +20,7 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({
 	audioFile,
 	videoBlob,
 	videoFile,
+	imageFile,
 	onClearMedia,
 }) => {
 	const [isPlaying, setIsPlaying] = useState(false)
@@ -26,6 +28,7 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({
 	const [currentTime, setCurrentTime] = useState<number>(0)
 	const [audioUrl, setAudioUrl] = useState<string | null>(null)
 	const [videoUrl, setVideoUrl] = useState<string | null>(null)
+	const [imageUrl, setImageUrl] = useState<string | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const audioRef = useRef<HTMLAudioElement | null>(null)
 	const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -61,8 +64,15 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({
 					setVideoUrl(null)
 				}
 			}
+		} else if (mediaType === 'image' && imageFile) {
+			const url = URL.createObjectURL(imageFile)
+			setImageUrl(url)
+			return () => {
+				URL.revokeObjectURL(url)
+				setImageUrl(null)
+			}
 		}
-	}, [mediaType, audioBlob, audioFile, videoBlob, videoFile])
+	}, [mediaType, audioBlob, audioFile, videoBlob, videoFile, imageFile])
 
 	// Cleanup interval on unmount
 	useEffect(() => {
@@ -73,7 +83,7 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({
 		}
 	}, [])
 
-	if (!audioBlob && !audioFile && !videoBlob && !videoFile) {
+	if (!audioBlob && !audioFile && !videoBlob && !videoFile && !imageFile) {
 		return null
 	}
 
@@ -239,6 +249,24 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({
 							>
 								<track kind="captions" label="English" />
 							</video>
+						</div>
+					)}
+				</div>
+			)}
+
+			{mediaType === 'image' && imageFile && (
+				<div className="flex flex-col gap-2">
+					<div className="flex items-center space-x-2 text-sm text-muted-foreground">
+						<Image className="h-4 w-4" />
+						<span>{imageFile.name}</span>
+					</div>
+					{imageUrl && (
+						<div className="relative w-full overflow-hidden rounded-md bg-black">
+							<img
+								src={imageUrl}
+								alt={imageFile.name}
+								className="w-full h-auto object-contain max-h-[400px]"
+							/>
 						</div>
 					)}
 				</div>

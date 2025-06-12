@@ -19,7 +19,13 @@ import { DeleteConfirmationDialog } from './DeleteConfirmationDialog'
 interface PostMenuProps {
 	post: Post
 	onDelete: (id: number) => void
-	onEdit: (id: number, head: string, body: string, transcript?: string) => Promise<void>
+	onEdit: (
+		id: number,
+		head: string,
+		body: string,
+		transcript?: string,
+		altText?: string
+	) => Promise<void>
 }
 
 const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete, onEdit }) => {

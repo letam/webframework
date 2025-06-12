@@ -81,18 +81,30 @@ class PostViewSet(viewsets.ModelViewSet):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
 
-        # Extract transcript from request data if it exists
+        # Extract media updates from request data if they exist
         transcript = request.data.pop('transcript', None)
+        alt_text = request.data.pop('alt_text', None)
 
         # Update the post
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
 
-        # Update transcript if provided and post has media
-        if transcript is not None and instance.media:
-            instance.media.transcript = transcript
-            instance.media.save(update_fields=['transcript'])
+        if instance.media:
+            # Get updates for media
+            media_updates = {}
+
+            if transcript is not None:
+                instance.media.transcript = transcript
+                media_updates['transcript'] = transcript
+
+            if alt_text is not None:
+                instance.media.alt_text = alt_text
+                media_updates['alt_text'] = alt_text
+
+            if media_updates:
+                print(f'Media updates: {media_updates}')
+                instance.media.save(update_fields=media_updates.keys())
 
         return Response(serializer.data)
 

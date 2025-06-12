@@ -8,13 +8,14 @@ export interface Author {
 
 export interface Media {
 	id: number
-	media_type: 'audio' | 'video'
+	media_type: 'audio' | 'video' | 'image'
 	file: string
 	s3_file_key?: string
 	mp3_file?: string
 	duration?: string
 	thumbnail?: string
 	transcript?: string
+	alt_text?: string
 	created: Date
 	modified: Date
 }
@@ -36,7 +37,7 @@ export interface Post {
 
 export interface CreatePostRequest {
 	text?: string
-	media_type?: 'audio' | 'video'
+	media_type?: 'audio' | 'video' | 'image'
 	media?: File
 }
 
@@ -44,4 +45,5 @@ export interface UpdatePostRequest {
 	head?: string
 	body?: string
 	transcript?: string
+	alt_text?: string
 }

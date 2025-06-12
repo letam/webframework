@@ -25,6 +25,7 @@ class MediaSerializer(serializers.ModelSerializer):
             'duration',
             'thumbnail',
             'transcript',
+            'alt_text',
         ]
 
 

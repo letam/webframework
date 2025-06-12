@@ -17,7 +17,13 @@ interface EditPostModalProps {
 	post: Post
 	open: boolean
 	onOpenChange: (open: boolean) => void
-	onSave: (postId: number, head: string, body: string, transcript?: string) => Promise<void>
+	onSave: (
+		postId: number,
+		head: string,
+		body: string,
+		transcript?: string,
+		altText?: string
+	) => Promise<void>
 }
 
 export const EditPostModal: React.FC<EditPostModalProps> = ({
@@ -29,6 +35,7 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 	const [head, setHead] = useState(post.head)
 	const [body, setBody] = useState(post.body)
 	const [transcript, setTranscript] = useState(post.media?.transcript || '')
+	const [altText, setAltText] = useState(post.media?.alt_text || '')
 	const [isSubmitting, setIsSubmitting] = useState(false)
 
 	// Update state when post changes
@@ -36,13 +43,14 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 		setHead(post.head)
 		setBody(post.body)
 		setTranscript(post.media?.transcript || '')
+		setAltText(post.media?.alt_text || '')
 	}, [post])
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
 		setIsSubmitting(true)
 		try {
-			await onSave(post.id, head, body, transcript)
+			await onSave(post.id, head, body, transcript, altText)
 			onOpenChange(false)
 		} catch (error) {
 			console.error('Failed to update post:', error)
@@ -89,7 +97,7 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 							onKeyDown={handleKeyDown}
 						/>
 					</div>
-					{post.media && (
+					{post.media && post.media.media_type !== 'image' && (
 						<div className="space-y-2">
 							<Label htmlFor="transcript">Transcript</Label>
 							<Textarea
@@ -102,6 +110,20 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 							/>
 						</div>
 					)}
+					{post.media && post.media.media_type === 'image' && (
+						<div className="space-y-2">
+							<Label htmlFor="altText">Alt Text</Label>
+							<Textarea
+								id="altText"
+								value={altText}
+								onChange={(e) => setAltText(e.target.value)}
+								placeholder="Enter media alt text"
+								className="min-h-[100px]"
+								onKeyDown={handleKeyDown}
+							/>
+						</div>
+					)}
+
 					<DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-4 sm:gap-2">
 						<Button type="submit" disabled={isSubmitting} className="order-1 sm:order-2">
 							{isSubmitting ? 'Saving...' : 'Save Changes'}

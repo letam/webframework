@@ -14,7 +14,13 @@ interface PostProps {
 	post: PostType
 	onLike: (id: number) => void
 	onDelete: (id: number) => void
-	onEdit: (id: number, head: string, body: string, transcript?: string) => Promise<void>
+	onEdit: (
+		id: number,
+		head: string,
+		body: string,
+		transcript?: string,
+		altText?: string
+	) => Promise<void>
 	onTranscribed?: (post: PostType) => void
 }
 
@@ -39,6 +45,7 @@ const FormatText: React.FC<{ children: string; className?: string }> = ({
 
 export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTranscribed }) => {
 	const mediaUrl = post.media ? getMediaUrl(post) : undefined
+	const mediaAltText = post.media ? post.media.alt_text : undefined
 	const mimeType = post.media
 		? getMimeTypeFromPath(post.media.file || post.media.s3_file_key)
 		: undefined
@@ -87,6 +94,12 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 
 				{post.media?.media_type === 'video' && mediaUrl && mimeType && (
 					<VideoPlayer videoUrl={mediaUrl} mimeType={mimeType} />
+				)}
+
+				{post.media?.media_type === 'image' && mediaUrl && mimeType && (
+					<div className="mt-2">
+						<img src={mediaUrl} alt={mediaAltText} className="w-full h-auto" />
+					</div>
 				)}
 
 				{post.media?.transcript && (

@@ -18,6 +18,7 @@ def media_file_path(instance, filename):
 MEDIA_TYPE_CHOICES = [
     ('audio', 'Audio'),
     ('video', 'Video'),
+    ('image', 'Image'),
 ]
 
 
@@ -31,6 +32,7 @@ class Media(models.Model):
     duration = models.DurationField(null=True, blank=True)
     thumbnail = models.ImageField(upload_to=media_file_path, blank=True)
     transcript = models.TextField(blank=True)
+    alt_text = models.TextField(blank=True)
 
     def save(self, *args, **kwargs):
         # If this is a new record with file and we don't yet have id for media_file_path def

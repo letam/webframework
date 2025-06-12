@@ -33,19 +33,21 @@ const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): stri
 
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [postText, setPostText] = useState('')
-	const [mediaType, setMediaType] = useState<'text' | 'audio' | 'video'>('text')
+	const [mediaType, setMediaType] = useState<'text' | 'audio' | 'video' | 'image'>('text')
 	const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
 	const [videoBlob, setVideoBlob] = useState<Blob | null>(null)
 	const [audioFile, setAudioFile] = useState<File | null>(null)
 	const [videoFile, setVideoFile] = useState<File | null>(null)
+	const [imageFile, setImageFile] = useState<File | null>(null)
 	const [submitStatus, setSubmitStatus] = useState<SubmitStatus | ''>('')
 	const [isAudioModalOpen, setIsAudioModalOpen] = useState(false)
 	const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const audioInputRef = useRef<HTMLInputElement>(null)
 	const videoInputRef = useRef<HTMLInputElement>(null)
+	const imageInputRef = useRef<HTMLInputElement>(null)
 
-	const hasNoMedia = !audioBlob && !audioFile && !videoBlob && !videoFile
+	const hasNoMedia = !audioBlob && !audioFile && !videoBlob && !videoFile && !imageFile
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		// Check for Cmd+Enter (macOS) or Ctrl+Enter (Windows/Linux)
@@ -92,11 +94,22 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		}
 	}
 
+	const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0]
+		if (file?.type.startsWith('image/')) {
+			setImageFile(file)
+			setMediaType('image')
+		} else if (file) {
+			toast.error('Please select a valid image file')
+		}
+	}
+
 	const clearMedia = () => {
 		setAudioBlob(null)
 		setVideoBlob(null)
 		setAudioFile(null)
 		setVideoFile(null)
+		setImageFile(null)
 		setMediaType('text')
 	}
 
@@ -107,7 +120,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			return
 		}
 
-		if (!postText.trim() && !audioBlob && !audioFile && !videoBlob && !videoFile) {
+		if (!postText.trim() && !audioBlob && !audioFile && !videoBlob && !videoFile && !imageFile) {
 			toast.error('Please enter some text or add media')
 			return
 		}
@@ -115,7 +128,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		setSubmitStatus('preparing')
 
 		try {
-			let finalMediaType: 'audio' | 'video' | undefined
+			let finalMediaType: 'audio' | 'video' | 'image' | undefined
 			let file: File | null = null
 
 			if (mediaType === 'audio' && (audioBlob || audioFile)) {
@@ -149,6 +162,9 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						file = blob
 					}
 				}
+			} else if (mediaType === 'image' && imageFile) {
+				finalMediaType = 'image'
+				file = imageFile
 			}
 
 			setSubmitStatus('submitting')
@@ -180,6 +196,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		videoInputRef.current?.click()
 	}
 
+	const openImageFileSelector = () => {
+		imageInputRef.current?.click()
+	}
+
 	return (
 		<div className="bg-card rounded-lg shadow-xs p-4 border">
 			<form onSubmit={handleSubmit} className="flex flex-col gap-6">
@@ -201,6 +221,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						audioFile={audioFile}
 						videoBlob={videoBlob}
 						videoFile={videoFile}
+						imageFile={imageFile}
 						onClearMedia={clearMedia}
 					/>
 				</div>
@@ -231,11 +252,11 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							type="button"
 							variant="outline"
 							className="flex items-center gap-2 py-4"
-							onClick={openAudioFileSelector}
+							onClick={openImageFileSelector}
 							disabled={!!submitStatus}
 						>
 							<Image className="h-5 w-5" />
-							<span className="text-base font-medium">Photo</span>
+							<span className="text-base font-medium">Image</span>
 						</Button>
 						<Button
 							type="button"
@@ -261,6 +282,14 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							className="hidden"
 							accept="video/*"
 							onChange={handleVideoFileChange}
+							disabled={!!submitStatus}
+						/>
+						<input
+							type="file"
+							ref={imageInputRef}
+							className="hidden"
+							accept="image/*"
+							onChange={handleImageFileChange}
 							disabled={!!submitStatus}
 						/>
 					</div>

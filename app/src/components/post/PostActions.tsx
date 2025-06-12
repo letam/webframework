@@ -8,7 +8,7 @@ interface PostActionsProps {
 	id: number
 	likes: number
 	onLike: (id: number) => void
-	mediaType?: 'audio' | 'video'
+	mediaType?: 'audio' | 'video' | 'image'
 	body?: string
 	transcript?: string
 	onTranscribe?: (id: number) => void

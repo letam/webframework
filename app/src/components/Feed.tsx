@@ -37,13 +37,19 @@ const Feed: React.FC = () => {
 		}
 	}
 
-	const handleEditPost = async (id: number, head: string, body: string, transcript?: string) => {
+	const handleEditPost = async (
+		id: number,
+		head: string,
+		body: string,
+		transcript?: string,
+		altText?: string
+	) => {
 		try {
 			const post = posts.find((p) => p.id === id)
 			if (!post) {
 				throw new Error('Post not found')
 			}
-			editPost(id, { head, body, transcript })
+			editPost(id, { head, body, transcript, alt_text: altText })
 			toast.success('Post updated successfully')
 		} catch (error) {
 			console.error('Failed to update post:', error)

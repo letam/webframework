@@ -419,6 +419,7 @@ CONTENT_SECURITY_POLICY_DIRECTIVES = {
     'report-uri': '/csp-report/',
     #
     'media-src': [SELF, 'blob:'],
+    'img-src': [SELF, 'blob:'],
 }
 
 if DEBUG:
@@ -436,11 +437,15 @@ if DEBUG:
             'style-src': [SELF, UNSAFE_INLINE, 'http://localhost:5173/src/index.css'],
             'style-src-elem': [SELF, UNSAFE_INLINE, 'http://localhost:5173/src/index.css'],
             'connect-src': [SELF, 'http://localhost:8000', 'ws://localhost:5173'],
-            'img-src': [SELF, 'localhost:5173', 'https://ui-avatars.com/api/'],
             'media-src': [
                 *CONTENT_SECURITY_POLICY_DIRECTIVES.get('media-src', []),
                 'https://citizen-dj.labs.loc.gov/audio/samplepacks/loc-fma/Mushrooms_fma-178531_001_00-00-01.mp3',
                 'https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+            ],
+            'img-src': [
+                *CONTENT_SECURITY_POLICY_DIRECTIVES.get('img-src', []),
+                'localhost:5173',
+                'https://ui-avatars.com/api/',
             ],
         }
     )
