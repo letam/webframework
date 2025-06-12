@@ -44,7 +44,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const audioInputRef = useRef<HTMLInputElement>(null)
-	const videoInputRef = useRef<HTMLInputElement>(null)
+	const uploadInputRef = useRef<HTMLInputElement>(null)
 	const imageInputRef = useRef<HTMLInputElement>(null)
 
 	const hasNoMedia = !audioBlob && !audioFile && !videoBlob && !videoFile && !imageFile
@@ -83,14 +83,31 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		}
 	}
 
-	const handleVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const handleUploadFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
-		if (file?.type.startsWith('video/')) {
+		if (!file) {
+			toast.error('Please select a valid file')
+			return
+		}
+
+		if (file.name.endsWith('.webm')) {
+			// TODO: Detect if it's an audio vs video file
+			setAudioFile(file)
+			setAudioBlob(null)
+			setMediaType('audio')
+		} else if (file.type.startsWith('audio/')) {
+			setAudioFile(file)
+			setAudioBlob(null)
+			setMediaType('audio')
+		} else if (file.type.startsWith('video/')) {
 			setVideoFile(file)
 			setVideoBlob(null)
 			setMediaType('video')
-		} else if (file) {
-			toast.error('Please select a valid video file')
+		} else if (file.type.startsWith('image/')) {
+			setImageFile(file)
+			setMediaType('image')
+		} else {
+			toast.error('Please select a valid file')
 		}
 	}
 
@@ -188,12 +205,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		}
 	}
 
-	const openAudioFileSelector = () => {
-		audioInputRef.current?.click()
-	}
-
-	const openVideoFileSelector = () => {
-		videoInputRef.current?.click()
+	const openUploadFileSelector = () => {
+		uploadInputRef.current?.click()
 	}
 
 	const openImageFileSelector = () => {
@@ -262,7 +275,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							type="button"
 							variant="outline"
 							className="flex items-center gap-2 py-4"
-							onClick={openVideoFileSelector}
+							onClick={openUploadFileSelector}
 							disabled={!!submitStatus}
 						>
 							<Upload className="h-5 w-5" />
@@ -278,10 +291,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						/>
 						<input
 							type="file"
-							ref={videoInputRef}
+							ref={uploadInputRef}
 							className="hidden"
-							accept="video/*"
-							onChange={handleVideoFileChange}
+							accept="audio/*, video/*, image/*"
+							onChange={handleUploadFileChange}
 							disabled={!!submitStatus}
 						/>
 						<input
