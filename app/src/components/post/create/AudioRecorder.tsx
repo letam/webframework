@@ -308,11 +308,11 @@ const AudioRecorder = ({
 		}
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies:
 	useEffect(() => {
 		return () => {
 			reset()
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [])
 
 	useImperativeHandle(ref, () => ({
