@@ -280,10 +280,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 					clearInterval(progressIntervalRef.current)
 				}
 			} else {
-				if (!isLoaded) {
-					await loadAudio()
-				}
-
 				// Reset all other audio playback first
 				for (const audio of document.querySelectorAll('audio')) {
 					if (audio !== audioRef.current) {
@@ -305,6 +301,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 						setIsPlaying(false)
 						setError(`Failed to play audio: ${error.message}`)
 					})
+
+				if (!isLoaded) {
+					await loadAudio()
+				}
 			}
 		}
 	}
