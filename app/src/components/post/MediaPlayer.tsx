@@ -2,6 +2,7 @@ import type React from 'react'
 import { useState, useRef, useEffect } from 'react'
 import { Play, Pause, SkipBack, SkipForward } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { isDesktop, isFirefox } from '@/lib/utils/browser'
 
 interface AudioControlsProps {
 	audioRef: React.RefObject<HTMLAudioElement>
@@ -280,7 +281,9 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 					clearInterval(progressIntervalRef.current)
 				}
 			} else {
-				if (!isLoaded) {
+				const isAutoplayDisabled = isDesktop() && isFirefox() // TODO: get value directly from browser API
+
+				if (!isLoaded && !isAutoplayDisabled) {
 					await loadAudio()
 				}
 
@@ -305,6 +308,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 						setIsPlaying(false)
 						setError(`Failed to play audio: ${error.message}`)
 					})
+
+				if (!isLoaded && isAutoplayDisabled) {
+					await loadAudio()
+				}
 			}
 		}
 	}
