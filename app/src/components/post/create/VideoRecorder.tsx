@@ -25,7 +25,7 @@ export const VideoRecorderModal: React.FC<VideoRecorderModalProps> = ({
 }) => {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[425px] h-[400px] flex flex-col">
+			<DialogContent className="sm:max-w-[425px] h-[420px] flex flex-col">
 				<DialogHeader className="text-center py-2">
 					<DialogTitle className="flex items-center justify-center gap-2">
 						<Video className="h-5 w-5" />
@@ -40,6 +40,12 @@ export const VideoRecorderModal: React.FC<VideoRecorderModalProps> = ({
 	)
 }
 
+const formatTime = (seconds: number): string => {
+	const mins = Math.floor(seconds / 60)
+	const secs = seconds % 60
+	return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
 const VideoRecorder = forwardRef<
 	VideoRecorderRef,
 	{
@@ -51,11 +57,13 @@ const VideoRecorder = forwardRef<
 	const [isRecording, setIsRecording] = useState(false)
 	const [videoURL, setVideoURL] = useState<string | null>(null)
 	const [isPlaying, setIsPlaying] = useState(false)
+	const [recordingTime, setRecordingTime] = useState<number>(0)
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const videoChunksRef = useRef<Blob[]>([])
 	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const streamRef = useRef<MediaStream | null>(null)
 	const fileInputRef = useRef<HTMLInputElement>(null)
+	const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
 	useEffect(() => {
 		if (autoStart && !isRecording && !videoURL) {
@@ -65,6 +73,7 @@ const VideoRecorder = forwardRef<
 
 	const reset = () => {
 		setIsRecording(false)
+		setRecordingTime(0)
 		if (videoURL) {
 			URL.revokeObjectURL(videoURL)
 			setVideoURL(null)
@@ -83,6 +92,10 @@ const VideoRecorder = forwardRef<
 		if (videoRef.current) {
 			videoRef.current.srcObject = null
 		}
+		if (timerRef.current) {
+			clearInterval(timerRef.current)
+			timerRef.current = undefined
+		}
 	}
 
 	useImperativeHandle(ref, () => ({
@@ -100,6 +113,24 @@ const VideoRecorder = forwardRef<
 		} catch (error) {
 			console.error('Error processing video file:', error)
 			toast.error('Error processing video file')
+		}
+	}
+
+	const startTimer = (opts: { reset: boolean } = { reset: false }) => {
+		if (timerRef.current) {
+			clearInterval(timerRef.current)
+		}
+		if (opts.reset) {
+			setRecordingTime(0)
+		}
+		timerRef.current = setInterval(() => {
+			setRecordingTime((prev) => prev + 1)
+		}, 1000)
+	}
+
+	const stopTimer = () => {
+		if (timerRef.current) {
+			clearInterval(timerRef.current)
 		}
 	}
 
@@ -157,6 +188,7 @@ const VideoRecorder = forwardRef<
 			}
 
 			mediaRecorder.onstop = () => {
+				stopTimer()
 				;(async () => {
 					const videoBlob = await fixWebmDuration(
 						new Blob(videoChunksRef.current, { type: videoChunksRef.current[0]?.type })
@@ -173,6 +205,7 @@ const VideoRecorder = forwardRef<
 			}
 
 			mediaRecorder.start()
+			startTimer({ reset: true })
 			setIsRecording(true)
 		} catch (error) {
 			console.error('Error accessing camera/microphone:', error)
@@ -291,9 +324,14 @@ const VideoRecorder = forwardRef<
 			</div>
 
 			{isRecording && (
-				<div className="flex items-center justify-center gap-2 mt-4 text-sm text-primary">
-					<div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
-					<span>Recording video...</span>
+				<div className="flex flex-col items-center justify-center gap-2 mt-4 pb-4">
+					<div className="flex items-center gap-2 text-sm text-primary">
+						<div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
+						<span>Recording video...</span>
+					</div>
+					<div className="text-2xl font-mono font-bold text-primary">
+						{formatTime(recordingTime)}
+					</div>
 				</div>
 			)}
 
