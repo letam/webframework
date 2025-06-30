@@ -42,6 +42,7 @@ type RecordingStatus = 'idle' | 'loading' | 'recording' | 'paused' | 'normalizin
 interface StatusMessageProps {
 	status: RecordingStatus
 	showNormalizingMessage: boolean
+	recordingTime?: number
 }
 
 const isRecordingInProgress = (status: RecordingStatus): boolean => {
@@ -53,7 +54,13 @@ const isRecordingInProgress = (status: RecordingStatus): boolean => {
 	)
 }
 
-const StatusMessage = ({ status, showNormalizingMessage }: StatusMessageProps) => {
+const formatTime = (seconds: number): string => {
+	const mins = Math.floor(seconds / 60)
+	const secs = seconds % 60
+	return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
+const StatusMessage = ({ status, showNormalizingMessage, recordingTime }: StatusMessageProps) => {
 	if (status === 'loading') {
 		return (
 			<div className="flex items-center justify-center gap-2 text-base">
@@ -64,17 +71,31 @@ const StatusMessage = ({ status, showNormalizingMessage }: StatusMessageProps) =
 	}
 	if (status === 'recording') {
 		return (
-			<div className="flex items-center justify-center gap-2 text-base">
-				<div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
-				<span className="text-primary font-medium">Recording...</span>
+			<div className="flex flex-col items-center justify-center gap-2 text-base">
+				<div className="flex items-center gap-2">
+					<div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
+					<span className="text-primary font-medium">Recording...</span>
+				</div>
+				{recordingTime !== undefined && (
+					<div className="text-2xl font-mono font-bold text-primary">
+						{formatTime(recordingTime)}
+					</div>
+				)}
 			</div>
 		)
 	}
 	if (status === 'paused') {
 		return (
-			<div className="flex items-center justify-center gap-2 text-base">
-				<Pause className="h-5 w-5 text-muted-foreground" />
-				<span className="text-muted-foreground font-medium">Recording paused</span>
+			<div className="flex flex-col items-center justify-center gap-2 text-base">
+				<div className="flex items-center gap-2">
+					<Pause className="h-5 w-5 text-muted-foreground" />
+					<span className="text-muted-foreground font-medium">Recording paused</span>
+				</div>
+				{recordingTime !== undefined && (
+					<div className="text-2xl font-mono font-bold text-muted-foreground">
+						{formatTime(recordingTime)}
+					</div>
+				)}
 			</div>
 		)
 	}
@@ -188,9 +209,11 @@ const AudioRecorder = ({
 	const [status, setStatus] = useState<RecordingStatus>('idle')
 	const [showNormalizingMessage, setShowNormalizingMessage] = useState(false)
 	const [audioURL, setAudioURL] = useState<string | null>(null)
+	const [recordingTime, setRecordingTime] = useState<number>(0)
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const audioChunksRef = useRef<Blob[]>([])
 	const normalizingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+	const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
 	useEffect(() => {
 		if (autoStart && status === 'idle') {
@@ -201,6 +224,7 @@ const AudioRecorder = ({
 	const reset = () => {
 		setStatus('idle')
 		setShowNormalizingMessage(false)
+		setRecordingTime(0)
 		if (audioURL) {
 			URL.revokeObjectURL(audioURL)
 			setAudioURL(null)
@@ -211,6 +235,29 @@ const AudioRecorder = ({
 		}
 		if (normalizingTimeoutRef.current) {
 			clearTimeout(normalizingTimeoutRef.current)
+		}
+		if (timerRef.current) {
+			clearInterval(timerRef.current)
+			timerRef.current = undefined
+		}
+	}
+
+	const startTimer = (opts: { reset: boolean } = { reset: false }) => {
+		if (timerRef.current) {
+			clearInterval(timerRef.current)
+		}
+		if (opts.reset) {
+			setRecordingTime(0)
+		}
+		timerRef.current = setInterval(() => {
+			setRecordingTime((prev) => prev + 1)
+		}, 1000)
+	}
+
+	const stopTimer = () => {
+		if (timerRef.current) {
+			clearInterval(timerRef.current)
+			timerRef.current = undefined
 		}
 	}
 
@@ -237,6 +284,7 @@ const AudioRecorder = ({
 			}
 
 			mediaRecorder.onstop = () => {
+				stopTimer()
 				;(async () => {
 					try {
 						let audioBlob = new Blob(audioChunksRef.current, {
@@ -272,6 +320,7 @@ const AudioRecorder = ({
 			}
 
 			mediaRecorder.start()
+			startTimer({ reset: true })
 
 			// In Safari desktop app, delay recording state update by 500ms since the microphone does not always start recording immediately
 			if (isSafari() && !isIOS()) {
@@ -291,9 +340,11 @@ const AudioRecorder = ({
 	const pauseRecording = () => {
 		if (mediaRecorderRef.current && status === 'recording') {
 			mediaRecorderRef.current.pause()
+			stopTimer()
 			setStatus('paused')
 		} else if (mediaRecorderRef.current && status === 'paused') {
 			mediaRecorderRef.current.resume()
+			startTimer()
 			setStatus('recording')
 		}
 	}
@@ -301,6 +352,7 @@ const AudioRecorder = ({
 	const stopRecording = () => {
 		if (mediaRecorderRef.current && (status === 'recording' || status === 'paused')) {
 			mediaRecorderRef.current.stop()
+			stopTimer()
 			// Stop all audio tracks
 			for (const track of mediaRecorderRef.current.stream.getTracks()) {
 				track.stop()
@@ -325,7 +377,11 @@ const AudioRecorder = ({
 	return (
 		<div className="flex flex-col h-full">
 			<div className="flex-1 flex items-center justify-center">
-				<StatusMessage status={status} showNormalizingMessage={showNormalizingMessage} />
+				<StatusMessage
+					status={status}
+					showNormalizingMessage={showNormalizingMessage}
+					recordingTime={recordingTime}
+				/>
 			</div>
 
 			<div className="flex justify-center gap-4 mt-auto">
