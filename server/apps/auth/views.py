@@ -47,5 +47,7 @@ def status(request):
             'is_authenticated': request.user.is_authenticated,
             'user_id': request.user.id,
             'username': request.user.username,
+            'is_staff': request.user.is_staff,
+            'is_superuser': request.user.is_superuser,
         }
     )

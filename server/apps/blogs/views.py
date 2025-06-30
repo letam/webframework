@@ -81,12 +81,31 @@ class PostViewSet(viewsets.ModelViewSet):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
 
+        # Check if user is authenticated
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        # Allow update if user is the author or an admin
+        is_author = request.user.id == instance.author.id
+        is_admin = request.user.is_superuser
+
+        if not (is_author or is_admin):
+            return Response(
+                {'error': 'Permission denied. Only the author or admin can edit this post.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        # Create a mutable copy of request data
+        data = request.data.copy()
+
         # Extract media updates from request data if they exist
-        transcript = request.data.pop('transcript', None)
-        alt_text = request.data.pop('alt_text', None)
+        transcript = data.pop('transcript', None)
+        alt_text = data.pop('alt_text', None)
 
         # Update the post
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer = self.get_serializer(instance, data=data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
 
@@ -147,6 +166,31 @@ class PostViewSet(viewsets.ModelViewSet):
                 {'error': 'An error occurred while transcribing the media file'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Override destroy method to check permissions.
+        Allow deletion if user is the author or an admin (superuser).
+        """
+        instance = self.get_object()
+
+        # Check if user is authenticated
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        # Allow deletion if user is the author or an admin
+        is_author = request.user.id == instance.author.id
+        is_admin = request.user.is_superuser
+
+        if not (is_author or is_admin):
+            return Response(
+                {'error': 'Permission denied. Only the author or admin can delete this post.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return super().destroy(request, *args, **kwargs)
 
 
 @require_GET

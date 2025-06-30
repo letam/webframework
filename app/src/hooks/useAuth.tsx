@@ -6,6 +6,8 @@ interface AuthState {
 	isAuthenticated: boolean
 	userId: number | null
 	username: string | null
+	isStaff: boolean
+	isSuperuser: boolean
 }
 
 interface AuthContextType extends AuthState {
@@ -19,6 +21,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 		isAuthenticated: false,
 		userId: null,
 		username: null,
+		isStaff: false,
+		isSuperuser: false,
 	})
 
 	const checkAuthStatus = useCallback(async () => {
@@ -30,6 +34,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 					isAuthenticated: data.is_authenticated,
 					userId: data.user_id,
 					username: data.username,
+					isStaff: data.is_staff || false,
+					isSuperuser: data.is_superuser || false,
 				}
 
 				// Clear CSRF token cache if auth state changes

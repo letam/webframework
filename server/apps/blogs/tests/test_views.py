@@ -156,6 +156,119 @@ class PostViewSetTests(ViewTestCase):
             "Media record should be deleted from database",
         )
 
+    def test_admin_can_delete_any_post(self):
+        """Test that admin users can delete any post, not just their own."""
+        # Create an admin user
+        admin_user = User.objects.create_user(
+            username='admin_user', password='testpass123', is_superuser=True
+        )
+
+        # Create a regular user
+        regular_user = User.objects.create_user(username='regular_user', password='testpass123')
+
+        # Create a post by the regular user
+        post = Post.objects.create(
+            author=regular_user, head='Regular User Post', body='This is a post by a regular user'
+        )
+
+        # Authenticate as admin user
+        self.client.force_authenticate(user=admin_user)
+
+        # Admin should be able to delete the regular user's post
+        response = self.client.delete(reverse('post-detail', args=[post.id]))
+
+        # Check response
+        self.assertEqual(response.status_code, 204, "Admin should be able to delete any post")
+
+        # Verify post is deleted
+        self.assertFalse(
+            Post.objects.filter(id=post.id).exists(), "Post should be deleted by admin"
+        )
+
+    def test_regular_user_cannot_delete_others_post(self):
+        """Test that regular users cannot delete posts they don't own."""
+        # Create two regular users
+        user1 = User.objects.create_user(username='user1', password='testpass123')
+
+        user2 = User.objects.create_user(username='user2', password='testpass123')
+
+        # Create a post by user1
+        post = Post.objects.create(author=user1, head='User1 Post', body='This is a post by user1')
+
+        # Authenticate as user2
+        self.client.force_authenticate(user=user2)
+
+        # User2 should not be able to delete user1's post
+        response = self.client.delete(reverse('post-detail', args=[post.id]))
+
+        # Check response
+        self.assertEqual(
+            response.status_code, 403, "Regular user should not be able to delete others' posts"
+        )
+
+        # Verify post still exists
+        self.assertTrue(
+            Post.objects.filter(id=post.id).exists(),
+            "Post should still exist after failed deletion attempt",
+        )
+
+    def test_admin_can_edit_any_post(self):
+        """Test that admin users can edit any post, not just their own."""
+        # Create an admin user
+        admin_user = User.objects.create_user(
+            username='admin_user', password='testpass123', is_superuser=True
+        )
+
+        # Create a regular user
+        regular_user = User.objects.create_user(username='regular_user', password='testpass123')
+
+        # Create a post by the regular user
+        post = Post.objects.create(
+            author=regular_user, head='Original Title', body='Original content'
+        )
+
+        # Authenticate as admin user
+        self.client.force_authenticate(user=admin_user)
+
+        # Admin should be able to edit the regular user's post
+        update_data = {'head': 'Updated Title by Admin', 'body': 'Updated content by admin'}
+        response = self.client.patch(reverse('post-detail', args=[post.id]), update_data)
+
+        # Check response
+        self.assertEqual(response.status_code, 200, "Admin should be able to edit any post")
+
+        # Verify post is updated
+        post.refresh_from_db()
+        self.assertEqual(post.head, 'Updated Title by Admin')
+        self.assertEqual(post.body, 'Updated content by admin')
+
+    def test_regular_user_cannot_edit_others_post(self):
+        """Test that regular users cannot edit posts they don't own."""
+        # Create two regular users
+        user1 = User.objects.create_user(username='user1', password='testpass123')
+
+        user2 = User.objects.create_user(username='user2', password='testpass123')
+
+        # Create a post by user1
+        post = Post.objects.create(author=user1, head='Original Title', body='Original content')
+
+        # Authenticate as user2
+        self.client.force_authenticate(user=user2)
+
+        # User2 should not be able to edit user1's post
+        update_data = {'head': 'Attempted Update', 'body': 'Attempted content change'}
+        response = self.client.patch(reverse('post-detail', args=[post.id]), update_data)
+
+        # Check response
+        self.assertEqual(
+            response.status_code, 403, "Regular user should not be able to edit others' posts"
+        )
+
+        # Verify post is unchanged
+        post.refresh_from_db()
+        self.assertEqual(post.head, 'Original Title')
+        self.assertEqual(post.body, 'Original content')
+
     def tearDown(self):
         # Clean up the temporary directory
         for root, dirs, files in os.walk(self.temp_dir, topdown=False):

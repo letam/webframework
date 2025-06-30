@@ -29,9 +29,9 @@ interface PostMenuProps {
 }
 
 const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete, onEdit }) => {
-	const { isAuthenticated, userId } = useAuth()
-	const canDelete = isAuthenticated && userId === post.author.id
-	const canEdit = isAuthenticated && userId === post.author.id
+	const { isAuthenticated, userId, isSuperuser } = useAuth()
+	const canDelete = isAuthenticated && (userId === post.author.id || isSuperuser)
+	const canEdit = isAuthenticated && (userId === post.author.id || isSuperuser)
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
@@ -57,6 +57,12 @@ const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete, onEdit }) => {
 			downloadFile({ url: getMediaUrl(post), filename })
 		}
 	}
+
+	const isOwnPost = userId === post.author.id
+	const deleteTitle = isOwnPost ? 'Delete Post' : 'Delete Post (Admin Action)'
+	const deleteDescription = isOwnPost
+		? 'This action cannot be undone. This will permanently delete your post.'
+		: `This action cannot be undone. This will permanently delete ${post.author.username}'s post.`
 
 	return (
 		<>
@@ -102,8 +108,8 @@ const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete, onEdit }) => {
 				open={isDeleteDialogOpen}
 				onOpenChange={setIsDeleteDialogOpen}
 				onConfirm={handleConfirmDelete}
-				title="Delete Post"
-				description="This action cannot be undone. This will permanently delete your post."
+				title={deleteTitle}
+				description={deleteDescription}
 			/>
 		</>
 	)
