@@ -262,76 +262,30 @@ const VideoRecorder = forwardRef<
 						</div>
 					)}
 				</div>
-
-				<div className="flex justify-center gap-4 mt-4">
-					{!isRecording ? (
-						<>
-							{!videoURL && (
-								<Button
-									type="button"
-									variant="outline"
-									size="lg"
-									onClick={startRecording}
-									className="flex items-center gap-2 px-8"
-									disabled={disabled}
-								>
-									<Video className="h-5 w-5" />
-									<span>Start Recording</span>
-								</Button>
-							)}
-
-							{videoURL && (
-								<>
-									<Button
-										type="button"
-										variant="outline"
-										size="lg"
-										onClick={togglePlayback}
-										className="flex items-center gap-2 px-8"
-										disabled={disabled}
-									>
-										{isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-										<span>{isPlaying ? 'Pause' : 'Play'}</span>
-									</Button>
-									<Button
-										type="button"
-										variant="outline"
-										size="lg"
-										onClick={reset}
-										className="flex items-center gap-2 px-8"
-										disabled={disabled}
-									>
-										<Video className="h-5 w-5" />
-										<span>Record Again</span>
-									</Button>
-								</>
-							)}
-						</>
-					) : (
-						<Button
-							type="button"
-							variant="destructive"
-							size="lg"
-							onClick={stopRecording}
-							className="flex items-center gap-2 px-8 animate-pulse-gentle"
-							disabled={disabled}
-						>
-							<Square className="h-5 w-5" />
-							<span>Stop Recording</span>
-						</Button>
-					)}
-				</div>
 			</div>
 
 			{isRecording && (
-				<div className="flex flex-col items-center justify-center gap-2 mt-4 pb-4">
-					<div className="flex items-center gap-2 text-sm text-primary">
-						<div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
-						<span>Recording video...</span>
+				<div className="flex flex-col items-center justify-center gap-4 mt-4 pb-4">
+					<div className="flex flex-col items-center justify-center gap-2">
+						<div className="flex items-center gap-2 text-sm text-primary">
+							<div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
+							<span>Recording video...</span>
+						</div>
+						<div className="text-2xl font-mono font-bold text-primary">
+							{formatTime(recordingTime)}
+						</div>
 					</div>
-					<div className="text-2xl font-mono font-bold text-primary">
-						{formatTime(recordingTime)}
-					</div>
+					<Button
+						type="button"
+						variant="destructive"
+						size="lg"
+						onClick={stopRecording}
+						className="flex items-center gap-2 px-8 animate-pulse-gentle"
+						disabled={disabled}
+					>
+						<Square className="h-5 w-5" />
+						<span>Stop Recording</span>
+					</Button>
 				</div>
 			)}
 
