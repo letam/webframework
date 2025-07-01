@@ -30,9 +30,10 @@ interface LoginFormData extends Record<string, unknown> {
 
 interface LoginModalProps {
 	triggerClassName?: string
+	onLoginSuccess?: () => void
 }
 
-export const LoginModal = ({ triggerClassName }: LoginModalProps) => {
+export const LoginModal = ({ triggerClassName, onLoginSuccess }: LoginModalProps) => {
 	const [open, setOpen] = useState(false)
 	const { refreshAuthStatus } = useAuth()
 	const form = useForm<LoginFormData>()
@@ -52,6 +53,9 @@ export const LoginModal = ({ triggerClassName }: LoginModalProps) => {
 
 			await refreshAuthStatus()
 			setOpen(false)
+			if (onLoginSuccess) {
+				onLoginSuccess()
+			}
 		} catch (error) {
 			console.error('Error logging in:', error)
 			form.setError('root', { message: 'An error occurred while logging in' })

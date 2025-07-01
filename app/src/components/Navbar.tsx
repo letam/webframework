@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router'
 import { Home, User, Menu, LogOut, Settings } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
@@ -14,6 +15,7 @@ import { Button } from '@/components/ui/button'
 
 const Navbar = () => {
 	const { isAuthenticated, refreshAuthStatus } = useAuth()
+	const [dropdownOpen, setDropdownOpen] = useState(false)
 
 	const handleLogout = async () => {
 		try {
@@ -81,7 +83,7 @@ const Navbar = () => {
 					<ThemeToggle />
 
 					{/* Mobile Menu */}
-					<DropdownMenu>
+					<DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
 						<DropdownMenuTrigger asChild>
 							<Button variant="ghost" size="icon" className="md:hidden">
 								<Menu className="h-5 w-5" />
@@ -117,7 +119,10 @@ const Navbar = () => {
 								</DropdownMenuItem>
 							) : (
 								<DropdownMenuItem asChild>
-									<LoginModal triggerClassName="w-full justify-start text-black dark:text-white -ml-2" />
+									<LoginModal
+										triggerClassName="w-full justify-start text-black dark:text-white -ml-2"
+										onLoginSuccess={() => setDropdownOpen(false)}
+									/>
 								</DropdownMenuItem>
 							)}
 						</DropdownMenuContent>
