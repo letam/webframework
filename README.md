@@ -15,12 +15,13 @@ Includes some functionality for a basic public micro-blogging app.
 
 ## Setup for Local Development
 
-### Quick Setup
-1. Download and unzip project from [https://github.com/letam/web-framework-2025/archive/refs/heads/main.zip](https://github.com/letam/web-framework-2025/archive/refs/heads/main.zip)
+### Quick Setup (Recommended--or follow [Manual Setup](#manual-setup)):
+
+1. Download and unzip project from [https://github.com/letam/web-framework-2025/archive/refs/heads/main.zip](https://github.com/letam/web-framework-2025/archive/refs/heads/main.zip) (or clone this repo)
 
 2. Open terminal and change present directory to be the project directory
 
-3. Run the setup script (Recommended--or follow [Manual Setup](#manual-setup)):
+3. Run the setup script:
 	```
 	./scripts/setup.sh
 	```
@@ -37,45 +38,50 @@ Includes some functionality for a basic public micro-blogging app.
 
 The web app during development is served via http://localhost:8000
 
-### Manual Setup (If you don't want to run the quick setup script)
+### Manual Setup
+(If you don't want to run the quick setup script)
+
+#### Download project
+1. Download and unzip project from [https://github.com/letam/web-framework-2025/archive/refs/heads/main.zip](https://github.com/letam/web-framework-2025/archive/refs/heads/main.zip) (or clone this repo)
+2. Open terminal and change present directory to be the project directory
 
 #### Backend server
-1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/).
+1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/)
 2. Install Python dependencies:
-		```bash
+		```
 		uv sync
 		```
 3. Apply database migrations:
-		```bash
+		```
 		uv run python server/manage.py migrate
 		```
 4. Start the backend server:
-		```bash
+		```
 		uv run python server/manage.py runserver_plus
 		```
 
 #### Frontend server
 1. In another terminal, change into the frontend app directory:
-		```bash
+		```
 		cd app
 		```
-2. Install [Bun](https://bun.sh).
+2. Install [Bun](https://bun.sh)
 3. Install npm packages:
-		```bash
+		```
 		bun i
 		```
 4. Create the `.env` file:
-		```bash
+		```
 		cp .env.development.local.sample .env
 		```
 5. Start the frontend dev server:
-		```bash
+		```
 		bun dev
 		```
 
 #### Misc setup stuff
 
-- If you're on macOS and you you didn't follow the quick setup, then ensure that you have installed gsed, which can be done via `brew install gsed` or `scripts/setup/setup-mac.sh`.
+- If you're on macOS and you didn't follow the quick setup, then ensure that you have installed [gsed](https://www.gnu.org/software/sed/), which can be done via `brew install gsed` or `scripts/setup/setup-mac.sh`. We use `gsed` in scripts to manage configuration-deployment of project.
 
 ## Setup for Production
 
