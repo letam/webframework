@@ -9,6 +9,7 @@ import { AudioPlayer, VideoPlayer } from './MediaPlayer'
 import { toast } from '@/components/ui/sonner'
 import { getMediaUrl, transcribePost } from '@/lib/api/posts'
 import { getMimeTypeFromPath } from '@/lib/utils/file'
+import { parseDurationString } from '@/lib/utils/media'
 
 interface PostProps {
 	post: PostType
@@ -49,6 +50,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 	const mimeType = post.media
 		? getMimeTypeFromPath(post.media.file || post.media.s3_file_key)
 		: undefined
+	const mediaDuration = post.media ? parseDurationString(post.media.duration) : undefined
 
 	const handleTranscribe = async (id: number) => {
 		try {
@@ -89,11 +91,11 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 				</div>
 
 				{post.media?.media_type === 'audio' && mediaUrl && mimeType && (
-					<AudioPlayer audioUrl={mediaUrl} mimeType={mimeType} />
+					<AudioPlayer audioUrl={mediaUrl} mimeType={mimeType} duration={mediaDuration} />
 				)}
 
 				{post.media?.media_type === 'video' && mediaUrl && mimeType && (
-					<VideoPlayer videoUrl={mediaUrl} mimeType={mimeType} />
+					<VideoPlayer videoUrl={mediaUrl} mimeType={mimeType} duration={mediaDuration} />
 				)}
 
 				{post.media?.media_type === 'image' && mediaUrl && mimeType && (

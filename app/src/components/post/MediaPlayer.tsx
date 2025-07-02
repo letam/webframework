@@ -125,15 +125,20 @@ export const AudioControls: React.FC<AudioControlsProps> = ({
 interface AudioPlayerProps {
 	audioUrl: string
 	mimeType: string
+	duration?: number
 }
 
-export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) => {
+export const AudioPlayer: React.FC<AudioPlayerProps> = ({
+	audioUrl,
+	mimeType,
+	duration: initialDuration,
+}) => {
 	const [isPlaying, setIsPlaying] = useState(false)
 	const [isLoading, setIsLoading] = useState(false)
 	const [showLoading, setShowLoading] = useState(false)
 	const [isLoaded, setIsLoaded] = useState(false)
 	const [error, setError] = useState<string | null>(null)
-	const [duration, setDuration] = useState<number>(0)
+	const [duration, setDuration] = useState<number>(initialDuration || 0)
 	const [currentTime, setCurrentTime] = useState<number>(0)
 	const audioRef = useRef<HTMLAudioElement | null>(null)
 	const audioBlobRef = useRef<Blob | null>(null)
@@ -147,7 +152,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 		setIsLoading(false)
 		setShowLoading(false)
 		setIsLoaded(false)
-		setDuration(0)
+		setDuration(initialDuration || 0)
 		setCurrentTime(0)
 		audioBlobRef.current = null
 		const player = audioRef.current
@@ -258,8 +263,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 
 	const handleLoadedMetadata = () => {
 		if (audioRef.current) {
+			// Use the provided duration if available, otherwise use the audio element's duration
+			const audioDuration = initialDuration || audioRef.current.duration
 			// Add a small buffer to the duration to prevent early cutoff
-			setDuration(audioRef.current.duration + 0.1)
+			setDuration(audioDuration + 0.1)
 		}
 		setIsLoading(false)
 		setIsLoaded(true)
@@ -392,14 +399,20 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({ audioUrl, mimeType }) 
 interface VideoPlayerProps {
 	videoUrl: string
 	mimeType: string
+	duration?: number
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, mimeType }) => {
+export const VideoPlayer: React.FC<VideoPlayerProps> = ({
+	videoUrl,
+	mimeType,
+	duration: initialDuration,
+}) => {
 	const [isPlaying, setIsPlaying] = useState(false)
 	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [isLoading, setIsLoading] = useState(false)
 	const [isLoaded, setIsLoaded] = useState(false)
+	const [duration, setDuration] = useState<number>(initialDuration || 0)
 	const videoBlobRef = useRef<Blob | null>(null)
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: executed when videoUrl changes
@@ -408,6 +421,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, mimeType }) 
 		setError(null)
 		setIsLoading(false)
 		setIsLoaded(false)
+		setDuration(initialDuration || 0)
 		videoBlobRef.current = null
 		const player = videoRef.current
 
@@ -479,7 +493,11 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, mimeType }) 
 	}
 
 	const handleLoadedMetadata = () => {
-		console.log('derp loaded metadata')
+		if (videoRef.current) {
+			// Use the provided duration if available, otherwise use the video element's duration
+			const videoDuration = initialDuration || videoRef.current.duration
+			setDuration(videoDuration)
+		}
 		setIsLoading(false)
 		setIsLoaded(true)
 		setError(null)

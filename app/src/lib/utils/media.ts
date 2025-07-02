@@ -45,3 +45,43 @@ export function getSupportedAudioMimeTypes() {
 export const supportedAudioMimeType = getSupportedAudioMimeTypes()[0]
 console.log('INFO: supportedAudioMimeType', supportedAudioMimeType)
 export const mimeTypes = [...videoMimeTypes, ...audioMimeTypes]
+
+/**
+ * Parses a duration string from a media record into seconds
+ * @param durationString The duration string (e.g., "0:01:30.500000" or "1:30")
+ * @returns The duration in seconds, or 0 if parsing fails
+ */
+export const parseDurationString = (durationString?: string): number => {
+	if (!durationString) return 0
+
+	try {
+		// Handle Django DurationField format: "0:01:30.500000"
+		if (durationString.includes(':')) {
+			const parts = durationString.split(':')
+			if (parts.length === 3) {
+				// Format: "0:01:30.500000"
+				const hours = Number.parseInt(parts[0], 10)
+				const minutes = Number.parseInt(parts[1], 10)
+				const secondsWithMs = Number.parseFloat(parts[2])
+				return hours * 3600 + minutes * 60 + secondsWithMs
+			}
+			if (parts.length === 2) {
+				// Format: "1:30"
+				const minutes = Number.parseInt(parts[0], 10)
+				const seconds = Number.parseInt(parts[1], 10)
+				return minutes * 60 + seconds
+			}
+		}
+
+		// Try parsing as a simple number (seconds)
+		const seconds = Number.parseFloat(durationString)
+		if (!Number.isNaN(seconds)) {
+			return seconds
+		}
+
+		return 0
+	} catch (error) {
+		console.error('Error parsing duration string:', durationString, error)
+		return 0
+	}
+}
