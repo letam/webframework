@@ -49,13 +49,23 @@ class Media(models.Model):
             if 'force_insert' in kwargs:
                 kwargs.pop('force_insert')
 
+        # Save the record first to ensure file is on disk
+        super().save(*args, **kwargs)
+
         # Set duration if file is present and duration is not set
         if self.file and not self.duration:
-            duration = get_media_duration(self.file.path)
-            if duration:
-                self.duration = duration
-
-        super().save(*args, **kwargs)
+            try:
+                logger.info(f"Attempting to extract duration for {self.file.path}")
+                duration = get_media_duration(self.file.path)
+                if duration:
+                    logger.info(f"Extracted duration: {duration} for {self.file.path}")
+                    self.duration = duration
+                    # Save again with duration
+                    super().save(update_fields=['duration'])
+                else:
+                    logger.warning(f"Could not extract duration for {self.file.path}")
+            except Exception as e:
+                logger.error(f"Error extracting duration for {self.file.path}: {str(e)}")
 
     def delete(self, *args, **kwargs):
         # Get the media directory path
