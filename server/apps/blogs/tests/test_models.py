@@ -212,17 +212,19 @@ class MediaModelTests(BaseTestCase):
             if os.path.exists(temp_file_path):
                 os.unlink(temp_file_path)
 
-    def test_media_duration_extraction_with_35_second_file(self):
-        """Test duration extraction with a 3.5-second audio file."""
+    def test_media_duration_extraction_with_expected_duration(self):
+        """Test duration extraction with a audio file with the expected duration."""
         import subprocess
         import tempfile
 
-        # Create a 3.5-second audio file using ffmpeg
+        expected_duration = timedelta(seconds=3.5)
+
+        # Create a audio file using ffmpeg with the expected duration
         with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
             temp_file_path = temp_file.name
 
         try:
-            # Generate a 3.5-second silent MP3 file using ffmpeg
+            # Generate a silent MP3 file using ffmpeg with the expected duration
             cmd = [
                 'ffmpeg',
                 '-f',
@@ -230,7 +232,7 @@ class MediaModelTests(BaseTestCase):
                 '-i',
                 'anullsrc=channel_layout=stereo:sample_rate=44100',
                 '-t',
-                '3.5',
+                str(expected_duration.total_seconds()),
                 '-c:a',
                 'mp3',
                 '-b:a',
@@ -253,10 +255,10 @@ class MediaModelTests(BaseTestCase):
             self.assertIsNotNone(duration)
             self.assertIsInstance(duration, timedelta)
 
-            # Check that duration is approximately 3.5 seconds (allow small tolerance)
-            expected_seconds = 3.5
-            actual_seconds = duration.total_seconds()
-            self.assertAlmostEqual(actual_seconds, expected_seconds, delta=0.1)
+            # Check that duration is approximately the expected duration (allow small tolerance)
+            self.assertAlmostEqual(
+                duration.total_seconds(), expected_duration.total_seconds(), delta=0.1
+            )
 
             # Now test with the Media model
             with open(temp_file_path, 'rb') as f:
@@ -281,9 +283,10 @@ class MediaModelTests(BaseTestCase):
             self.assertIsNotNone(media.duration)
             self.assertIsInstance(media.duration, timedelta)
 
-            # Verify the duration is approximately 3.5 seconds
-            actual_seconds = media.duration.total_seconds()
-            self.assertAlmostEqual(actual_seconds, expected_seconds, delta=0.1)
+            # Verify the duration is approximately the expected duration
+            self.assertAlmostEqual(
+                media.duration.total_seconds(), expected_duration.total_seconds(), delta=0.1
+            )
 
         finally:
             # Clean up temporary file
