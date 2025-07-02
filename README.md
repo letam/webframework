@@ -20,7 +20,7 @@ Includes some functionality for a basic public micro-blogging app.
 
 2. Open terminal and change present directory to be the project directory
 
-3. Run the setup script:
+3. Run the setup script (Recommended--or follow [Manual Setup](#manual-setup)):
 	```
 	./scripts/setup.sh
 	```
@@ -32,10 +32,50 @@ Includes some functionality for a basic public micro-blogging app.
 		```
 	- In another terminal:
 		```
-		cd app && bun dev
+		cd app ; bun dev
 		```
 
 The web app during development is served via http://localhost:8000
+
+### Manual Setup (If you don't want to run the quick setup script)
+
+#### Backend server
+1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/).
+2. Install Python dependencies:
+		```bash
+		uv sync
+		```
+3. Apply database migrations:
+		```bash
+		uv run python server/manage.py migrate
+		```
+4. Start the backend server:
+		```bash
+		uv run python server/manage.py runserver_plus
+		```
+
+#### Frontend server
+1. In another terminal, change into the frontend app directory:
+		```bash
+		cd app
+		```
+2. Install [Bun](https://bun.sh).
+3. Install npm packages:
+		```bash
+		bun i
+		```
+4. Create the `.env` file:
+		```bash
+		cp .env.development.local.sample .env
+		```
+5. Start the frontend dev server:
+		```bash
+		bun dev
+		```
+
+#### Misc setup stuff
+
+- If you're on macOS and you you didn't follow the quick setup, then ensure that you have installed gsed, which can be done via `brew install gsed` or `scripts/setup/setup-mac.sh`.
 
 ## Setup for Production
 
