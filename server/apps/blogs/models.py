@@ -5,7 +5,7 @@ import os.path
 from django.conf import settings
 from django.db import models
 
-from .utils import convert_to_mp3
+from .utils import convert_to_mp3, get_media_duration
 
 # Configure logging
 logger = logging.getLogger('server.apps.blogs')
@@ -48,6 +48,12 @@ class Media(models.Model):
             self.file = file
             if 'force_insert' in kwargs:
                 kwargs.pop('force_insert')
+
+        # Set duration if file is present and duration is not set
+        if self.file and not self.duration:
+            duration = get_media_duration(self.file.path)
+            if duration:
+                self.duration = duration
 
         super().save(*args, **kwargs)
 
