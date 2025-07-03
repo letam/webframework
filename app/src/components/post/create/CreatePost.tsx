@@ -215,7 +215,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	return (
 		<div className="bg-card rounded-lg shadow-xs border max-w-lg mx-auto px-4 py-2">
-			<form onSubmit={handleSubmit} className="flex flex-col gap-3 w-full">
+			<form onSubmit={handleSubmit} className="flex flex-col w-full">
 				<div className="-mx-2">
 					<Textarea
 						ref={textareaRef}
@@ -224,7 +224,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						onChange={handlePostTextChange}
 						onKeyDown={handleKeyDown}
 						className="w-full resize-none mb-4 border-none focus-visible:ring-0 py-1 px-2 text-base max-w-lg"
-						rows={3}
+						rows={4}
 						disabled={!!submitStatus}
 					/>
 				</div>
