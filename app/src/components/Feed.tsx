@@ -57,10 +57,6 @@ const Feed: React.FC = () => {
 		}
 	}
 
-	if (isLoading) {
-		return <div className="max-w-2xl mx-auto text-center py-8">Loading posts...</div>
-	}
-
 	return (
 		<div className="max-w-2xl mx-auto">
 			{error && <div className="text-center py-4 text-red-500 mb-4">Error: {error.message}</div>}
@@ -70,16 +66,20 @@ const Feed: React.FC = () => {
 			</div>
 
 			<div className="space-y-4 my-6">
-				{posts.map((post) => (
-					<Post
-						key={post.id}
-						post={post}
-						onLike={handleLike}
-						onDelete={handleDeletePost}
-						onEdit={handleEditPost}
-						onTranscribed={handlePostTranscribed}
-					/>
-				))}
+				{isLoading ? (
+					<div className="max-w-2xl mx-auto text-center py-8">Loading posts...</div>
+				) : (
+					posts.map((post) => (
+						<Post
+							key={post.id}
+							post={post}
+							onLike={handleLike}
+							onDelete={handleDeletePost}
+							onEdit={handleEditPost}
+							onTranscribed={handlePostTranscribed}
+						/>
+					))
+				)}
 			</div>
 		</div>
 	)
