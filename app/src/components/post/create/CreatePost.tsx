@@ -222,7 +222,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					value={postText}
 					onChange={handlePostTextChange}
 					onKeyDown={handleKeyDown}
-					className="w-full resize-none mb-4 border-none focus-visible:ring-0 py-2 px-3 text-base"
+					className="w-full resize-none mb-4 border-none focus-visible:ring-0 py-1 px-0 text-base max-w-lg"
 					rows={3}
 					disabled={!!submitStatus}
 				/>

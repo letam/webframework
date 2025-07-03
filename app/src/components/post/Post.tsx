@@ -76,7 +76,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 			</div>
 
 			<div className="ml-12">
-				<div className="mt-2">
+				<div className="mt-2 max-w-lg">
 					{post.head && (
 						<div className="mt-1 text-lg font-bold">
 							<FormatText>{post.head}</FormatText>
@@ -105,7 +105,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 				)}
 
 				{post.media?.transcript && (
-					<div className="mt-2">
+					<div className="mt-2 max-w-lg">
 						<FormatText>{post.media.transcript}</FormatText>
 					</div>
 				)}
