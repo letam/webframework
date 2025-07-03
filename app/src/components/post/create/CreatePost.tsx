@@ -216,16 +216,18 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	return (
 		<div className="bg-card rounded-lg shadow-xs border max-w-lg mx-auto px-4 py-2">
 			<form onSubmit={handleSubmit} className="flex flex-col gap-3 w-full">
-				<Textarea
-					ref={textareaRef}
-					placeholder="What's on your mind? Share your thoughts, upload media, or record something..."
-					value={postText}
-					onChange={handlePostTextChange}
-					onKeyDown={handleKeyDown}
-					className="w-full resize-none mb-4 border-none focus-visible:ring-0 py-1 px-0 text-base max-w-lg"
-					rows={3}
-					disabled={!!submitStatus}
-				/>
+				<div className="-mx-2">
+					<Textarea
+						ref={textareaRef}
+						placeholder="What's on your mind? Share your thoughts, upload media, or record something..."
+						value={postText}
+						onChange={handlePostTextChange}
+						onKeyDown={handleKeyDown}
+						className="w-full resize-none mb-4 border-none focus-visible:ring-0 py-1 px-2 text-base max-w-lg"
+						rows={3}
+						disabled={!!submitStatus}
+					/>
+				</div>
 
 				<div className={submitStatus ? 'hidden' : ''}>
 					<MediaPreview
