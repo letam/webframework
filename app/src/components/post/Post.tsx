@@ -67,7 +67,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 
 	return (
 		<div
-			className="bg-card rounded-lg shadow-xs p-4 border hover:border-primary/20 transition-colors"
+			className="bg-card rounded-lg shadow-xs border hover:border-primary/20 transition-colors max-w-lg mx-auto px-4 py-2"
 			data-testid={`post-${post.id}`}
 		>
 			<div className="flex items-center gap-2">
@@ -75,7 +75,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 				<PostMenu post={post} onDelete={onDelete} onEdit={onEdit} />
 			</div>
 
-			<div className="ml-12">
+			<div className="">
 				<div className="mt-2 max-w-lg">
 					{post.head && (
 						<div className="mt-1 text-lg font-bold">
