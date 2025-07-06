@@ -27,6 +27,16 @@ Includes some functionality for a basic public micro-blogging app.
 	```
 
 4. Start the development servers:
+
+**Option A: Using tmux session (Recommended)**
+	```
+	./scripts/start-dev-session.sh
+	```
+	This creates 2 tmux windows:
+	- **Window 1 "servers"**: Backend server (left) and Frontend server (right)
+	- **Window 2 "cli"**: CLI at project root (left) and CLI in app directory (right)
+
+**Option B: Manual terminal setup**
 	- In one terminal:
 		```
 		uv run python server/manage.py runserver_plus
@@ -41,9 +51,12 @@ The web app during development is served via http://localhost:8000
 ### Manual Setup
 (If you don't want to run the quick setup script)
 
-#### Install package managers
+#### Install package managers and tools
 1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) (for Python package/project management)
 2. Install [Bun](https://bun.sh) (for JavaScript package/project management)
+3. Install [tmux](https://github.com/tmux/tmux) (for development session management):
+   - macOS: `brew install tmux`
+   - Ubuntu/Debian: `sudo apt-get install tmux`
 
 #### Download project
 1. Download and unzip project from [https://github.com/letam/web-framework-2025/archive/refs/heads/main.zip](https://github.com/letam/web-framework-2025/archive/refs/heads/main.zip) (or clone this repo)
