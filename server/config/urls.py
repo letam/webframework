@@ -34,6 +34,7 @@ urlpatterns = [
     #
     path('auth/csrf/', auth_views.csrf),
     path('auth/login/', auth_views.login),
+    path('auth/signup/', auth_views.signup),
     path('auth/logout/', auth_views.logout),
     path('auth/status/', auth_views.status),
     #

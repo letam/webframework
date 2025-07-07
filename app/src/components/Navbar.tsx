@@ -5,6 +5,7 @@ import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAuth } from '@/hooks/useAuth'
 import { logout } from '@/lib/api/auth'
 import { LoginModal } from '@/components/LoginModal'
+import { SignupModal } from '@/components/SignupModal'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -76,7 +77,10 @@ const Navbar = () => {
 								</div>
 							</Button>
 						) : (
-							<LoginModal />
+							<div className="flex items-center gap-2">
+								<LoginModal />
+								<SignupModal />
+							</div>
 						)}
 					</nav>
 
@@ -118,12 +122,20 @@ const Navbar = () => {
 									</div>
 								</DropdownMenuItem>
 							) : (
-								<DropdownMenuItem asChild>
-									<LoginModal
-										triggerClassName="w-full justify-start text-black dark:text-white -ml-2"
-										onLoginSuccess={() => setDropdownOpen(false)}
-									/>
-								</DropdownMenuItem>
+								<>
+									<DropdownMenuItem asChild>
+										<LoginModal
+											triggerClassName="w-full justify-start text-black dark:text-white -ml-2"
+											onLoginSuccess={() => setDropdownOpen(false)}
+										/>
+									</DropdownMenuItem>
+									<DropdownMenuItem asChild>
+										<SignupModal
+											triggerClassName="w-full justify-start text-black dark:text-white -ml-2"
+											onSignupSuccess={() => setDropdownOpen(false)}
+										/>
+									</DropdownMenuItem>
+								</>
 							)}
 						</DropdownMenuContent>
 					</DropdownMenu>
