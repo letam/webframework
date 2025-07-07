@@ -14,18 +14,15 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
-from django.contrib import admin
-from django.urls import path, include, re_path
+from apps.auth import views as auth_views
+from apps.blogs.views import PostViewSet, get_post_media_mime_type, stream_post_media
+from apps.uploads.views import get_presigned_url, get_presigned_url_for_post
+from apps.website.views import index
 from django.conf import settings
 from django.conf.urls.static import static
-
+from django.contrib import admin
+from django.urls import include, path, re_path
 from rest_framework import routers
-
-from apps.auth import views as auth_views
-
-from apps.website.views import index
-from apps.blogs.views import PostViewSet, stream_post_media, get_post_media_mime_type
-from apps.uploads.views import get_presigned_url, get_presigned_url_for_post
 
 router = routers.DefaultRouter()
 router.register(r'posts', PostViewSet)
