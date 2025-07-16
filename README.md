@@ -28,15 +28,18 @@ Includes some functionality for a basic public micro-blogging app.
 
 4. Start the development servers:
 
-**Option A: Using tmux session (Recommended)**
+   **Option A: Using tmux session (Recommended)**
+
 	```
 	./scripts/start-dev-session.sh
 	```
 	This creates 2 tmux windows:
+
 	- **Window 1 "servers"**: Backend server (left) and Frontend server (right)
 	- **Window 2 "cli"**: CLI at project root (left) and CLI in app directory (right)
 
-**Option B: Manual terminal setup**
+   **Option B: Manual terminal setup**
+
 	- In one terminal:
 		```
 		uv run python server/manage.py runserver_plus
