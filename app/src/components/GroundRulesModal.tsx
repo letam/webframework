@@ -86,21 +86,24 @@ export const GroundRulesModal = () => {
 
 					<div className="space-y-4">
 						{groundRules.map((rule) => (
-							<div key={rule.id} className="flex items-start space-x-3 p-3 rounded-lg border">
-								<div className="flex items-center space-x-2 flex-1">
+							<div key={rule.id} className="p-3 rounded-lg border">
+								<div className="flex items-start space-x-3">
 									<Checkbox
 										id={rule.id}
 										checked={acceptedRules.has(rule.id)}
 										onCheckedChange={(checked) => handleRuleToggle(rule.id, checked as boolean)}
+										className="mt-0.5"
 									/>
-									<div className="flex items-center gap-2">
+									<div className="flex items-center gap-2 min-w-0 flex-1">
 										{rule.icon}
-										<Label htmlFor={rule.id} className="font-medium">
+										<Label htmlFor={rule.id} className="font-medium whitespace-nowrap">
 											{rule.title}
 										</Label>
 									</div>
 								</div>
-								<p className="text-sm text-muted-foreground ml-6">{rule.description}</p>
+								<p className="text-sm text-muted-foreground ml-6 mt-2">
+									{rule.description}
+								</p>
 							</div>
 						))}
 					</div>
