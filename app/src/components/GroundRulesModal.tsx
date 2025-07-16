@@ -20,19 +20,19 @@ const groundRules: GroundRule[] = [
 		title: 'No Hate or Harm',
 		description:
 			'Treat everyone with respect and kindness. No hate speech, harassment, or harmful content.',
-		icon: <Heart className="h-5 w-5 text-red-500" />,
+		icon: <Heart className="h-5 w-5 text-red-500 flex-shrink-0" />,
 	},
 	{
 		id: 'be-respectful',
 		title: 'Be Respectful',
 		description: 'Respect different opinions and perspectives. Engage in constructive discussions.',
-		icon: <Users className="h-5 w-5 text-blue-500" />,
+		icon: <Users className="h-5 w-5 text-blue-500 flex-shrink-0" />,
 	},
 	{
 		id: 'safe-environment',
 		title: 'Safe Environment',
 		description: 'Help maintain a safe and welcoming environment for all users.',
-		icon: <Shield className="h-5 w-5 text-green-500" />,
+		icon: <Shield className="h-5 w-5 text-green-500 flex-shrink-0" />,
 	},
 ]
 
