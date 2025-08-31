@@ -6,6 +6,7 @@ from django.conf import settings
 from django.db import models
 
 from .utils import convert_to_mp3, get_media_duration
+from .utils.image_processing import create_compressed_image_contentfile, is_image_file
 
 # Configure logging
 logger = logging.getLogger('server.apps.blogs')
@@ -31,6 +32,9 @@ class Media(models.Model):
     media_type = models.CharField(max_length=255, choices=MEDIA_TYPE_CHOICES)
     duration = models.DurationField(null=True, blank=True)
     thumbnail = models.ImageField(upload_to=media_file_path, blank=True)
+    # Compressed image fields
+    compressed_file = models.ImageField(upload_to=media_file_path, blank=True)
+    compressed_s3_file_key = models.CharField(max_length=255, blank=True)
     transcript = models.TextField(blank=True)
     alt_text = models.TextField(blank=True)
 
@@ -67,6 +71,26 @@ class Media(models.Model):
             except Exception as e:
                 logger.error(f"Error extracting duration for {self.file.path}: {str(e)}")
 
+        # Create compressed image if this is an image and compressed version doesn't exist
+        if (
+            self.file
+            and self.media_type == 'image'
+            and is_image_file(self.file.path)
+            and not self.compressed_file
+        ):
+            try:
+                logger.info(f"Creating compressed version for image: {self.file.path}")
+                compressed_content = create_compressed_image_contentfile(self.file.path)
+                if compressed_content:
+                    self.compressed_file = compressed_content
+                    # Save again with compressed file
+                    super().save(update_fields=['compressed_file'])
+                    logger.info(f"Compressed image created for: {self.file.path}")
+                else:
+                    logger.warning(f"Failed to create compressed image for: {self.file.path}")
+            except Exception as e:
+                logger.error(f"Error creating compressed image for {self.file.path}: {str(e)}")
+
     def delete(self, *args, **kwargs):
         # Get the media directory path
         media_dir = os.path.dirname(self.file.path) if self.file else None
@@ -92,6 +116,15 @@ class Media(models.Model):
                     os.remove(self.thumbnail.path)
             except Exception as e:
                 logger.error(f"Error deleting thumbnail {self.thumbnail.path}: {str(e)}")
+
+        if self.compressed_file:
+            try:
+                if os.path.isfile(self.compressed_file.path):
+                    os.remove(self.compressed_file.path)
+            except Exception as e:
+                logger.error(
+                    f"Error deleting compressed file {self.compressed_file.path}: {str(e)}"
+                )
 
         # Delete the media directory if it exists
         if media_dir and os.path.exists(media_dir):

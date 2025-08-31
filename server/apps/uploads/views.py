@@ -76,3 +76,20 @@ def get_presigned_url_for_post(request, post_id):
     post = Post.objects.get(id=post_id)
     signed_url = _get_presigned_url_for_file_path(post.media.s3_file_key)
     return JsonResponse({'url': signed_url})
+
+
+def get_presigned_url_for_compressed_post(request, post_id):
+    """Get presigned URL for compressed version of post media."""
+    post = Post.objects.get(id=post_id)
+
+    if not post.media:
+        return JsonResponse({'error': 'No media found for this post'}, status=404)
+
+    # Use compressed version if available, otherwise fall back to original
+    file_key = post.media.compressed_s3_file_key or post.media.s3_file_key
+
+    if not file_key:
+        return JsonResponse({'error': 'No file key found'}, status=404)
+
+    signed_url = _get_presigned_url_for_file_path(file_key)
+    return JsonResponse({'url': signed_url})

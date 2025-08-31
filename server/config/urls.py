@@ -16,7 +16,11 @@ Including another URLconf
 
 from apps.auth import views as auth_views
 from apps.blogs.views import PostViewSet, get_post_media_mime_type, stream_post_media
-from apps.uploads.views import get_presigned_url, get_presigned_url_for_post
+from apps.uploads.views import (
+    get_presigned_url,
+    get_presigned_url_for_compressed_post,
+    get_presigned_url_for_post,
+)
 from apps.website.views import index
 from django.conf import settings
 from django.conf.urls.static import static
@@ -45,6 +49,11 @@ urlpatterns = [
         'api/uploads/presign/<int:post_id>/',
         get_presigned_url_for_post,
         name='get_presigned_url_for_post',
+    ),
+    path(
+        'api/uploads/presign/<int:post_id>/compressed/',
+        get_presigned_url_for_compressed_post,
+        name='get_presigned_url_for_compressed_post',
     ),
     #
     path(

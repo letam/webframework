@@ -1,4 +1,5 @@
 import type React from 'react'
+import { useState, useEffect } from 'react'
 import DOMPurify from 'dompurify'
 import { cn } from '@/lib/utils'
 import PostHeader from './PostHeader'
@@ -6,8 +7,9 @@ import PostActions from './PostActions'
 import PostMenu from './PostMenu'
 import type { Post as PostType } from '../../types/post'
 import { AudioPlayer, VideoPlayer } from './MediaPlayer'
+import { ImageModal } from '../ImageModal'
 import { toast } from '@/components/ui/sonner'
-import { getMediaUrl, transcribePost } from '@/lib/api/posts'
+import { getMediaUrl, getCompressedMediaUrl, transcribePost } from '@/lib/api/posts'
 import { getMimeTypeFromPath } from '@/lib/utils/file'
 import { parseDurationString } from '@/lib/utils/media'
 
@@ -45,12 +47,32 @@ const FormatText: React.FC<{ children: string; className?: string }> = ({
 }
 
 export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTranscribed }) => {
+	const [compressedImageUrl, setCompressedImageUrl] = useState<string | null>(null)
+	const [isImageModalOpen, setIsImageModalOpen] = useState(false)
 	const mediaUrl = post.media ? getMediaUrl(post) : undefined
 	const mediaAltText = post.media ? post.media.alt_text : undefined
 	const mimeType = post.media
 		? getMimeTypeFromPath(post.media.file || post.media.s3_file_key)
 		: undefined
 	const mediaDuration = post.media ? parseDurationString(post.media.duration) : undefined
+
+	// Load compressed image URL for images
+	useEffect(() => {
+		const loadCompressedImage = async () => {
+			if (post.media?.media_type === 'image') {
+				try {
+					const compressedUrl = await getCompressedMediaUrl(post)
+					setCompressedImageUrl(compressedUrl)
+				} catch (error) {
+					console.error('Error loading compressed image:', error)
+					// Fall back to regular media URL
+					setCompressedImageUrl(mediaUrl || null)
+				}
+			}
+		}
+
+		loadCompressedImage()
+	}, [post, mediaUrl])
 
 	const handleTranscribe = async (id: number) => {
 		try {
@@ -98,9 +120,23 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 					<VideoPlayer videoUrl={mediaUrl} mimeType={mimeType} duration={mediaDuration} />
 				)}
 
-				{post.media?.media_type === 'image' && mediaUrl && mimeType && (
+				{post.media?.media_type === 'image' && compressedImageUrl && mimeType && (
 					<div className="mt-2">
-						<img src={mediaUrl} alt={mediaAltText} className="w-full h-auto" />
+						<button
+							type="button"
+							onClick={() => setIsImageModalOpen(true)}
+							className="w-full p-0 border-0 bg-transparent cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-lg"
+							aria-label="Open full resolution image"
+						>
+							<img
+								src={compressedImageUrl}
+								alt={mediaAltText}
+								className="w-full h-auto hover:opacity-90 transition-opacity rounded-lg"
+							/>
+						</button>
+						<div className="mt-1 text-xs text-muted-foreground text-center">
+							Click to view full resolution
+						</div>
 					</div>
 				)}
 
@@ -120,6 +156,13 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 					onTranscribe={handleTranscribe}
 				/>
 			</div>
+
+			{/* Image Modal */}
+			<ImageModal
+				post={post}
+				isOpen={isImageModalOpen}
+				onClose={() => setIsImageModalOpen(false)}
+			/>
 		</div>
 	)
 }

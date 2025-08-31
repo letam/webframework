@@ -14,6 +14,8 @@ export interface Media {
 	mp3_file?: string
 	duration?: string
 	thumbnail?: string
+	compressed_file?: string
+	compressed_s3_file_key?: string
 	transcript?: string
 	alt_text?: string
 	created: Date

@@ -116,6 +116,32 @@ export const getMediaUrl = (post: Post): string => {
 	// return isSafari ? `${SERVER_API_URL}/posts/${post.id}/media/` : post.media
 }
 
+export const getCompressedMediaUrl = async (post: Post): Promise<string | null> => {
+	if (!post.media || post.media.media_type !== 'image') {
+		return null
+	}
+
+	try {
+		// If we have a compressed file URL from the API response, use it
+		if (post.media.compressed_file) {
+			return post.media.compressed_file
+		}
+
+		// If we have a compressed S3 file key, get presigned URL
+		if (post.media.compressed_s3_file_key) {
+			const response = await fetch(`${SERVER_API_URL}/uploads/presign/${post.id}/compressed/`)
+			const data = await response.json()
+			return data.url
+		}
+
+		// Fall back to regular media URL
+		return getMediaUrl(post)
+	} catch (error) {
+		console.error('Error getting compressed media URL:', error)
+		return getMediaUrl(post)
+	}
+}
+
 export const transcribePost = async (id: number): Promise<Post> => {
 	try {
 		const options = await getFetchOptions('POST')
