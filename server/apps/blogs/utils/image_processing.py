@@ -6,12 +6,81 @@ from typing import Optional
 from django.core.files.base import ContentFile
 from PIL import Image, ImageOps
 
+try:
+    from PIL import ExifTags
+
+    HAS_EXIF = True
+except ImportError:
+    HAS_EXIF = False
+
 logger = logging.getLogger(__name__)
 
 # Compression settings
 COMPRESSED_MAX_SIZE = (1200, 1200)  # Max width/height for compressed images
 COMPRESSED_QUALITY = 80  # JPEG quality (0-100)
 COMPRESSED_FORMAT = 'JPEG'
+
+
+def apply_exif_orientation(image: Image.Image) -> Image.Image:
+    """
+    Apply EXIF orientation to an image if available.
+
+    Args:
+        image: PIL Image object
+
+    Returns:
+        Image with correct orientation applied
+    """
+    if not HAS_EXIF:
+        return image
+
+    try:
+        # Get EXIF data
+        exif = image._getexif()
+        if exif is None:
+            return image
+
+        # Find orientation tag
+        orientation = None
+        for tag, value in exif.items():
+            if tag in ExifTags.TAGS and ExifTags.TAGS[tag] == 'Orientation':
+                orientation = value
+                break
+
+        if orientation is None:
+            return image
+
+        # Apply rotation/flip based on orientation value
+        if orientation == 1:
+            # Normal, no change needed
+            pass
+        elif orientation == 2:
+            # Mirrored horizontal
+            image = image.transpose(Image.FLIP_LEFT_RIGHT)
+        elif orientation == 3:
+            # Rotated 180 degrees
+            image = image.rotate(180)
+        elif orientation == 4:
+            # Mirrored vertical
+            image = image.transpose(Image.FLIP_TOP_BOTTOM)
+        elif orientation == 5:
+            # Mirrored horizontal then rotated 90 degrees CCW
+            image = image.transpose(Image.FLIP_LEFT_RIGHT).rotate(90, expand=True)
+        elif orientation == 6:
+            # Rotated 90 degrees CCW
+            image = image.rotate(270, expand=True)
+        elif orientation == 7:
+            # Mirrored horizontal then rotated 90 degrees CW
+            image = image.transpose(Image.FLIP_LEFT_RIGHT).rotate(270, expand=True)
+        elif orientation == 8:
+            # Rotated 90 degrees CW
+            image = image.rotate(90, expand=True)
+
+        return image
+
+    except Exception as e:
+        logger.warning(f"Error applying EXIF orientation: {str(e)}")
+        return image
 
 
 def create_compressed_image(
@@ -30,6 +99,9 @@ def create_compressed_image(
     try:
         # Open the original image
         with Image.open(original_image_path) as img:
+            # Apply EXIF orientation first
+            img = apply_exif_orientation(img)
+
             # Convert to RGB if necessary (for PNG with transparency, etc.)
             if img.mode in ('RGBA', 'LA', 'P'):
                 # Create a white background
@@ -80,6 +152,9 @@ def create_compressed_image_contentfile(original_image_path: str) -> Optional[Co
     try:
         # Open the original image
         with Image.open(original_image_path) as img:
+            # Apply EXIF orientation first
+            img = apply_exif_orientation(img)
+
             # Convert to RGB if necessary
             if img.mode in ('RGBA', 'LA', 'P'):
                 background = Image.new('RGB', img.size, (255, 255, 255))
