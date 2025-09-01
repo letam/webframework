@@ -266,11 +266,8 @@ def setup_save_errorlog_to_file(logging: dict):
         if not log_dir.exists():
             os.mkdir(log_dir)
         if not errorlog_filepath.exists():
-            try:
-                os.mknod(errorlog_filepath)
-            except PermissionError:
-                with open(errorlog_filepath, 'w'):
-                    pass
+            with open(errorlog_filepath, 'w'):
+                pass
 
     create_log_dir_for_server_errors()
 
