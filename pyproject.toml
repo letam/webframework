@@ -97,7 +97,7 @@ exclude = [
   ".git",
   "app",
 ]
-include = ["scripts", "server"]
+include = ["admin", "server"]
 
 [tool.django-stubs]
 # django_settings_module = "config.settings"
