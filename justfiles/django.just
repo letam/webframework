@@ -1,5 +1,7 @@
 # justfile for common Django commands (using uv)
 
+set working-directory := '..'
+
 # Run the Django development server
 dev:
     uv run python server/manage.py runserver_plus
