@@ -2,8 +2,8 @@
 
 # Remove backup files created by fly deployment script
 files=(
-    "scripts/configs/fly-postgres.toml.bak"
-    "scripts/configs/fly-sqlite.toml.bak"
+    "admin/configs/fly-postgres.toml.bak"
+    "admin/configs/fly-sqlite.toml.bak"
     "server/config/settings.py.bak"
 )
 for file in "${files[@]}"; do

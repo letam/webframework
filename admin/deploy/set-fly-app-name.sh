@@ -11,4 +11,4 @@ fi
 
 # Set app name in project
 sed -i.bak "s/FLY_APP_NAME/$FLY_APP_NAME/g" server/config/settings.py
-find scripts/configs/ -type f -name "fly-*" -exec sed -i.bak "s/FLY_APP_NAME/$FLY_APP_NAME/g" {} +
+find admin/configs/ -type f -name "fly-*" -exec sed -i.bak "s/FLY_APP_NAME/$FLY_APP_NAME/g" {} +

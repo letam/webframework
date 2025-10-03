@@ -105,10 +105,10 @@ npx @biomejs/biome format --write .
 npx @biomejs/biome check .
 
 # Start both servers using tmux
-./scripts/start-dev-session.sh
+./admin/dev/start-tmux-session.sh
 
 # Build for production
-./scripts/build-prod.sh
+./admin/prod/build-prod.sh
 ```
 
 ## Code Style and Conventions

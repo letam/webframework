@@ -10,7 +10,7 @@ if [ -z "$FLY_APP_NAME" ]; then
 fi
 
 # Set app name in project via script
-./scripts/set-fly-app-name.sh $FLY_APP_NAME
+./admin/set-fly-app-name.sh $FLY_APP_NAME
 
 # Specify the target fly.toml configuration file
 function specify_target_fly_toml() {
@@ -21,7 +21,7 @@ function specify_target_fly_toml() {
     fi
 
     # Copy target fly.toml configuration file to project root directory
-    cp -p ./scripts/configs/fly-postgres.toml fly.toml
+    cp -p ./admin/configs/fly-postgres.toml fly.toml
 }
 specify_target_fly_toml
 

@@ -23,7 +23,7 @@ Includes some functionality for a basic public micro-blogging app.
 
 3. Run the setup script:
 	```
-	./scripts/setup.sh
+	./admin/setup/setup-all.sh
 	```
 
 4. Start the development servers:
@@ -31,7 +31,7 @@ Includes some functionality for a basic public micro-blogging app.
    **Option A: Using tmux session (Recommended)**
 
 	```
-	./scripts/start-dev-session.sh
+	./admin/dev/start-tmux-session.sh
 	```
 	This creates 2 tmux windows:
 
@@ -99,7 +99,7 @@ The web app during development is served via http://localhost:8000
 
 #### Misc setup stuff
 
-- If you're on macOS and you didn't follow the quick setup, then ensure that [gsed](https://www.gnu.org/software/sed/) is installed, which can be done via `brew install gsed` or `scripts/setup/setup-mac.sh`. We use `gsed` in scripts to manage configuration-deployment of project.
+- If you're on macOS and you didn't follow the quick setup, then ensure that [gsed](https://www.gnu.org/software/sed/) is installed, which can be done via `brew install gsed` or `admin/setup/setup-mac.sh`. We use `gsed` in shell scripts to manage configuration-deployment of project.
 
 ## Setup for Production
 
@@ -107,33 +107,23 @@ The web app during development is served via http://localhost:8000
 
 2. Build app for production
 	```
-	./scripts/build-prod.sh
+	./admin/prod/build-prod.sh
 	```
 
 ## Deploying to fly.io
 
 ### Config Type 1: Deploy on simple single webserver with SQLite database:
 
-1. Set app name in project (Replace *your_app_name* with an actual app name):
+1. Run app deployment script:
 ```
-sed -i.bak 's/FLY_APP_NAME/your_app_name/g' server/config/settings.py && find scripts/ -type f -name "deploy_*" -exec sed -i.bak 's/FLY_APP_NAME/your_app_name/g' {} +
-```
-
-2. Run app deployment script:
-```
-./scripts/deploy-fly.io-sqlite.sh <app_name>
+./admin/deploy/launch-fly.io-sqlite.sh <app_name>
 ```
 
 ### Config Type 2: Deploy using HA configuration with Postgres database:
 
-1. Set app name in project (Replace *your_app_name* with an actual app name):
+1. Run app deployment script:
 ```
-sed -i.bak 's/FLY_APP_NAME/your_app_name/g' server/config/settings.py && find scripts/ -type f -name "deploy_*" -exec sed -i.bak 's/FLY_APP_NAME/your_app_name/g' {} +
-```
-
-2. Run app deployment script:
-```
-./scripts/deploy-fly.io-postgres.sh <app_name>
+./admin/deploy/launch-fly.io-postgres.sh <app_name>
 ```
 
 ### To use Cloudflare R2 object storage for user uploads (Required for Config Type 2):

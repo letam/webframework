@@ -36,16 +36,16 @@ log ""
 
 # Run macOS setup
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    run_setup "macOS Setup" "$SCRIPT_DIR/setup/setup-mac.sh"
+    run_setup "macOS Setup" "$SCRIPT_DIR/setup-mac.sh"
     log ""
 fi
 
 # Run backend setup
-run_setup "Backend Setup" "$SCRIPT_DIR/setup/setup-backend.sh"
+run_setup "Backend Setup" "$SCRIPT_DIR/setup-backend.sh"
 log ""
 
 # Run frontend setup
-run_setup "Frontend Setup" "$SCRIPT_DIR/setup/setup-frontend.sh"
+run_setup "Frontend Setup" "$SCRIPT_DIR/setup-frontend.sh"
 log ""
 
 log ""

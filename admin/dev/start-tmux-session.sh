@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Start development tmux session with 2 windows
-# Usage: ./scripts/start-dev-session.sh
+# Usage: ./admin/dev/start-tmux-session.sh
 
 SESSION_NAME="web-framework-dev"
 
