@@ -1,5 +1,10 @@
 # justfile for common Django commands (using uv)
 
+# Shortcut to run manage.py command
+[no-exit-message]
+manage-py *args:
+    uv run python server/manage.py {{args}}
+
 # Run the Django development server
 dev:
     uv run python server/manage.py runserver_plus
