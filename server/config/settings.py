@@ -109,11 +109,15 @@ SECRET_KEY = env('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env('DEBUG')
 
+FLY_APP_NAME = env('FLY_APP_NAME', default='')
+
 if not DEBUG:
-    ALLOWED_HOSTS = [
+    ALLOWED_HOSTS = []
+    if FLY_APP_NAME:
+        ALLOWED_HOSTS.append(f'{FLY_APP_NAME}.fly.dev')
+    ALLOWED_HOSTS += [
         '127.0.0.1',
         'localhost',
-        'FLY_APP_NAME.fly.dev',
         'webframework.fly.dev',
         'webframework.dev',
         'wut.sh',
@@ -356,8 +360,10 @@ if DEBUG:
         ]
     )
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://FLY_APP_NAME.fly.dev',
+CSRF_TRUSTED_ORIGINS = []
+if FLY_APP_NAME:
+    CSRF_TRUSTED_ORIGINS.append(f'https://{FLY_APP_NAME}.fly.dev')
+CSRF_TRUSTED_ORIGINS += [
     'https://webframework.fly.dev',
     'https://webframework.dev',
     'https://wut.sh',

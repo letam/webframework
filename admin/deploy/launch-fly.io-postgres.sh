@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Exit on error
+set -e
+
 # Get FLY_APP_NAME from command line arguments
 FLY_APP_NAME=$1
 
@@ -8,9 +11,6 @@ if [ -z "$FLY_APP_NAME" ]; then
     echo "Usage: $0 <app_name>"
     exit 1
 fi
-
-# Set app name in project via script
-./admin/set-fly-app-name.sh $FLY_APP_NAME
 
 # Specify the target fly.toml configuration file
 function specify_target_fly_toml() {
@@ -26,7 +26,9 @@ function specify_target_fly_toml() {
 specify_target_fly_toml
 
 # Launch app
-yes n | fly launch --name $FLY_APP_NAME --now --copy-config
+yes n | fly launch --name $FLY_APP_NAME --now --copy-config --db=upg
 
 # Restore existing fly.toml
-mv .tmp/fly.toml fly.toml
+if [ -f .tmp/fly.toml ]; then
+    mv .tmp/fly.toml fly.toml
+fi

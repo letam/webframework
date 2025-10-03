@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Exit on error
+set -e
+
 # Get FLY_APP_NAME from command line arguments
 FLY_APP_NAME=$1
 
@@ -8,9 +11,6 @@ if [ -z "$FLY_APP_NAME" ]; then
     echo "Usage: $0 <app_name>"
     exit 1
 fi
-
-# Set app name in project via script
-./admin/set-fly-app-name.sh $FLY_APP_NAME
 
 # Specify the target fly.toml configuration file
 function specify_target_fly_toml() {
@@ -51,7 +51,7 @@ $SED_CMD -i "s|^  release_command = 'python manage.py migrate --noinput'|#  rele
 
 
 # Launch app
-fly deploy --config ./admin/configs/fly-sqlite.toml
+fly deploy --app $FLY_APP_NAME --config ./admin/configs/fly-sqlite.toml
 
 # Wait for app to be ready
 echo "Waiting for app to be ready..."
@@ -66,4 +66,6 @@ echo "Running migrations..."
 fly ssh console -C 'python manage.py migrate'
 
 # Restore existing fly.toml
-mv .tmp/fly.toml fly.toml
+if [ -f .tmp/fly.toml ]; then
+    mv .tmp/fly.toml fly.toml
+fi
