@@ -1,4 +1,4 @@
-import 'justfiles/django.just'
+import 'admin/justfiles/django.just'
 
 
 default:
@@ -6,7 +6,9 @@ default:
 
 # Dump all just files in justfiles/ dir
 just-dump-all:
-	for file in `ls justfiles`; do \
-		echo $file; \
-		just --dump -f justfiles/$file; \
+	echo ; \
+	for file in `ls admin/justfiles`; do \
+		echo JUSTFILE: $file; \
+		just --dump -f admin/justfiles/$file; \
+		echo ; \
 	done
