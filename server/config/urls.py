@@ -56,7 +56,10 @@ urlpatterns = [
     #
     path('api/', include(router.urls)),
     #
+    # Static files management
+    path('static/', include('apps.static_manager.urls')),
     #
+    # Django-rendered web pages
     re_path(r'^p/(?P<post_id>\d+)/?$', post_detail, name='post_detail'),
 ]
 

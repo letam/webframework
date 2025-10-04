@@ -147,6 +147,7 @@ INSTALLED_APPS = [
     'apps.users.apps.UsersConfig',
     'apps.website',
     'apps.blogs',
+    'apps.static_manager',
 ]
 
 MIDDLEWARE = [
