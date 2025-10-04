@@ -24,7 +24,8 @@ console_command = '/code/manage.py shell'
 [http_service]
   internal_port = 8000
   force_https = true
-  auto_stop_machines = false
+# Reference for autostop/autostart: https://fly.io/docs/launch/autostop-autostart/
+  auto_stop_machines = 'off' # never stop machine ('off' is equivalent to false)
   auto_start_machines = true
   min_machines_running = 1
   processes = ['app']
