@@ -55,6 +55,9 @@ urlpatterns = [
     path('api/posts/<int:post_id>/media/', stream_post_media, name='stream_post_media'),
     #
     path('api/', include(router.urls)),
+    #
+    # Static files management
+    path('static/', include('apps.static_manager.urls')),
 ]
 
 # Serve media files in development
