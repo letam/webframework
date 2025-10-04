@@ -1,4 +1,5 @@
 import 'admin/justfiles/django.just'
+import 'admin/justfiles/fly.io.just'
 
 
 default:
