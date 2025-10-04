@@ -1,6 +1,16 @@
 # justfile for actions on fly.io
 
 
+# Deploy app with SQLite config
+fly-deploy-app-sqlite app_name:
+    fly deploy --config admin/configs/fly-sqlite.toml --app {{app_name}}
+
+
+# Deploy app with Postgres config
+fly-deploy-app-postgres app_name:
+    fly deploy --config admin/configs/fly-postgres.toml --app {{app_name}}
+
+
 # Launch app with local SQLite database
 fly-launch-app-sqlite app_name:
     ./admin/deploy/launch-fly.io-sqlite.sh {{app_name}}
