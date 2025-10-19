@@ -1,3 +1,4 @@
+import 'admin/justfiles/dev.just'
 import 'admin/justfiles/django.just'
 import 'admin/justfiles/fly.io.just'
 

@@ -6,7 +6,7 @@ manage-py *args:
     uv run python server/manage.py {{args}}
 
 # Run the Django development server
-dev:
+runserver:
     uv run python server/manage.py runserver_plus
 
 # Make new migrations for all apps
