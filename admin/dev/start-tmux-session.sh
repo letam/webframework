@@ -13,8 +13,12 @@ if ! command -v tmux &> /dev/null; then
     exit 1
 fi
 
-# Kill existing session if it exists
-tmux kill-session -t $SESSION_NAME 2>/dev/null
+# Check if session already exists and is active
+if tmux has-session -t $SESSION_NAME 2>/dev/null; then
+    echo "Session '$SESSION_NAME' already exists. Attaching to existing session..."
+    tmux attach-session -t $SESSION_NAME
+    exit 0
+fi
 
 # Create new session with first window
 tmux new-session -d -s $SESSION_NAME -n "servers"
