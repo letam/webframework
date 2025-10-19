@@ -1,0 +1,148 @@
+# Web Framework 2025 - Cursor Rules
+
+## Project Overview
+This is a full-stack web framework built with Django (Python) backend and React (TypeScript) frontend. It's designed as a "framework on top of frameworks" for building web applications quickly.
+
+## Tech Stack
+- **Backend**: Python + Django + Django REST Framework
+- **Frontend**: React + TypeScript + Vite
+- **Package Managers**: uv (Python), bun (JavaScript)
+- **Database**: SQLite (dev) / PostgreSQL (production)
+- **Deployment**: Fly.io
+- **Linting**: Ruff + Black (Python), ESLint + Biome (frontend)
+
+## Project Structure
+- `server/` - Django backend application
+- `app/` - React frontend application
+- `admin/` - Development and deployment scripts (setup/, dev/, deploy/, prod/)
+- `scripts/` - Utility scripts
+- `dev/` - Development configuration files
+- `html/` - Static HTML files for production
+- `log/` - Application logs directory
+
+## Development Setup
+1. Install dependencies: `./admin/setup/setup-all.sh`
+2. Start dev servers: `./admin/dev/start-tmux-session.sh`
+3. Or manually:
+   - Backend: `uv run python server/manage.py runserver_plus`
+   - Frontend: `cd app && bun dev`
+
+## Running Python Commands
+**Always run Python commands from the project root directory.**
+
+### Django Management Commands
+- Run migrations: `uv run python server/manage.py migrate`
+- Create superuser: `uv run python server/manage.py createsuperuser`
+- Run tests: `uv run python server/manage.py test`
+- Collect static files: `uv run python server/manage.py collectstatic`
+- Create new app: `uv run python server/manage.py startapp <app_name>`
+
+### Python Scripts
+- Any Python script: `uv run python <script.py>`
+- With arguments: `uv run python server/manage.py <command> <args>`
+
+## Frontend Development
+**Frontend commands must be run from the `app/` directory.**
+
+### Common Commands
+- Install dependencies: `cd app && bun install`
+- Start dev server: `cd app && bun dev`
+- Build for production: `cd app && bun run build`
+- Run tests: `cd app && bun test`
+- Lint code: `cd app && bun run lint`
+- Format code: `cd app && bun run format`
+- Check code: `cd app && bun run check`
+
+## Code Style Guidelines
+
+### Python (Django)
+- Follow PEP 8 style guidelines
+- Use type hints where possible
+- Use Django's built-in authentication system
+- Use Django REST Framework for API endpoints
+- Place business logic in models/managers, not views
+- Use meaningful variable and function names
+
+### TypeScript/React
+- Use functional components with hooks
+- Use TypeScript interfaces for data structures
+- Follow React best practices
+- Use proper error handling
+- Keep components small and focused
+- Use custom hooks for reusable logic
+
+## API Patterns
+- RESTful API design using Django REST Framework
+- Authentication via Django's built-in authentication system
+- Use serializers for data validation
+- Implement proper error handling and status codes
+- Use pagination for list endpoints
+
+## Database Patterns
+- Use Django ORM for all database operations
+- Define relationships properly (ForeignKey, ManyToMany, etc.)
+- Use migrations for schema changes
+- Implement data validation at model level
+- Use database constraints where appropriate
+
+## Testing
+- Write unit tests for models and utilities
+- Write integration tests for API endpoints
+- Use Django's TestCase for backend tests
+- Use Vitest for frontend component tests
+- Aim for good test coverage
+
+## Deployment
+- Use provided deployment scripts in `admin/deploy/`
+- Two deployment configurations:
+  - SQLite: Simple single server setup (`launch-fly.io-sqlite.sh`)
+  - PostgreSQL: HA configuration with database (`launch-fly.io-postgres.sh`)
+- Configure Fly.io app name before deployment
+- Use Cloudflare R2 for file storage in production
+
+## Common Development Tasks
+
+### Adding New Features
+1. Plan the feature and its API endpoints
+2. Create/update Django models and migrations
+3. Implement backend API views and serializers
+4. Create/update frontend components
+5. Add proper error handling and validation
+6. Write tests
+7. Update documentation
+
+### Database Changes
+1. Modify models in `server/apps/*/models.py`
+2. Create migration: `uv run python server/manage.py makemigrations`
+3. Apply migration: `uv run python server/manage.py migrate`
+4. Update serializers if needed
+
+### Frontend Changes
+1. Work in `app/src/` directory
+2. Use TypeScript for all new code
+3. Follow component structure in `app/src/components/`
+4. Use hooks from `app/src/hooks/` for reusable logic
+5. Update tests in `app/src/__tests__/`
+
+## File Organization
+- Keep related code together
+- Use clear directory structure
+- Follow Django app structure for backend
+- Use feature-based organization for frontend components
+- Keep utility functions in appropriate lib/utils directories
+
+## Security Considerations
+- Always validate user input
+- Use Django's built-in security features
+- Implement proper authentication and authorization
+- Sanitize data before rendering
+- Use HTTPS in production
+- Keep dependencies updated
+
+## Performance Tips
+- Use Django's caching framework
+- Optimize database queries
+- Use pagination for large datasets
+- Compress static files
+- Implement lazy loading for frontend assets
+- Monitor and optimize API response times
