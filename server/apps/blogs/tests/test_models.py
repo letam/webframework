@@ -1,4 +1,5 @@
 """Tests for the blogs app models."""
+# pyright: reportAttributeAccessIssue=false, reportOptionalMemberAccess=false
 
 import os
 import tempfile

@@ -1,3 +1,6 @@
+"""Tests for the auth app views."""
+# pyright: reportAttributeAccessIssue=false
+
 import json
 
 from django.contrib.auth import get_user_model
