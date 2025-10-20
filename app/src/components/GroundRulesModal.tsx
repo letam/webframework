@@ -1,5 +1,11 @@
 import { useState, useEffect } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
@@ -80,13 +86,12 @@ export const GroundRulesModal = () => {
 						<AlertTriangle className="h-6 w-6 text-amber-500" />
 						Community Ground Rules
 					</DialogTitle>
+					<DialogDescription className="mt-2">
+						Review the community rules below. Check all boxes to proceed.
+					</DialogDescription>
 				</DialogHeader>
 
 				<div className="space-y-6">
-					<div className="text-sm text-muted-foreground">
-						Before you can access our community, please review and accept our ground rules:
-					</div>
-
 					<div className="space-y-4">
 						{groundRules.map((rule) => (
 							<button
