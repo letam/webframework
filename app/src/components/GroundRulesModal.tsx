@@ -51,6 +51,7 @@ const groundRules: GroundRule[] = [
 export const GroundRulesModal = () => {
 	const [isOpen, setIsOpen] = useState(false)
 	const [acceptedRules, setAcceptedRules] = useState<Set<string>>(new Set())
+	const [hasAttemptedAccept, setHasAttemptedAccept] = useState(false)
 
 	useEffect(() => {
 		const saved = localStorage.getItem(GROUND_RULES_KEY)
@@ -73,6 +74,8 @@ export const GroundRulesModal = () => {
 		if (acceptedRules.size === groundRules.length) {
 			localStorage.setItem(GROUND_RULES_KEY, JSON.stringify(Array.from(acceptedRules)))
 			setIsOpen(false)
+		} else {
+			setHasAttemptedAccept(true)
 		}
 	}
 
@@ -119,15 +122,14 @@ export const GroundRulesModal = () => {
 					<div className="flex justify-end space-x-2">
 						<Button
 							onClick={handleAccept}
-							disabled={!allRulesAccepted}
-							className="bg-green-600 hover:bg-green-700"
+							className={`${allRulesAccepted ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 hover:bg-gray-500 cursor-not-allowed'}`}
 						>
 							I Accept All Rules
 						</Button>
 					</div>
 
-					{!allRulesAccepted && (
-						<div className="text-sm text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-200">
+					{!allRulesAccepted && hasAttemptedAccept && (
+						<div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg border border-border">
 							Please check all boxes to accept the ground rules and continue.
 						</div>
 					)}
