@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import { AlertTriangle, Shield, Heart, Users } from 'lucide-react'
+import { AlertTriangle, Shield, Heart, Users, Smile } from 'lucide-react'
 
 const GROUND_RULES_KEY = 'ground-rules-accepted'
 
@@ -33,6 +33,12 @@ const groundRules: GroundRule[] = [
 		title: 'Safe Environment',
 		description: 'Help maintain a safe and welcoming environment for all users.',
 		icon: <Shield className="h-5 w-5 text-green-500 flex-shrink-0" />,
+	},
+	{
+		id: 'be-awesome',
+		title: 'Be Awesome',
+		description: 'Be awesome to everyone and everything. Start with your self.',
+		icon: <Smile className="h-5 w-5 text-yellow-500 flex-shrink-0" />,
 	},
 ]
 
