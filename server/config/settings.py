@@ -461,6 +461,11 @@ else:
             'script-src': [
                 SELF,
                 "'sha256-Ucm0AC6Vg7xQaBrSEjxBw5seBgXx38qp1ezaIVXWjWk='",
+                #
+                # Hashes for scripts in Django HTML templates
+                "'sha256-fEadAhS2dhEMqfOnUpZHx3NwyMuqE2eNGHf2lfZ7GxA='",
+                "'sha256-U5omDvKKIDQbdU3Ikh2GpqWJSIAqoNu8TR0Dix3fYN8='",
+                "'sha256-dTNUwcfUGtMkuMEJSvFCBc+T6wD28MihhklEfl0tPyE='",
             ],
             'style-src': [
                 SELF,
@@ -470,6 +475,12 @@ else:
                 "'sha256-CIxDM5jnsGiKqXs2v7NKCY5MzdR9gu6TtiMJrDw29AY='",
                 "'sha256-9yCaDE0ZqnMqIHIqv/lrx+VJOh16ZKpxkH4PoBNWe2s='",
                 "'sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo='",
+                #
+                # Hashes for styles in Django HTML templates
+                "'sha256-AJCAAIHaPGimoFuBmCHkbvR2Y1cbFoXCG7J0RYFfhvw='",
+                "'sha256-sEPwHz2R++1oUDRxE8ijUrPHXTPU0i3UpPzD0Foq6CE='",
+                "'sha256-biLFinpqYMtWHmXfkA1BPeCY0/fNt46SAZ+BBk5YUog='",
+                "'sha256-HPqN5wutbiR2xWv43XepwlmBqjOWbDPEtwzgq1nmUb4='",
             ],
             'connect-src': [SELF, 'http://127.0.0.1:8000'],
         }
