@@ -51,6 +51,11 @@ STATIC_APP_DIR="server/static/app"
 ### Build frontend files and move to static app dir
 cd app
 npm run build
+
+### Add build timestamp to index-*.js
+BUILD_TIME=$(date +'%Y-%m-%d %H:%M:%S %Z')
+echo "// Build time: $BUILD_TIME" >> dist/assets/index-*.js
+
 cd - >/dev/null
 
 rm -rf "$STATIC_APP_DIR"

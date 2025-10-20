@@ -75,6 +75,9 @@ COPY app .
 # Build frontend files
 RUN npm run build
 
+# Add build timestamp to index-*.js
+RUN echo "// Build time: $(date +'%Y-%m-%d %H:%M:%S %Z')" >> dist/assets/index-*.js
+
 
 # Production Stage: Integrate and Serve
 FROM python:${PYTHON_IMAGE_VERSION} as production
@@ -109,6 +112,9 @@ COPY --from=build-backend /code .
 
 # Copy the compiled frontend files
 COPY --from=build-frontend /code/dist /code/static/app
+
+# Log launched timestamp in index-*.js
+RUN echo "console.log('Launched at: $(date +'%Y-%m-%d %H:%M:%S %Z')');" >> /code/static/app/assets/index-*.js
 
 # Setup to serve fully integrated index.html
 ARG WEBSITE_TEMPLATE_DIST_DIR="apps/website/templates/website/dist"
