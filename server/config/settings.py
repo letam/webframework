@@ -18,7 +18,7 @@ import logging.config
 import os
 from pathlib import Path
 
-import environ
+from environs import Env
 
 # Configure logging
 LOGGING = {
@@ -60,44 +60,47 @@ logging.config.dictConfig(LOGGING)
 logger = logging.getLogger('server')
 
 # Environment variables
-# Reference: https://github.com/joke2k/django-environ
-env = environ.Env(
-    # set casting, default value
-    DEBUG=(bool, False),
-    OPENAI_API_KEY=(str, ''),
-)
+# Reference: https://github.com/sloria/environs
+env = Env()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# NOTE: In production container (Docker) image as well as gunicorn process, then the working directory is the project's server (Django project root) directory. Only during development and running the server from project root then we see the server child directory.
-IS_SERVER_CHILD_DIR_PRESENT = (Path.cwd() / 'server').exists()
-if IS_SERVER_CHILD_DIR_PRESENT:
-    ENV_FILE = 'server/.env'
-else:
-    ENV_FILE = '.env'
 
-if not Path(ENV_FILE).is_file():
-    logger.debug('Required .env file not found.')
-    from django.core.management.utils import get_random_secret_key
+def check_and_create_env_file():
+    # NOTE: In production container (Docker) image as well as gunicorn process, then the working directory is the project's server (Django project root) directory. Only during development and running the server from project root then we see the server child directory.
+    IS_SERVER_CHILD_DIR_PRESENT = (Path.cwd() / 'server').exists()
+    if IS_SERVER_CHILD_DIR_PRESENT:
+        ENV_FILE = 'server/.env'
+    else:
+        ENV_FILE = '.env'
 
-    with open(ENV_FILE, 'a') as f:
-        f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
-        if IS_SERVER_CHILD_DIR_PRESENT:
-            f.write('DEBUG=True\n')
-            f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
-            f.write('USE_LOCAL_FILE_STORAGE=True\n')
-            f.write('MEDIA_ROOT=server/uploads\n')
-            logger.debug('Created .env file at server/.env with default values for development.')
-            logger.warning('Please edit the .env file for production environment.')
-        else:
-            f.write('DEBUG=False\n')
-            f.write('DATABASE_URL=sqlite:////data/db.sqlite3\n')
-            f.write('MEDIA_ROOT=/data/uploads\n')
-            logger.debug('Created .env file at .env with default values for production.')
-    logger.debug('')
+    if not Path(ENV_FILE).is_file():
+        logger.debug('Required .env file not found.')
+        from django.core.management.utils import get_random_secret_key
 
-environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+        with open(ENV_FILE, 'a') as f:
+            f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
+            if IS_SERVER_CHILD_DIR_PRESENT:
+                f.write('DEBUG=True\n')
+                f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
+                f.write('USE_LOCAL_FILE_STORAGE=True\n')
+                f.write('MEDIA_ROOT=server/uploads\n')
+                logger.debug(
+                    'Created .env file at server/.env with default values for development.'
+                )
+                logger.warning('Please edit the .env file for production environment.')
+            else:
+                f.write('DEBUG=False\n')
+                f.write('DATABASE_URL=sqlite:////data/db.sqlite3\n')
+                f.write('MEDIA_ROOT=/data/uploads\n')
+                logger.debug('Created .env file at .env with default values for production.')
+        logger.debug('')
+
+
+check_and_create_env_file()
+
+env.read_env(os.path.join(BASE_DIR, '.env'))
 
 # Quick-start settings
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -184,7 +187,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-    'default': env.db(default='sqlite:///db.sqlite3')
+    'default': env.dj_db_url('DATABASE_URL', default='sqlite:///db.sqlite3')
     or {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
