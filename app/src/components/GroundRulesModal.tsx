@@ -39,13 +39,10 @@ const groundRules: GroundRule[] = [
 export const GroundRulesModal = () => {
 	const [isOpen, setIsOpen] = useState(false)
 	const [acceptedRules, setAcceptedRules] = useState<Set<string>>(new Set())
-	const [hasAcceptedBefore, setHasAcceptedBefore] = useState(false)
 
 	useEffect(() => {
 		const saved = localStorage.getItem(GROUND_RULES_KEY)
-		if (saved) {
-			setHasAcceptedBefore(true)
-		} else {
+		if (!saved) {
 			setIsOpen(true)
 		}
 	}, [])
