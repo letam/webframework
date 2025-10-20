@@ -7,13 +7,13 @@ User = get_user_model()
 
 
 class UserNameSerializer(serializers.ModelSerializer):
-    class Meta:
+    class Meta:  # type: ignore
         model = User
         fields = ['id', 'username', 'first_name', 'last_name']
 
 
 class MediaSerializer(serializers.ModelSerializer):
-    class Meta:
+    class Meta:  # type: ignore
         model = Media
         fields = [
             'id',
@@ -33,7 +33,7 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
     author = UserNameSerializer(read_only=True)
     media = MediaSerializer(read_only=True)
 
-    class Meta:
+    class Meta:  # type: ignore
         model = Post
         fields = [
             'id',
@@ -47,7 +47,7 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
 
 
 class PostCreateSerializer(serializers.ModelSerializer):
-    class Meta:
+    class Meta:  # type: ignore
         model = Post
         fields = [
             'head',

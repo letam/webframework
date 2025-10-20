@@ -38,9 +38,9 @@ class PostAdmin(admin.ModelAdmin):
     def get_media_type(self, obj):
         return obj.media.media_type if obj.media else '-'
 
-    get_media_type.short_description = 'Media Type'
+    get_media_type.short_description = 'Media Type'  # type: ignore
 
     def get_media_duration(self, obj):
         return obj.media.duration if obj.media else '-'
 
-    get_media_duration.short_description = 'Media Duration'
+    get_media_duration.short_description = 'Media Duration'  # type: ignore

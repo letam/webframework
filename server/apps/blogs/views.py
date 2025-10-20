@@ -64,12 +64,12 @@ class PostViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
 
         if media:
-            serializer.instance.media = Media.objects.create(
-                id=serializer.instance.id,
+            serializer.instance.media = Media.objects.create(  # type: ignore
+                id=serializer.instance.id,  # type: ignore
                 file=media,
                 media_type=media_type,
             )
-            serializer.instance.save()
+            serializer.instance.save()  # type: ignore
 
         # Get the created instance and serialize it with PostSerializer
         instance = serializer.instance
@@ -88,8 +88,8 @@ class PostViewSet(viewsets.ModelViewSet):
             )
 
         # Allow update if user is the author or an admin
-        is_author = request.user.id == instance.author.id
-        is_admin = request.user.is_superuser
+        is_author = request.user.id == instance.author.id  # type: ignore
+        is_admin = request.user.is_superuser  # type: ignore
 
         if not (is_author or is_admin):
             return Response(
@@ -181,8 +181,8 @@ class PostViewSet(viewsets.ModelViewSet):
             )
 
         # Allow deletion if user is the author or an admin
-        is_author = request.user.id == instance.author.id
-        is_admin = request.user.is_superuser
+        is_author = request.user.id == instance.author.id  # type: ignore
+        is_admin = request.user.is_superuser  # type: ignore
 
         if not (is_author or is_admin):
             return Response(
@@ -239,9 +239,9 @@ def stream_post_media(request, post_id):
 
     # For simplicity, handle only single range requests
     try:
-        start, end = ranges[0]
+        start, end = ranges[0]  # type: ignore
     except Exception as e:
-        logger.info(f'Error getting range for post {post.id}: {str(e)}')
+        logger.info(f'Error getting range for post {post.id}: {str(e)}')  # type: ignore
         mime_type = get_file_mime_type(post.media.file.path)
         response = FileResponse(open(post.media.file.path, 'rb'), content_type=mime_type)
         return response

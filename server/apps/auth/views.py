@@ -16,9 +16,8 @@ UserModel = get_user_model()
 class CustomUserCreationForm(UserCreationForm):
     """Custom user creation form that works with our custom User model."""
 
-    class Meta(UserCreationForm.Meta):
+    class Meta(UserCreationForm.Meta):  # type: ignore
         model = UserModel
-        fields = ('username',)
 
 
 def csrf(request):

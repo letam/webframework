@@ -36,7 +36,7 @@ class Media(models.Model):
 
     def save(self, *args, **kwargs):
         # If this is a new record with file and we don't yet have id for media_file_path def
-        if self.id is None and self.file:
+        if self.id is None and self.file:  # type: ignore
             # Store file temporarily outside of record
             file = self.file
             self.file = None
@@ -101,10 +101,12 @@ class Media(models.Model):
                 logger.error(f"Error deleting media directory {media_dir}: {str(e)}")
 
         # Delete the record
-        super().delete(*args, **kwargs)
+        return super().delete(*args, **kwargs)
 
     def convert_to_mp3(self):
         """Convert the media file to MP3 format."""
+        if not self.file:
+            return
         if not self.file.path.endswith('.mp3'):
             convert_to_mp3(self.file.path)
             new_media_file_name = os.path.splitext(self.file.name)[0] + '.mp3'
@@ -136,4 +138,4 @@ class Post(models.Model):
                 logger.error(f"Error deleting media record {self.media.id}: {str(e)}")
 
         # Delete the record
-        super().delete(*args, **kwargs)
+        return super().delete(*args, **kwargs)

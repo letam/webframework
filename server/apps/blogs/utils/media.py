@@ -1,11 +1,12 @@
 import logging
 import subprocess
 from datetime import timedelta
+from typing import Optional
 
 logger = logging.getLogger('server.apps.blogs')
 
 
-def get_media_duration(file_path: str) -> timedelta:
+def get_media_duration(file_path: str) -> Optional[timedelta]:
     """
     Returns the duration of a media file as a timedelta object using ffprobe.
     """
