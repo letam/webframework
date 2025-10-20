@@ -16,7 +16,7 @@ UserModel = get_user_model()
 class CustomUserCreationForm(UserCreationForm):
     """Custom user creation form that works with our custom User model."""
 
-    class Meta(UserCreationForm.Meta):  # type: ignore
+    class Meta(UserCreationForm.Meta):  # pyright: ignore [reportAttributeAccessIssue]
         model = UserModel
 
 
@@ -37,7 +37,7 @@ def login(request):
         return JsonResponse(errors, status=400)
 
     auth_login(request, form.get_user())
-    user_id = form.get_user().id  # type: ignore
+    user_id = form.get_user().id  # pyright: ignore [reportAttributeAccessIssue]
 
     return JsonResponse(user_id, safe=False)
 

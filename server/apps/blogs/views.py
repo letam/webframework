@@ -35,7 +35,7 @@ class PostViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         ANONYMOUS_USER_ID = 2
         user_id = (
-            self.request.user.id  # type: ignore
+            self.request.user.id  # pyright: ignore [reportAttributeAccessIssue]
             if self.request.user.is_authenticated
             else ANONYMOUS_USER_ID
         )
@@ -64,12 +64,12 @@ class PostViewSet(viewsets.ModelViewSet):
         headers = self.get_success_headers(serializer.data)
 
         if media:
-            serializer.instance.media = Media.objects.create(  # type: ignore
-                id=serializer.instance.id,  # type: ignore
+            serializer.instance.media = Media.objects.create(  # pyright: ignore [reportOptionalMemberAccess]
+                id=serializer.instance.id,  # pyright: ignore [reportOptionalMemberAccess]
                 file=media,
                 media_type=media_type,
             )
-            serializer.instance.save()  # type: ignore
+            serializer.instance.save()  # pyright: ignore [reportOptionalMemberAccess]
 
         # Get the created instance and serialize it with PostSerializer
         instance = serializer.instance
@@ -88,8 +88,8 @@ class PostViewSet(viewsets.ModelViewSet):
             )
 
         # Allow update if user is the author or an admin
-        is_author = request.user.id == instance.author.id  # type: ignore
-        is_admin = request.user.is_superuser  # type: ignore
+        is_author = request.user.id == instance.author.id  # pyright: ignore [reportAttributeAccessIssue]
+        is_admin = request.user.is_superuser  # pyright: ignore [reportAttributeAccessIssue]
 
         if not (is_author or is_admin):
             return Response(
@@ -181,8 +181,8 @@ class PostViewSet(viewsets.ModelViewSet):
             )
 
         # Allow deletion if user is the author or an admin
-        is_author = request.user.id == instance.author.id  # type: ignore
-        is_admin = request.user.is_superuser  # type: ignore
+        is_author = request.user.id == instance.author.id  # pyright: ignore [reportAttributeAccessIssue]
+        is_admin = request.user.is_superuser  # pyright: ignore [reportAttributeAccessIssue]
 
         if not (is_author or is_admin):
             return Response(
@@ -239,9 +239,9 @@ def stream_post_media(request, post_id):
 
     # For simplicity, handle only single range requests
     try:
-        start, end = ranges[0]  # type: ignore
+        start, end = ranges[0]  # pyright: ignore [reportIndexIssue]
     except Exception as e:
-        logger.info(f'Error getting range for post {post.id}: {str(e)}')  # type: ignore
+        logger.info(f'Error getting range for post {post.id}: {str(e)}')  # pyright: ignore [reportAttributeAccessIssue]
         mime_type = get_file_mime_type(post.media.file.path)
         response = FileResponse(open(post.media.file.path, 'rb'), content_type=mime_type)
         return response

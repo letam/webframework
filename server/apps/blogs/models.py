@@ -36,7 +36,7 @@ class Media(models.Model):
 
     def save(self, *args, **kwargs):
         # If this is a new record with file and we don't yet have id for media_file_path def
-        if self.id is None and self.file:  # type: ignore
+        if self.id is None and self.file:  # pyright: ignore [reportAttributeAccessIssue]
             # Store file temporarily outside of record
             file = self.file
             self.file = None
