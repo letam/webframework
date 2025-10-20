@@ -1,6 +1,13 @@
 import type React from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
+import { Copy, ExternalLink } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { Post } from '@/types/post'
 
@@ -9,6 +16,20 @@ interface PostHeaderProps {
 }
 
 const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
+	console.log('derp post', post) // DEBUG
+	const handleCopyLink = async () => {
+		try {
+			await navigator.clipboard.writeText(post.url)
+			// You could add a toast notification here if you have one
+		} catch (err) {
+			console.error('Failed to copy link:', err)
+		}
+	}
+
+	const handleOpenInNewTab = () => {
+		window.open(post.url, '_blank', 'noopener,noreferrer')
+	}
+
 	return (
 		<div className="flex items-center gap-2">
 			<Avatar className="h-10 w-10">
@@ -27,11 +48,25 @@ const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
 				</div>
 				<TooltipProvider>
 					<Tooltip>
-						<TooltipTrigger asChild>
-							<div className="text-sm text-muted-foreground cursor-help">
-								{formatDistanceToNow(post.created, { addSuffix: true })}
-							</div>
-						</TooltipTrigger>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<TooltipTrigger asChild>
+									<div className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+										{formatDistanceToNow(post.created, { addSuffix: true })}
+									</div>
+								</TooltipTrigger>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="start">
+								<DropdownMenuItem onClick={handleCopyLink} className="cursor-pointer">
+									<Copy className="mr-2 h-4 w-4" />
+									Copy link to post
+								</DropdownMenuItem>
+								<DropdownMenuItem onClick={handleOpenInNewTab} className="cursor-pointer">
+									<ExternalLink className="mr-2 h-4 w-4" />
+									Open post in new tab
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
 						<TooltipContent>
 							<p>{format(post.created, 'PPpp')}</p>
 						</TooltipContent>

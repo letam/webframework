@@ -12,6 +12,7 @@ export const getPosts = async (): Promise<Post[]> => {
 		data = data.map((post) => ({
 			...post,
 			created: new Date(post.created),
+			url: `${window.location.origin}/p/${post.id}/`,
 		}))
 
 		// Get signed url for each post

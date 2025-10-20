@@ -15,7 +15,7 @@ Including another URLconf
 """
 
 from apps.auth import views as auth_views
-from apps.blogs.views import PostViewSet, get_post_media_mime_type, stream_post_media
+from apps.blogs.views import PostViewSet, get_post_media_mime_type, post_detail, stream_post_media
 from apps.uploads.views import get_presigned_url, get_presigned_url_for_post
 from apps.website.views import index
 from django.conf import settings
@@ -55,6 +55,9 @@ urlpatterns = [
     path('api/posts/<int:post_id>/media/', stream_post_media, name='stream_post_media'),
     #
     path('api/', include(router.urls)),
+    #
+    #
+    re_path(r'^p/(?P<post_id>\d+)/?$', post_detail, name='post_detail'),
 ]
 
 # Serve media files in development

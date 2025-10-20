@@ -4,6 +4,7 @@ import traceback
 
 from django.conf import settings
 from django.http import FileResponse, HttpResponse
+from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_GET
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -256,3 +257,42 @@ def stream_post_media(request, post_id):
     response['Accept-Ranges'] = 'bytes'
     response.status_code = 206  # Partial Content
     return response
+
+
+def post_detail(request, post_id):
+    """
+    View for individual post detail pages.
+    Returns JSON if Accept header contains application/json, otherwise renders HTML.
+    """
+    post = get_object_or_404(Post.objects.select_related('author', 'media'), id=post_id)
+
+    # Check if client wants JSON response
+    accept_header = request.META.get('HTTP_ACCEPT', '')
+    if 'application/json' in accept_header:
+        serializer = PostSerializer(post)
+        return Response(serializer.data)
+
+    # Prepare context for HTML template
+    context = {
+        'post': post,
+        'debug': settings.DEBUG,
+    }
+
+    # Add Open Graph data
+    og_data = {
+        'title': post.head or 'Post',
+        'description': post.body[:200] + '...' if len(post.body) > 200 else post.body,
+        'type': 'article',
+        'url': request.build_absolute_uri(),
+    }
+
+    # Add image if post has media and it's an image type
+    if post.media and post.media.media_type == 'image':
+        if post.media.thumbnail:
+            og_data['image'] = request.build_absolute_uri(post.media.thumbnail.url)
+        elif post.media.file:
+            og_data['image'] = request.build_absolute_uri(post.media.file.url)
+
+    context['og_data'] = og_data
+
+    return render(request, 'blogs/post_detail.html', context)
