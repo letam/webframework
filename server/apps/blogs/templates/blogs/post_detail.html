@@ -1,452 +1,253 @@
+{% extends 'shared/base.html' %}
 {% load static %}
-<!DOCTYPE html>
-<html lang="en">
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="color-scheme" content="light dark" />
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-  <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+{% block title %}{{ og_data.title }} - Echo Sphere{% endblock %}
+{% block description %}{{ og_data.description }}{% endblock %}
+{% block author %}{{ post.author.first_name }} {{ post.author.last_name }}{% endblock %}
 
-  {% if debug %}
-  <link rel="icon" type="image/svg+xml" href="{% static 'vite-logo.svg' %}" />
-  <link rel="apple-touch-icon" href="{% static 'vite-logo.png' %}" />
-  {% else %}
-  <link rel="icon" type="image/svg+xml" href="/vite-logo.svg" />
-  <link rel="apple-touch-icon" href="/vite-logo.png" />
-  {% endif %}
+{% block og_title %}{{ og_data.title }}{% endblock %}
+{% block og_description %}{{ og_data.description }}{% endblock %}
+{% block og_type %}{{ og_data.type }}{% endblock %}
+{% block og_url %}{{ og_data.url }}{% endblock %}
+{% block og_image %}{% if og_data.image %}
+<meta property="og:image" content="{{ og_data.image }}" />{% endif %}{% endblock %}
 
-  <title>{{ og_data.title }} - Echo Sphere</title>
-  <meta name="description" content="{{ og_data.description }}" />
-  <meta name="author" content="{{ post.author.first_name }} {{ post.author.last_name }}" />
+{% block twitter_title %}{{ og_data.title }}{% endblock %}
+{% block twitter_description %}{{ og_data.description }}{% endblock %}
+{% block twitter_image %}{% if og_data.image %}
+<meta name="twitter:image" content="{{ og_data.image }}" />{% endif %}{% endblock %}
 
-  <!-- Open Graph meta tags -->
-  <meta property="og:title" content="{{ og_data.title }}" />
-  <meta property="og:description" content="{{ og_data.description }}" />
-  <meta property="og:type" content="{{ og_data.type }}" />
-  <meta property="og:url" content="{{ og_data.url }}" />
-  {% if og_data.image %}
-  <meta property="og:image" content="{{ og_data.image }}" />
-  {% endif %}
+{% block extra_css %}
+<style>
+  /* Post detail specific styles */
+  .post-detail {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 20px;
+    background-color: hsl(var(--background));
+    min-height: calc(100vh - 3.5rem);
+    transition: background-color 0.2s ease;
+  }
 
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:site" content="@slowpowk" />
-  <meta name="twitter:title" content="{{ og_data.title }}" />
-  <meta name="twitter:description" content="{{ og_data.description }}" />
-  {% if og_data.image %}
-  <meta name="twitter:image" content="{{ og_data.image }}" />
-  {% endif %}
+  .post-header {
+    margin-bottom: 20px;
+  }
 
-  <script>
-    // Blocking script to set theme before any content renders
-    (function () {
-      // This script runs before the page renders to prevent flash of unstyled content
-      try {
-        let theme = "dark"; // Default to dark mode
-        let hasSavedPreference = false;
+  .post-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: hsl(var(--foreground));
+    line-height: 1.3;
+  }
 
-        // Check for saved theme preference first (matches frontend app storage key)
-        try {
-          const savedTheme = localStorage.getItem("app-theme");
-          if (savedTheme && (savedTheme === "dark" || savedTheme === "light")) {
-            theme = savedTheme;
-            hasSavedPreference = true;
-          }
-        } catch (e) {
-          // localStorage not available, continue to system detection
-        }
+  .post-meta {
+    color: hsl(var(--muted-foreground));
+    font-size: 14px;
+    margin-bottom: 15px;
+  }
 
-        // If no saved preference, check system preference
-        if (!hasSavedPreference) {
-          try {
-            if (window.matchMedia) {
-              if (window.matchMedia("(prefers-color-scheme: light)").matches) {
-                theme = "light";
-              } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-                theme = "dark";
-              }
-            }
-          } catch (e) {
-            // matchMedia not available, keep default
-          }
-        }
+  .post-body {
+    line-height: 1.7;
+    margin-bottom: 24px;
+    color: hsl(var(--foreground));
+    font-size: 16px;
+  }
 
-        // Apply the theme
-        console.log("Theme detection:", {
-          theme,
-          hasSavedPreference,
-          systemPrefersDark: window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)").matches : "unavailable",
-          systemPrefersLight: window.matchMedia ? window.matchMedia("(prefers-color-scheme: light)").matches : "unavailable"
-        });
+  .post-body a {
+    color: hsl(var(--primary));
+    text-decoration: none;
+  }
 
-        if (theme === "dark") {
-          document.documentElement.classList.add("dark");
-          console.log("Applied dark theme");
-        } else {
-          document.documentElement.classList.remove("dark");
-          console.log("Applied light theme");
-        }
+  .post-body a:hover {
+    color: hsl(var(--accent));
+    text-decoration: underline;
+  }
 
-        // Add global theme functions for debugging
-        window.toggleTheme = function () {
-          const isDark = document.documentElement.classList.contains("dark");
-          if (isDark) {
-            document.documentElement.classList.remove("dark");
-            localStorage.setItem("app-theme", "light");
-            console.log("Manually switched to light theme");
-          } else {
-            document.documentElement.classList.add("dark");
-            localStorage.setItem("app-theme", "dark");
-            console.log("Manually switched to dark theme");
-          }
-          updateDebugPanel();
-        };
+  .post-body strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
 
-        window.clearThemePreference = function () {
-          localStorage.removeItem("app-theme");
-          const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-          if (systemPrefersDark) {
-            document.documentElement.classList.add("dark");
-          } else {
-            document.documentElement.classList.remove("dark");
-          }
-          console.log("Cleared theme preference, using system theme");
-          updateDebugPanel();
-        };
+  .post-body em {
+    color: hsl(var(--muted-foreground));
+    font-style: italic;
+  }
 
-        window.getThemeInfo = function () {
-          return {
-            currentTheme: document.documentElement.classList.contains("dark") ? "dark" : "light",
-            savedPreference: localStorage.getItem("app-theme"),
-            systemPrefersDark: window.matchMedia("(prefers-color-scheme: dark)").matches,
-            systemPrefersLight: window.matchMedia("(prefers-color-scheme: light)").matches
-          };
-        };
+  .post-media {
+    margin: 24px 0;
+    background-color: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) - 2px);
+    padding: 16px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
 
-        // Update debug panel
-        function updateDebugPanel() {
-          const debugPanel = document.getElementById("theme-debug");
-          if (debugPanel) {
-            const info = window.getThemeInfo();
-            document.getElementById("current-theme").textContent = info.currentTheme;
-            document.getElementById("saved-preference").textContent = info.savedPreference || "none";
-            document.getElementById("system-preference").textContent = info.systemPrefersDark ? "dark" : "light";
-          }
-        }
+  .post-media img {
+    max-width: 100%;
+    height: auto;
+    border-radius: calc(var(--radius) - 4px);
+    box-shadow: 0 4px 12px hsl(var(--foreground) / 0.1);
+  }
 
-        // Show debug panel in development
-        {% if debug %}
-        document.addEventListener("DOMContentLoaded", function () {
-          const debugPanel = document.getElementById("theme-debug");
-          if (debugPanel) {
-            debugPanel.style.display = "block";
-            updateDebugPanel();
-          }
-        });
-        {% endif %}
+  .post-media video {
+    max-width: 100%;
+    height: auto;
+    border-radius: calc(var(--radius) - 4px);
+    box-shadow: 0 4px 12px hsl(var(--foreground) / 0.1);
+  }
 
-        // Enhanced system theme change detection
-        try {
-          if (window.matchMedia) {
-            const darkModeQuery = window.matchMedia("(prefers-color-scheme: dark)");
-            const lightModeQuery = window.matchMedia("(prefers-color-scheme: light)");
+  .post-media audio {
+    width: 100%;
+    border-radius: calc(var(--radius) - 4px);
+  }
 
-            // Function to handle theme changes
-            const handleThemeChange = (isDark) => {
-              const currentSavedTheme = localStorage.getItem("app-theme");
-              console.log("System theme changed:", { isDark, hasSavedPreference: !!currentSavedTheme });
+  .author-info {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+    gap: 8px;
+  }
 
-              // Only update if no saved preference exists
-              if (!currentSavedTheme) {
-                if (isDark) {
-                  document.documentElement.classList.add("dark");
-                  console.log("Applied dark theme from system preference");
-                } else {
-                  document.documentElement.classList.remove("dark");
-                  console.log("Applied light theme from system preference");
-                }
-                updateDebugPanel();
-              } else {
-                console.log("Ignoring system theme change - using saved preference:", currentSavedTheme);
-              }
-            };
+  .author-name {
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    font-size: 16px;
+  }
 
-            // Listen for dark mode changes
-            darkModeQuery.addEventListener("change", (e) => {
-              handleThemeChange(e.matches);
-            });
+  .post-date {
+    color: hsl(var(--muted-foreground));
+    font-size: 14px;
+  }
 
-            // Listen for light mode changes (for completeness)
-            lightModeQuery.addEventListener("change", (e) => {
-              handleThemeChange(!e.matches);
-            });
+  /* Theme debug info (only in development) */
+  .theme-debug {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 1000;
+    display: none;
+  }
 
-            // Also listen for storage changes (in case theme is changed in another tab)
-            window.addEventListener("storage", (e) => {
-              if (e.key === "app-theme") {
-                console.log("Theme preference changed in another tab:", e.newValue);
-                const newTheme = e.newValue;
-                if (newTheme === "dark" || newTheme === "light") {
-                  if (newTheme === "dark") {
-                    document.documentElement.classList.add("dark");
-                  } else {
-                    document.documentElement.classList.remove("dark");
-                  }
-                } else {
-                  // If theme was cleared, fall back to system preference
-                  const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-                  handleThemeChange(systemPrefersDark);
-                }
-                updateDebugPanel();
-              }
-            });
+  .theme-debug button {
+    margin-right: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+  }
 
-            console.log("System theme change listeners initialized");
-          }
-        } catch (e) {
-          console.error("Error setting up theme change listeners:", e);
-        }
-      } catch (e) {
-        console.error("Error setting theme:", e);
-        // Fallback to dark mode on error
-        document.documentElement.classList.add("dark");
-      }
-    })();
-  </script>
-
-  <style>
-    /* Match frontend app theme system exactly */
-    :root {
-      --background: 220 100% 98%;
-      --foreground: 222.2 84% 4.9%;
-      --card: 0 0% 100%;
-      --card-foreground: 222.2 84% 4.9%;
-      --popover: 0 0% 100%;
-      --popover-foreground: 222.2 84% 4.9%;
-      --primary: 235 85% 65%;
-      --primary-foreground: 210 40% 98%;
-      --secondary: 260 50% 60%;
-      --secondary-foreground: 222.2 47.4% 11.2%;
-      --muted: 210 40% 96.1%;
-      --muted-foreground: 215.4 16.3% 46.9%;
-      --accent: 250 95% 76%;
-      --accent-foreground: 222.2 47.4% 11.2%;
-      --destructive: 0 84.2% 60.2%;
-      --destructive-foreground: 210 40% 98%;
-      --border: 214.3 31.8% 91.4%;
-      --input: 214.3 31.8% 91.4%;
-      --ring: 235 85% 65%;
-      --radius: 0.75rem;
-      color-scheme: light dark;
-    }
-
-    .dark {
-      --background: 222.2 84% 4.9%;
-      --foreground: 210 40% 98%;
-      --card: 222.2 84% 4.9%;
-      --card-foreground: 210 40% 98%;
-      --popover: 222.2 84% 4.9%;
-      --popover-foreground: 210 40% 98%;
-      --primary: 235 85% 65%;
-      --primary-foreground: 222.2 47.4% 11.2%;
-      --secondary: 260 50% 60%;
-      --secondary-foreground: 210 40% 98%;
-      --muted: 217.2 32.6% 17.5%;
-      --muted-foreground: 215 20.2% 65.1%;
-      --accent: 250 95% 76%;
-      --accent-foreground: 210 40% 98%;
-      --destructive: 0 62.8% 30.6%;
-      --destructive-foreground: 210 40% 98%;
-      --border: 217.2 32.6% 17.5%;
-      --input: 217.2 32.6% 17.5%;
-      --ring: 235 85% 65%;
-      color-scheme: dark;
-    }
-
-    /* Base styles using CSS custom properties */
-    body {
-      margin: 0;
-      padding: 0;
-      background-color: hsl(var(--background));
-      color: hsl(var(--foreground));
-      transition: background-color 0.2s ease, color 0.2s ease;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-    }
-
-    /* Post detail container */
+  /* Responsive design */
+  @media (max-width: 640px) {
     .post-detail {
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px;
-      background-color: hsl(var(--background));
-      min-height: 100vh;
-      transition: background-color 0.2s ease;
-    }
-
-    .post-header {
-      margin-bottom: 20px;
+      padding: 16px;
     }
 
     .post-title {
-      font-size: 28px;
-      font-weight: 700;
-      margin-bottom: 12px;
-      color: hsl(var(--foreground));
-      line-height: 1.3;
-    }
-
-    .post-meta {
-      color: hsl(var(--muted-foreground));
-      font-size: 14px;
-      margin-bottom: 15px;
-    }
-
-    .post-body {
-      line-height: 1.7;
-      margin-bottom: 24px;
-      color: hsl(var(--foreground));
-      font-size: 16px;
-    }
-
-    .post-body a {
-      color: hsl(var(--primary));
-      text-decoration: none;
-    }
-
-    .post-body a:hover {
-      color: hsl(var(--accent));
-      text-decoration: underline;
-    }
-
-    .post-body strong {
-      color: hsl(var(--foreground));
-      font-weight: 600;
-    }
-
-    .post-body em {
-      color: hsl(var(--muted-foreground));
-      font-style: italic;
+      font-size: 24px;
     }
 
     .post-media {
-      margin: 24px 0;
-      background-color: hsl(var(--muted));
-      border: 1px solid hsl(var(--border));
-      border-radius: calc(var(--radius) - 2px);
-      padding: 16px;
-      transition: background-color 0.2s ease, border-color 0.2s ease;
+      padding: 12px;
     }
+  }
+</style>
+{% endblock %}
 
-    .post-media img {
-      max-width: 100%;
-      height: auto;
-      border-radius: calc(var(--radius) - 4px);
-      box-shadow: 0 4px 12px hsl(var(--foreground) / 0.1);
-    }
+{% block content %}
+<!-- Theme debug info (only in development) -->
+{% if debug %}
+<div id="theme-debug" class="theme-debug">
+  <div>Theme: <span id="current-theme">-</span></div>
+  <div>Saved: <span id="saved-preference">-</span></div>
+  <div>System: <span id="system-preference">-</span></div>
+  <div style="margin-top: 4px;">
+    <button onclick="toggleTheme()">Toggle</button>
+    <button onclick="clearThemePreference()">Clear</button>
+  </div>
+</div>
+{% endif %}
 
-    .post-media video {
-      max-width: 100%;
-      height: auto;
-      border-radius: calc(var(--radius) - 4px);
-      box-shadow: 0 4px 12px hsl(var(--foreground) / 0.1);
-    }
-
-    .post-media audio {
-      width: 100%;
-      border-radius: calc(var(--radius) - 4px);
-    }
-
-    .author-info {
-      display: flex;
-      align-items: center;
-      margin-bottom: 16px;
-      gap: 8px;
-    }
-
-    .author-name {
-      font-weight: 600;
-      color: hsl(var(--foreground));
-      font-size: 16px;
-    }
-
-    .post-date {
-      color: hsl(var(--muted-foreground));
-      font-size: 14px;
-    }
-
-    /* Responsive design */
-    @media (max-width: 640px) {
-      .post-detail {
-        padding: 16px;
-      }
-
-      .post-title {
-        font-size: 24px;
-      }
-
-      .post-media {
-        padding: 12px;
-      }
-    }
-  </style>
-
-</head>
-
-<body>
-  <!-- Server-rendered post content for SEO and social sharing -->
-  <div class="post-detail">
-    <!-- Theme debug info (only in development) -->
-    <div id="theme-debug"
-      style="position: fixed; top: 10px; right: 10px; background: hsl(var(--muted)); border: 1px solid hsl(var(--border)); padding: 8px; border-radius: 4px; font-size: 12px; z-index: 1000; display: none;">
-      <div>Theme: <span id="current-theme">-</span></div>
-      <div>Saved: <span id="saved-preference">-</span></div>
-      <div>System: <span id="system-preference">-</span></div>
-      <div style="margin-top: 4px;">
-        <button onclick="toggleTheme()" style="margin-right: 4px; padding: 2px 6px; font-size: 10px;">Toggle</button>
-        <button onclick="clearThemePreference()" style="padding: 2px 6px; font-size: 10px;">Clear</button>
-      </div>
+<!-- Server-rendered post content for SEO and social sharing -->
+<div class="post-detail">
+  <div class="post-header">
+    <div class="author-info">
+      <span class="author-name">{{ post.author.first_name }} {{ post.author.last_name }}</span>
+      <span class="post-date">@{{ post.author.username }} • {{ post.created|date:"M d, Y" }}</span>
     </div>
-    <div class="post-header">
-      <div class="author-info">
-        <span class="author-name">{{ post.author.first_name }} {{ post.author.last_name }}</span>
-        <span class="post-date">@{{ post.author.username }} • {{ post.created|date:"M d, Y" }}</span>
-      </div>
-    </div>
-
-    {% if post.head %}
-    <h1 class="post-title">{{ post.head }}</h1>
-    {% endif %}
-
-    {% if post.body %}
-    <div class="post-body">{{ post.body|linebreaks }}</div>
-    {% endif %}
-
-    {% if post.media %}
-    <div class="post-media">
-      {% if post.media.media_type == 'image' %}
-      {% if post.media.thumbnail %}
-      <img src="{{ post.media.thumbnail.url }}" alt="{{ post.media.alt_text|default:post.head }}" />
-      {% elif post.media.file %}
-      <img src="{{ post.media.file.url }}" alt="{{ post.media.alt_text|default:post.head }}" />
-      {% endif %}
-      {% elif post.media.media_type == 'video' %}
-      <video controls>
-        <source src="{{ post.media.file.url }}" type="video/mp4">
-        Your browser does not support the video tag.
-      </video>
-      {% elif post.media.media_type == 'audio' %}
-      <audio controls>
-        <source
-          src="{% if post.media.mp3_file %}{{ post.media.mp3_file.url }}{% else %}{{ post.media.file.url }}{% endif %}"
-          type="audio/mpeg">
-        Your browser does not support the audio tag.
-      </audio>
-      {% endif %}
-    </div>
-    {% endif %}
   </div>
 
-</body>
+  {% if post.head %}
+  <h1 class="post-title">{{ post.head }}</h1>
+  {% endif %}
 
-</html>
+  {% if post.body %}
+  <div class="post-body">{{ post.body|linebreaks }}</div>
+  {% endif %}
+
+  {% if post.media %}
+  <div class="post-media">
+    {% if post.media.media_type == 'image' %}
+    {% if post.media.thumbnail %}
+    <img src="{{ post.media.thumbnail.url }}" alt="{{ post.media.alt_text|default:post.head }}" />
+    {% elif post.media.file %}
+    <img src="{{ post.media.file.url }}" alt="{{ post.media.alt_text|default:post.head }}" />
+    {% endif %}
+    {% elif post.media.media_type == 'video' %}
+    <video controls>
+      <source src="{{ post.media.file.url }}" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
+    {% elif post.media.media_type == 'audio' %}
+    <audio controls>
+      <source
+        src="{% if post.media.mp3_file %}{{ post.media.mp3_file.url }}{% else %}{{ post.media.file.url }}{% endif %}"
+        type="audio/mpeg">
+      Your browser does not support the audio tag.
+    </audio>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Show debug panel in development
+  {% if debug %}
+  document.addEventListener("DOMContentLoaded", function () {
+    const debugPanel = document.getElementById("theme-debug");
+    if (debugPanel) {
+      debugPanel.style.display = "block";
+      updateDebugPanel();
+    }
+  });
+
+  // Update debug panel
+  function updateDebugPanel() {
+    const debugPanel = document.getElementById("theme-debug");
+    if (debugPanel) {
+      const info = window.getThemeInfo();
+      document.getElementById("current-theme").textContent = info.currentTheme;
+      document.getElementById("saved-preference").textContent = info.savedPreference || "none";
+      document.getElementById("system-preference").textContent = info.systemPrefersDark ? "dark" : "light";
+    }
+  }
+
+  // Add getThemeInfo function if not already defined
+  if (typeof window.getThemeInfo === 'undefined') {
+    window.getThemeInfo = function () {
+      return {
+        currentTheme: document.documentElement.classList.contains("dark") ? "dark" : "light",
+        savedPreference: localStorage.getItem("app-theme"),
+        systemPrefersDark: window.matchMedia("(prefers-color-scheme: dark)").matches,
+        systemPrefersLight: window.matchMedia("(prefers-color-scheme: light)").matches
+      };
+    };
+  }
+  {% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,170 @@
+{% load static %}
+<header class="header">
+  <div class="header-container">
+    <div class="header-left">
+      <a href="/" class="header-logo">
+        <span class="header-logo-text">EchoSphere</span>
+      </a>
+    </div>
+
+    <div class="header-right">
+      <!-- Desktop Navigation -->
+      <nav class="header-nav">
+        <a href="/" class="header-nav-link">
+          <svg class="header-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+          <span>Home</span>
+        </a>
+        {% if user.is_authenticated %}
+        <a href="/profile" class="header-nav-link">
+          <svg class="header-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          <span>Profile</span>
+        </a>
+        <form method="post" action="/auth/logout/" style="display: inline;">
+          {% csrf_token %}
+          <button type="submit" class="header-button">
+            <svg class="header-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span>Logout</span>
+          </button>
+        </form>
+        {% endif %}
+      </nav>
+
+      <!-- Theme Toggle -->
+      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+        <svg class="theme-toggle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </svg>
+      </button>
+
+      <!-- Mobile Menu Button -->
+      <button class="mobile-menu-button" onclick="toggleMobileMenu()" title="Open menu">
+        <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile Menu Dropdown -->
+  <div id="mobile-menu" class="mobile-menu" style="display: none;">
+    <div class="mobile-menu-content">
+      <a href="/" class="mobile-menu-link">
+        <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+        <span>Home</span>
+      </a>
+      {% if user.is_authenticated %}
+      <a href="/profile" class="mobile-menu-link">
+        <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+        <span>Profile</span>
+      </a>
+      <form method="post" action="/auth/logout/" style="display: block;">
+        {% csrf_token %}
+        <button type="submit" class="mobile-menu-link mobile-menu-button">
+          <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          <span>Logout</span>
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+<style>
+  /* Mobile menu styles */
+  .mobile-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    background-color: hsl(var(--popover));
+    border: 1px solid hsl(var(--border));
+    border-top: none;
+    border-radius: 0 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px);
+    box-shadow: 0 4px 6px -1px hsl(var(--foreground) / 0.1);
+    z-index: 50;
+  }
+
+  .mobile-menu-content {
+    padding: 0.5rem;
+  }
+
+  .mobile-menu-link {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    color: hsl(var(--popover-foreground));
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: calc(var(--radius) - 4px);
+    transition: background-color 0.2s ease;
+    width: 100%;
+    border: none;
+    background: none;
+    cursor: pointer;
+  }
+
+  .mobile-menu-link:hover {
+    background-color: hsl(var(--muted));
+    text-decoration: none;
+  }
+
+  .mobile-menu-link.primary {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+
+  .mobile-menu-link.primary:hover {
+    background-color: hsl(var(--primary) / 0.9);
+  }
+
+  .mobile-menu-icon {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .mobile-menu-auth {
+    justify-content: center;
+    margin: 0.25rem 0;
+  }
+</style>
+
+<script>
+  function toggleMobileMenu() {
+    const menu = document.getElementById('mobile-menu');
+    if (menu.style.display === 'none') {
+      menu.style.display = 'block';
+    } else {
+      menu.style.display = 'none';
+    }
+  }
+
+  // Close mobile menu when clicking outside
+  document.addEventListener('click', function (event) {
+    const menu = document.getElementById('mobile-menu');
+    const button = event.target.closest('.mobile-menu-button');
+    if (!button && !menu.contains(event.target)) {
+      menu.style.display = 'none';
+    }
+  });
+</script>

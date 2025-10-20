@@ -1,0 +1,28 @@
+{% extends 'shared/base.html' %}
+
+{% block title %}Example Page - Echo Sphere{% endblock %}
+{% block description %}This is an example page showing how to use the base template{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h1>Example Page</h1>
+  <p>This is an example of how to use the new base template with the header that matches the frontend app.</p>
+
+  <h2>Features</h2>
+  <ul>
+    <li>Responsive header with navigation</li>
+    <li>Theme toggle functionality</li>
+    <li>Mobile-friendly design</li>
+    <li>Consistent styling with the frontend app</li>
+  </ul>
+
+  <h2>How to Use</h2>
+  <p>Simply extend the <code>shared/base.html</code> template and override the blocks you need:</p>
+  <pre><code>{% extends 'shared/base.html' %}
+
+{% block title %}Your Page Title{% endblock %}
+{% block content %}
+  Your content here
+{% endblock %}</code></pre>
+</div>
+{% endblock %}
