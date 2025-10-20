@@ -94,15 +94,10 @@ export const GroundRulesModal = () => {
 				<div className="space-y-6">
 					<div className="space-y-4">
 						{groundRules.map((rule) => (
-							<button
+							<label
 								key={rule.id}
-								type="button"
-								className="w-full text-left p-3 rounded-lg border cursor-pointer hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-								onClick={() => {
-									const isCurrentlyAccepted = acceptedRules.has(rule.id)
-									handleRuleToggle(rule.id, !isCurrentlyAccepted)
-								}}
-								aria-pressed={acceptedRules.has(rule.id)}
+								htmlFor={rule.id}
+								className="w-full p-3 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer block focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2"
 							>
 								<div className="flex items-start space-x-3">
 									<Checkbox
@@ -113,16 +108,11 @@ export const GroundRulesModal = () => {
 									/>
 									<div className="flex items-center gap-2 min-w-0 flex-1">
 										{rule.icon}
-										<Label
-											htmlFor={rule.id}
-											className="font-medium whitespace-nowrap cursor-pointer"
-										>
-											{rule.title}
-										</Label>
+										<span className="font-medium whitespace-nowrap">{rule.title}</span>
 									</div>
 								</div>
 								<p className="text-sm text-muted-foreground ml-6 mt-2">{rule.description}</p>
-							</button>
+							</label>
 						))}
 					</div>
 
