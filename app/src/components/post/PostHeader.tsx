@@ -16,7 +16,6 @@ interface PostHeaderProps {
 }
 
 const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
-	console.log('derp post', post) // DEBUG
 	const handleCopyLink = async () => {
 		try {
 			await navigator.clipboard.writeText(post.url)
