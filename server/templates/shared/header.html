@@ -319,8 +319,25 @@
       menu.classList.remove('mobile-menu-hidden');
       menu.classList.add('mobile-menu-visible');
     } else {
+      closeMobileMenu();
+    }
+  }
+
+  function closeMobileMenu() {
+    const menu = document.getElementById('mobile-menu');
+    if (menu) {
       menu.classList.remove('mobile-menu-visible');
       menu.classList.add('mobile-menu-hidden');
+    }
+  }
+
+  function closeAllHeaderDropdowns() {
+    if (document.getElementById('mobile-menu').classList.contains('mobile-menu-visible')) {
+      closeMobileMenu();
+    }
+
+    if (document.getElementById('theme-dropdown-menu').classList.contains('visible')) {
+      closeThemeDropdown();
     }
   }
 
@@ -330,13 +347,17 @@
     if (dropdown.classList.contains('visible')) {
       dropdown.classList.remove('visible');
     } else {
+      closeAllHeaderDropdowns();
       dropdown.classList.add('visible');
     }
   }
 
   function closeThemeDropdown() {
     const dropdown = document.getElementById('theme-dropdown-menu');
+    const header = document.querySelector('.header');
+
     dropdown.classList.remove('visible');
+    header.classList.remove('dropdown-open');
   }
 
   function updateThemeDropdownSelection() {
@@ -400,8 +421,7 @@
     const mobileMenu = document.getElementById('mobile-menu');
     const mobileMenuButton = event.target.closest('.mobile-menu-button');
     if (!mobileMenuButton && !mobileMenu.contains(event.target)) {
-      mobileMenu.classList.remove('mobile-menu-visible');
-      mobileMenu.classList.add('mobile-menu-hidden');
+      closeMobileMenu();
     }
 
     // Close theme dropdown when clicking outside

@@ -464,7 +464,7 @@ else:
                 #
                 # Hashes for scripts in Django HTML templates
                 "'sha256-DjsUj0pC5ySPg95mtQ6lmWjVIWW5WZ6Kta+NTTdw6FM='",
-                "'sha256-saJ5CAQG4Y7zWxejc5AFAG+m0uecb+TllGCYVLi0mus='",
+                "'sha256-9sz5hXlT9+eXgaCYexiCm/1B6Y+TNcVWW06VKDHjnnc='",
             ],
             'style-src': [
                 SELF,
