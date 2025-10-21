@@ -1,132 +1,204 @@
 {% load static %}
-<header class="header">
-  <div class="header-container">
-    <div class="header-left">
-      <a href="/" class="header-logo">
-        <span class="header-logo-text">EchoSphere</span>
-      </a>
-    </div>
-
-    <div class="header-right">
-      <!-- Desktop Navigation -->
-      <nav class="header-nav">
-        <a href="/" class="header-nav-link">
-          <svg class="header-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-          </svg>
-          <span>Home</span>
-        </a>
-        {% if user.is_authenticated %}
-        <a href="/profile" class="header-nav-link">
-          <svg class="header-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
-          <span>Profile</span>
-        </a>
-        <form method="post" action="/auth/logout/" style="display: inline;">
-          {% csrf_token %}
-          <button type="submit" class="header-button">
-            <svg class="header-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            <span>Logout</span>
-          </button>
-        </form>
-        {% endif %}
-      </nav>
-
-      <!-- Theme Dropdown -->
-      <div class="theme-dropdown">
-        <button class="theme-dropdown-trigger" id="theme-dropdown-trigger" title="Toggle theme">
-          <svg class="theme-toggle-icon theme-icon-sun" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-          <svg class="theme-toggle-icon theme-icon-moon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-          </svg>
-        </button>
-        <div class="theme-dropdown-menu" id="theme-dropdown-menu">
-          <button class="theme-dropdown-item" data-theme="light">
-            <svg class="theme-dropdown-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-            </svg>
-            <span>Light</span>
-            <svg class="theme-dropdown-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-          </button>
-          <button class="theme-dropdown-item" data-theme="dark">
-            <svg class="theme-dropdown-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-            </svg>
-            <span>Dark</span>
-            <svg class="theme-dropdown-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-          </button>
-          <button class="theme-dropdown-item" data-theme="system">
-            <svg class="theme-dropdown-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-            <span>System</span>
-            <svg class="theme-dropdown-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-          </button>
-        </div>
-      </div>
-
-      <!-- Mobile Menu Button -->
-      <button class="mobile-menu-button" id="mobile-menu-button" title="Open menu">
-        <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
-    </div>
-  </div>
-
-  <!-- Mobile Menu Dropdown -->
-  <div id="mobile-menu" class="mobile-menu mobile-menu-hidden">
-    <div class="mobile-menu-content">
-      <a href="/" class="mobile-menu-link">
-        <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-        </svg>
-        <span>Home</span>
-      </a>
-      {% if user.is_authenticated %}
-      <a href="/profile" class="mobile-menu-link">
-        <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-        </svg>
-        <span>Profile</span>
-      </a>
-      <form method="post" action="/auth/logout/" style="display: block;">
-        {% csrf_token %}
-        <button type="submit" class="mobile-menu-link mobile-menu-button">
-          <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-          </svg>
-          <span>Logout</span>
-        </button>
-      </form>
-      {% endif %}
-    </div>
-  </div>
-</header>
 
 <style>
+  /* Header styles matching frontend Navbar */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    width: 100%;
+    border-bottom: 1px solid hsl(var(--border));
+    background-color: hsl(var(--background) / 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .header-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    display: flex;
+    height: 3.5rem;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+  }
+
+  .header-logo {
+    margin-right: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .header-logo:hover {
+    text-decoration: none;
+  }
+
+  .header-logo-text {
+    font-size: 1.25rem;
+    font-weight: 700;
+    background: linear-gradient(to right, hsl(var(--primary)), hsl(var(--secondary)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .header-nav {
+    display: none;
+    align-items: center;
+    gap: 1.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  @media (min-width: 768px) {
+    .header-nav {
+      display: flex;
+    }
+  }
+
+  .header-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: hsl(var(--foreground) / 0.6);
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+
+  .header-nav-link:hover {
+    color: hsl(var(--foreground) / 0.8);
+    text-decoration: none;
+  }
+
+  .header-nav-icon {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .header-button {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 1rem;
+    background: none;
+    border: none;
+    color: hsl(var(--foreground) / 0.6);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    border-radius: calc(var(--radius) - 2px);
+  }
+
+  .header-button:hover {
+    color: hsl(var(--foreground) / 0.8);
+    background-color: hsl(var(--muted));
+  }
+
+  .header-auth-buttons {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .header-auth-button {
+    padding: 0.5rem 1rem;
+    background: none;
+    border: 1px solid hsl(var(--border));
+    color: hsl(var(--foreground));
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-radius: calc(var(--radius) - 2px);
+  }
+
+  .header-auth-button:hover {
+    background-color: hsl(var(--muted));
+    text-decoration: none;
+  }
+
+  .header-auth-button.primary {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border-color: hsl(var(--primary));
+  }
+
+  .header-auth-button.primary:hover {
+    background-color: hsl(var(--primary) / 0.9);
+  }
+
+  .theme-toggle {
+    padding: 0.5rem;
+    background: none;
+    border: none;
+    color: hsl(var(--foreground) / 0.6);
+    cursor: pointer;
+    border-radius: calc(var(--radius) - 2px);
+    transition: all 0.2s ease;
+  }
+
+  .theme-toggle:hover {
+    color: hsl(var(--foreground) / 0.8);
+    background-color: hsl(var(--muted));
+  }
+
+  .theme-toggle-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  /* Mobile menu */
+  .mobile-menu-button {
+    display: block;
+    padding: 0.5rem;
+    background: none;
+    border: none;
+    color: hsl(var(--foreground) / 0.6);
+    cursor: pointer;
+    border-radius: calc(var(--radius) - 2px);
+    transition: all 0.2s ease;
+  }
+
+  @media (min-width: 768px) {
+    .mobile-menu-button {
+      display: none;
+    }
+  }
+
+  .mobile-menu-button:hover {
+    color: hsl(var(--foreground) / 0.8);
+    background-color: hsl(var(--muted));
+  }
+
+  .mobile-menu-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  /* Responsive design */
+  @media (max-width: 640px) {
+    .header-container {
+      padding: 0 1rem;
+    }
+  }
+
   /* Theme dropdown styles */
   .theme-dropdown {
     position: relative;
@@ -311,6 +383,134 @@
     margin: 0.25rem 0;
   }
 </style>
+
+<header class="header">
+  <div class="header-container">
+    <div class="header-left">
+      <a href="/" class="header-logo">
+        <span class="header-logo-text">EchoSphere</span>
+      </a>
+    </div>
+
+    <div class="header-right">
+      <!-- Desktop Navigation -->
+      <nav class="header-nav">
+        <a href="/" class="header-nav-link">
+          <svg class="header-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+          <span>Home</span>
+        </a>
+        {% if user.is_authenticated %}
+        <a href="/profile" class="header-nav-link">
+          <svg class="header-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          <span>Profile</span>
+        </a>
+        <form method="post" action="/auth/logout/" style="display: inline;">
+          {% csrf_token %}
+          <button type="submit" class="header-button">
+            <svg class="header-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span>Logout</span>
+          </button>
+        </form>
+        {% endif %}
+      </nav>
+
+      <!-- Theme Dropdown -->
+      <div class="theme-dropdown">
+        <button class="theme-dropdown-trigger" id="theme-dropdown-trigger" title="Toggle theme">
+          <svg class="theme-toggle-icon theme-icon-sun" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <svg class="theme-toggle-icon theme-icon-moon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+        </button>
+        <div class="theme-dropdown-menu" id="theme-dropdown-menu">
+          <button class="theme-dropdown-item" data-theme="light">
+            <svg class="theme-dropdown-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <span>Light</span>
+            <svg class="theme-dropdown-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+          <button class="theme-dropdown-item" data-theme="dark">
+            <svg class="theme-dropdown-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+            <span>Dark</span>
+            <svg class="theme-dropdown-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+          <button class="theme-dropdown-item" data-theme="system">
+            <svg class="theme-dropdown-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span>System</span>
+            <svg class="theme-dropdown-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile Menu Button -->
+      <button class="mobile-menu-button" id="mobile-menu-button" title="Open menu">
+        <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile Menu Dropdown -->
+  <div id="mobile-menu" class="mobile-menu mobile-menu-hidden">
+    <div class="mobile-menu-content">
+      <a href="/" class="mobile-menu-link">
+        <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+        <span>Home</span>
+      </a>
+      {% if user.is_authenticated %}
+      <a href="/profile" class="mobile-menu-link">
+        <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+        <span>Profile</span>
+      </a>
+      <form method="post" action="/auth/logout/" style="display: block;">
+        {% csrf_token %}
+        <button type="submit" class="mobile-menu-link mobile-menu-button">
+          <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          <span>Logout</span>
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
 
 <script>
   function toggleMobileMenu() {
