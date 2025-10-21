@@ -120,26 +120,6 @@
     font-size: 14px;
   }
 
-  /* Theme debug info (only in development) */
-  .theme-debug {
-    position: fixed;
-    top: 10px;
-    right: 10px;
-    background: hsl(var(--muted));
-    border: 1px solid hsl(var(--border));
-    padding: 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    z-index: 1000;
-    display: none;
-  }
-
-  .theme-debug button {
-    margin-right: 4px;
-    padding: 2px 6px;
-    font-size: 10px;
-  }
-
   /* Responsive design */
   @media (max-width: 640px) {
     .post-detail {
@@ -158,18 +138,6 @@
 {% endblock %}
 
 {% block content %}
-<!-- Theme debug info (only in development) -->
-{% if debug %}
-<div id="theme-debug" class="theme-debug">
-  <div>Theme: <span id="current-theme">-</span></div>
-  <div>Saved: <span id="saved-preference">-</span></div>
-  <div>System: <span id="system-preference">-</span></div>
-  <div style="margin-top: 4px;">
-    <button onclick="toggleTheme()">Toggle</button>
-    <button onclick="clearThemePreference()">Clear</button>
-  </div>
-</div>
-{% endif %}
 
 <!-- Server-rendered post content for SEO and social sharing -->
 <div class="post-detail">
@@ -214,40 +182,4 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}
-<script>
-  // Show debug panel in development
-  {% if debug %}
-  document.addEventListener("DOMContentLoaded", function () {
-    const debugPanel = document.getElementById("theme-debug");
-    if (debugPanel) {
-      debugPanel.style.display = "block";
-      updateDebugPanel();
-    }
-  });
-
-  // Update debug panel
-  function updateDebugPanel() {
-    const debugPanel = document.getElementById("theme-debug");
-    if (debugPanel) {
-      const info = window.getThemeInfo();
-      document.getElementById("current-theme").textContent = info.currentTheme;
-      document.getElementById("saved-preference").textContent = info.savedPreference || "none";
-      document.getElementById("system-preference").textContent = info.systemPrefersDark ? "dark" : "light";
-    }
-  }
-
-  // Add getThemeInfo function if not already defined
-  if (typeof window.getThemeInfo === 'undefined') {
-    window.getThemeInfo = function () {
-      return {
-        currentTheme: document.documentElement.classList.contains("dark") ? "dark" : "light",
-        savedPreference: localStorage.getItem("app-theme"),
-        systemPrefersDark: window.matchMedia("(prefers-color-scheme: dark)").matches,
-        systemPrefersLight: window.matchMedia("(prefers-color-scheme: light)").matches
-      };
-    };
-  }
-  {% endif %}
-</script>
-{% endblock %}
+{% block extra_js %}{% endblock %}

@@ -1,0 +1,186 @@
+{% load static %}
+
+<!-- Debug panel (only in development) -->
+<div id="debug-panel" class="debug-panel collapsed">
+  <div class="debug-panel-header">
+    <span class="debug-panel-title"> <span class="debug-title-icon">⚙</span> Debug</span>
+    <button class="debug-collapse-btn" onclick="toggleDebugPanel()" title="Collapse/Expand">
+      <span class="debug-icon">⚙</span>
+      <span class="debug-collapse-icon">−</span>
+    </button>
+  </div>
+  <div class="debug-panel-content">
+    <div>Theme: <span id="current-theme">-</span></div>
+    <div>Saved: <span id="saved-preference">-</span></div>
+    <div>System: <span id="system-preference">-</span></div>
+    <div style="margin-top: 4px;">
+      <button onclick="toggleTheme()">Toggle</button>
+      <button onclick="clearThemePreference()">Clear</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Debug panel (only in development) */
+  .debug-panel {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    border-radius: 4px;
+    font-size: 12px;
+    z-index: 1000;
+    display: none;
+    min-width: 200px;
+    opacity: 0.7;
+  }
+
+  .debug-panel.collapsed {
+    min-width: auto;
+    width: auto;
+    opacity: 0.5;
+  }
+
+  .debug-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    background: hsl(var(--muted));
+    border-bottom: 1px solid hsl(var(--border));
+    border-radius: 4px 4px 0 0;
+  }
+
+  .debug-panel.collapsed .debug-panel-header {
+    justify-content: center;
+    border-bottom: none;
+    border-radius: 4px;
+  }
+
+  .debug-panel-title {
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    display: flex;
+    align-items: center;
+  }
+
+  .debug-title-icon {
+    font-size: 22px;
+    margin-right: 4px;
+  }
+
+  .debug-panel-content {
+    padding: 8px;
+  }
+
+  .debug-panel.collapsed .debug-panel-content {
+    display: none;
+  }
+
+  .debug-panel.collapsed .debug-panel-title {
+    display: none;
+  }
+
+  .debug-panel.collapsed .debug-panel-header {
+    padding: 2px;
+    min-width: auto;
+  }
+
+  .debug-panel button {
+    margin-right: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+
+  .debug-collapse-btn {
+    background: none;
+    border: none;
+    color: hsl(var(--muted-foreground));
+    cursor: pointer;
+    padding: 2px;
+    font-size: 12px;
+    margin: 0;
+  }
+
+  .debug-collapse-btn:hover {
+    color: hsl(var(--foreground));
+  }
+
+  .debug-panel.collapsed .debug-collapse-btn {
+    font-size: 14px;
+    padding: 0;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    margin: 0;
+  }
+
+  .debug-icon {
+    font-size: 22px;
+    display: block;
+  }
+
+  .debug-collapse-icon {
+    font-size: 20px;
+    display: none;
+  }
+
+  .debug-panel:not(.collapsed) .debug-icon {
+    display: none;
+  }
+
+  .debug-panel:not(.collapsed) .debug-collapse-icon {
+    display: block;
+  }
+
+  .debug-panel.collapsed:hover {
+    opacity: 1;
+  }
+</style>
+
+<script>
+  // Show debug panel in development
+  document.addEventListener("DOMContentLoaded", function () {
+    const debugPanel = document.getElementById("debug-panel");
+    if (debugPanel) {
+      debugPanel.style.display = "block";
+      updateDebugInfo();
+      // Initialize button state for collapsed state (icon is handled by CSS)
+    }
+  });
+
+  // Update debug panel
+  function updateDebugInfo() {
+    const debugPanel = document.getElementById("debug-panel");
+    if (debugPanel) {
+      const info = window.getDebugInfo();
+      document.getElementById("current-theme").textContent = info.currentTheme;
+      document.getElementById("saved-preference").textContent = info.savedPreference || "none";
+      document.getElementById("system-preference").textContent = info.systemPrefersDark ? "dark" : "light";
+    }
+  }
+
+  // Toggle debug panel collapse/expand
+  function toggleDebugPanel() {
+    const debugPanel = document.getElementById("debug-panel");
+    if (debugPanel) {
+      debugPanel.classList.toggle("collapsed");
+    }
+  }
+
+  // Add getDebugInfo function if not already defined
+  if (typeof window.getDebugInfo === 'undefined') {
+    window.getDebugInfo = function () {
+      return {
+        currentTheme: document.documentElement.classList.contains("dark") ? "dark" : "light",
+        savedPreference: localStorage.getItem("app-theme"),
+        systemPrefersDark: window.matchMedia("(prefers-color-scheme: dark)").matches,
+        systemPrefersLight: window.matchMedia("(prefers-color-scheme: light)").matches
+      };
+    };
+  }
+</script>

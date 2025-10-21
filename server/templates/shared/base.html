@@ -464,6 +464,11 @@
   </main>
 
   {% block extra_js %}{% endblock %}
+
+  <!-- Debug panel (only in development) -->
+  {% if debug %}
+  {% include 'shared/debug_panel.html' %}
+  {% endif %}
 </body>
 
 </html>
