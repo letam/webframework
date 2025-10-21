@@ -29,7 +29,7 @@ const Navbar = () => {
 
 	return (
 		<header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur-sm supports-backdrop-filter:bg-background/60">
-			<div className="container flex h-14 items-center justify-between">
+			<div className="mx-auto max-w-[1400px] px-4 sm:px-8 flex h-14 items-center justify-between">
 				<div className="flex items-center">
 					<Link to="/" className="mr-6 flex items-center space-x-2">
 						<span className="text-xl font-bold gradient-text">EchoSphere</span>
