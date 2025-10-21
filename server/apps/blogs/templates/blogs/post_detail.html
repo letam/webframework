@@ -102,6 +102,29 @@
     border-radius: calc(var(--radius) - 4px);
   }
 
+  .post-transcript {
+    margin: 24px 0;
+    background-color: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) - 2px);
+    padding: 16px;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+  }
+
+  .transcript-header {
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    margin-bottom: 12px;
+    font-size: 16px;
+  }
+
+  .transcript-content {
+    color: hsl(var(--foreground));
+    line-height: 1.6;
+    white-space: pre-wrap;
+    font-size: 14px;
+  }
+
   .author-info {
     display: flex;
     align-items: center;
@@ -177,6 +200,13 @@
       Your browser does not support the audio tag.
     </audio>
     {% endif %}
+  </div>
+  {% endif %}
+
+  {% if post.media and post.media.transcript %}
+  <div class="post-transcript">
+    <div class="transcript-header">Transcript</div>
+    <div class="transcript-content">{{ post.media.transcript }}</div>
   </div>
   {% endif %}
 </div>
