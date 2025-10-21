@@ -44,8 +44,8 @@
 
         // Check for saved theme preference first (matches frontend app storage key)
         try {
-          const savedTheme = localStorage.getItem("app-theme");
-          if (savedTheme && (savedTheme === "dark" || savedTheme === "light")) {
+          const savedTheme = localStorage.getItem("ui-theme");
+          if (savedTheme && (savedTheme === "dark" || savedTheme === "light" || savedTheme === "system")) {
             theme = savedTheme;
             hasSavedPreference = true;
           }
@@ -69,7 +69,14 @@
         }
 
         // Apply the theme
-        if (theme === "dark") {
+        if (theme === "system") {
+          const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          if (systemTheme === "dark") {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+          }
+        } else if (theme === "dark") {
           document.documentElement.classList.add("dark");
         } else {
           document.documentElement.classList.remove("dark");
@@ -80,15 +87,36 @@
           const isDark = document.documentElement.classList.contains("dark");
           if (isDark) {
             document.documentElement.classList.remove("dark");
-            localStorage.setItem("app-theme", "light");
+            localStorage.setItem("ui-theme", "light");
           } else {
             document.documentElement.classList.add("dark");
-            localStorage.setItem("app-theme", "dark");
+            localStorage.setItem("ui-theme", "dark");
           }
         };
 
+        window.setTheme = function (theme) {
+          localStorage.setItem("ui-theme", theme);
+
+          if (theme === "system") {
+            const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            if (systemTheme === "dark") {
+              document.documentElement.classList.add("dark");
+            } else {
+              document.documentElement.classList.remove("dark");
+            }
+          } else if (theme === "dark") {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+          }
+        };
+
+        window.getTheme = function () {
+          return localStorage.getItem("ui-theme") || "system";
+        };
+
         window.clearThemePreference = function () {
-          localStorage.removeItem("app-theme");
+          localStorage.removeItem("ui-theme");
           const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
           if (systemPrefersDark) {
             document.documentElement.classList.add("dark");
@@ -105,9 +133,9 @@
 
             // Function to handle theme changes
             const handleThemeChange = (isDark) => {
-              const currentSavedTheme = localStorage.getItem("app-theme");
-              // Only update if no saved preference exists
-              if (!currentSavedTheme) {
+              const currentSavedTheme = localStorage.getItem("ui-theme");
+              // Only update if no saved preference exists or if system theme is selected
+              if (!currentSavedTheme || currentSavedTheme === "system") {
                 if (isDark) {
                   document.documentElement.classList.add("dark");
                 } else {
@@ -128,10 +156,17 @@
 
             // Also listen for storage changes (in case theme is changed in another tab)
             window.addEventListener("storage", (e) => {
-              if (e.key === "app-theme") {
+              if (e.key === "ui-theme") {
                 const newTheme = e.newValue;
-                if (newTheme === "dark" || newTheme === "light") {
-                  if (newTheme === "dark") {
+                if (newTheme === "dark" || newTheme === "light" || newTheme === "system") {
+                  if (newTheme === "system") {
+                    const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+                    if (systemTheme === "dark") {
+                      document.documentElement.classList.add("dark");
+                    } else {
+                      document.documentElement.classList.remove("dark");
+                    }
+                  } else if (newTheme === "dark") {
                     document.documentElement.classList.add("dark");
                   } else {
                     document.documentElement.classList.remove("dark");

@@ -38,13 +38,51 @@
         {% endif %}
       </nav>
 
-      <!-- Theme Toggle -->
-      <button class="theme-toggle" id="theme-toggle" title="Toggle theme">
-        <svg class="theme-toggle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-        </svg>
-      </button>
+      <!-- Theme Dropdown -->
+      <div class="theme-dropdown">
+        <button class="theme-dropdown-trigger" id="theme-dropdown-trigger" title="Toggle theme">
+          <svg class="theme-toggle-icon theme-icon-sun" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <svg class="theme-toggle-icon theme-icon-moon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+        </button>
+        <div class="theme-dropdown-menu" id="theme-dropdown-menu">
+          <button class="theme-dropdown-item" data-theme="light">
+            <svg class="theme-dropdown-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            <span>Light</span>
+            <svg class="theme-dropdown-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+          <button class="theme-dropdown-item" data-theme="dark">
+            <svg class="theme-dropdown-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+            </svg>
+            <span>Dark</span>
+            <svg class="theme-dropdown-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+          <button class="theme-dropdown-item" data-theme="system">
+            <svg class="theme-dropdown-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span>System</span>
+            <svg class="theme-dropdown-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       <!-- Mobile Menu Button -->
       <button class="mobile-menu-button" id="mobile-menu-button" title="Open menu">
@@ -89,6 +127,119 @@
 </header>
 
 <style>
+  /* Theme dropdown styles */
+  .theme-dropdown {
+    position: relative;
+    display: inline-block;
+  }
+
+  .theme-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: hsl(var(--foreground));
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  }
+
+  .theme-dropdown-trigger:hover {
+    background-color: hsl(var(--muted));
+  }
+
+  .theme-toggle-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    position: absolute;
+    transition: all 0.3s ease;
+  }
+
+  .theme-icon-sun {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+
+  .theme-icon-moon {
+    opacity: 0;
+    transform: rotate(90deg) scale(0);
+  }
+
+  .dark .theme-icon-sun {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0);
+  }
+
+  .dark .theme-icon-moon {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+
+  .theme-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 0.25rem;
+    min-width: 8rem;
+    background-color: hsl(var(--popover));
+    border: 1px solid hsl(var(--border));
+    border-radius: calc(var(--radius) - 2px);
+    box-shadow: 0 4px 6px -1px hsl(var(--foreground) / 0.1);
+    z-index: 50;
+    padding: 0.25rem;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-0.5rem);
+    transition: all 0.2s ease;
+  }
+
+  .theme-dropdown-menu.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .theme-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: none;
+    background: transparent;
+    color: hsl(var(--popover-foreground));
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: calc(var(--radius) - 4px);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    position: relative;
+  }
+
+  .theme-dropdown-item:hover {
+    background-color: hsl(var(--muted));
+  }
+
+  .theme-dropdown-icon {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .theme-dropdown-check {
+    width: 1rem;
+    height: 1rem;
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .theme-dropdown-item.selected .theme-dropdown-check {
+    opacity: 1;
+  }
+
   /* Mobile menu styles */
   .mobile-menu {
     position: absolute;
@@ -169,16 +320,65 @@
     }
   }
 
+  // Theme dropdown functionality
+  function toggleThemeDropdown() {
+    const dropdown = document.getElementById('theme-dropdown-menu');
+    if (dropdown.classList.contains('visible')) {
+      dropdown.classList.remove('visible');
+    } else {
+      dropdown.classList.add('visible');
+    }
+  }
+
+  function closeThemeDropdown() {
+    const dropdown = document.getElementById('theme-dropdown-menu');
+    dropdown.classList.remove('visible');
+  }
+
+  function updateThemeDropdownSelection() {
+    const currentTheme = window.getTheme ? window.getTheme() : 'system';
+    const items = document.querySelectorAll('.theme-dropdown-item');
+
+    items.forEach(item => {
+      item.classList.remove('selected');
+      if (item.dataset.theme === currentTheme) {
+        item.classList.add('selected');
+      }
+    });
+  }
+
+  function handleThemeSelection(theme) {
+    if (window.setTheme) {
+      window.setTheme(theme);
+      updateThemeDropdownSelection();
+    }
+    closeThemeDropdown();
+  }
+
   // Add event listeners when DOM is loaded
   document.addEventListener('DOMContentLoaded', function () {
-    // Theme toggle event listener
-    const themeToggle = document.getElementById('theme-toggle');
-    if (themeToggle) {
-      themeToggle.addEventListener('click', function () {
-        if (window.toggleTheme) {
-          window.toggleTheme();
-        }
+    // Theme dropdown event listeners
+    const themeDropdownTrigger = document.getElementById('theme-dropdown-trigger');
+    const themeDropdownMenu = document.getElementById('theme-dropdown-menu');
+
+    if (themeDropdownTrigger && themeDropdownMenu) {
+      // Toggle dropdown on trigger click
+      themeDropdownTrigger.addEventListener('click', function (e) {
+        e.stopPropagation();
+        toggleThemeDropdown();
       });
+
+      // Handle theme selection
+      const themeItems = document.querySelectorAll('.theme-dropdown-item');
+      themeItems.forEach(item => {
+        item.addEventListener('click', function () {
+          const theme = this.dataset.theme;
+          handleThemeSelection(theme);
+        });
+      });
+
+      // Initialize selection
+      updateThemeDropdownSelection();
     }
 
     // Mobile menu button event listener
@@ -190,13 +390,25 @@
     }
   });
 
-  // Close mobile menu when clicking outside
+  // Close dropdowns when clicking outside
   document.addEventListener('click', function (event) {
-    const menu = document.getElementById('mobile-menu');
-    const button = event.target.closest('.mobile-menu-button');
-    if (!button && !menu.contains(event.target)) {
-      menu.classList.remove('mobile-menu-visible');
-      menu.classList.add('mobile-menu-hidden');
+    // Close mobile menu when clicking outside
+    const mobileMenu = document.getElementById('mobile-menu');
+    const mobileMenuButton = event.target.closest('.mobile-menu-button');
+    if (!mobileMenuButton && !mobileMenu.contains(event.target)) {
+      mobileMenu.classList.remove('mobile-menu-visible');
+      mobileMenu.classList.add('mobile-menu-hidden');
+    }
+
+    // Close theme dropdown when clicking outside
+    const themeDropdown = document.getElementById('theme-dropdown-menu');
+    const themeDropdownTrigger = event.target.closest('.theme-dropdown-trigger');
+    const themeDropdownContainer = event.target.closest('.theme-dropdown');
+
+    if (!themeDropdownTrigger && !themeDropdownContainer) {
+      if (themeDropdown && themeDropdown.classList.contains('visible')) {
+        closeThemeDropdown();
+      }
     }
   });
 </script>
