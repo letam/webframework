@@ -476,9 +476,9 @@ else:
                 "'sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo='",
                 #
                 # Hashes for styles in Django HTML templates
-                "'sha256-b0sohjlIjGztqpmyNP3Q9cwnQGi0SXX/lps/qcmqXzk='",
-                "'sha256-I7renLBGLZO3hm7yEXb3LnJY2Z85/XTwyhdELYBhkZQ='",
+                "'sha256-GWweojyzwwt2WuqsMmaOTzMtCkOvLHnP8sc9dK1mDVo='",
                 "'sha256-JayKhsDueQH1eSiZMpD2bwcA5rUMPYRclFLcblDmxvU='",
+                "'sha256-c2svKMHHIytNvecMVUzr4RNy61AT1b0sYT937DFULOk='",
             ],
             'connect-src': [SELF, 'http://127.0.0.1:8000'],
         }

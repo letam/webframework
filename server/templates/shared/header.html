@@ -16,11 +16,12 @@
   .header-container {
     max-width: 1400px;
     margin: 0 auto;
-    padding: 0 2rem;
+    padding: 0 1rem;
     display: flex;
     height: 3.5rem;
     align-items: center;
     justify-content: space-between;
+    width: 100%;
   }
 
   .header-left {
@@ -193,9 +194,9 @@
   }
 
   /* Responsive design */
-  @media (max-width: 640px) {
+  @media (min-width: 640px) {
     .header-container {
-      padding: 0 1rem;
+      padding: 0 2rem;
     }
   }
 
@@ -256,6 +257,7 @@
     right: 0;
     margin-top: 0.25rem;
     min-width: 8rem;
+    max-width: calc(100vw - 2rem);
     background-color: hsl(var(--popover));
     border: 1px solid hsl(var(--border));
     border-radius: calc(var(--radius) - 2px);
@@ -319,6 +321,7 @@
     right: 0;
     margin-top: -0.125rem;
     min-width: 12rem;
+    max-width: calc(100vw - 2rem);
     background-color: hsl(var(--popover));
     border: 1px solid hsl(var(--border));
     border-radius: calc(var(--radius) - 2px);
