@@ -280,7 +280,9 @@ def post_detail(request, post_id):
 
     # Add Open Graph data
     og_data = {
-        'title': post.head or 'Post',
+        'title': post.head
+        or (post.body[:140] + '...' if len(post.body) > 140 else post.body)
+        or 'Post',
         'description': post.body[:200] + '...' if len(post.body) > 200 else post.body,
         'type': 'article',
         'url': request.build_absolute_uri(),
