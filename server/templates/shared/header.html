@@ -413,6 +413,19 @@
         toggleMobileMenu();
       });
     }
+
+    // Close mobile menu when clicking on mobile menu links
+    const mobileMenuLinks = document.querySelectorAll('.mobile-menu-link');
+    mobileMenuLinks.forEach(link => {
+      link.addEventListener('click', function () {
+        closeMobileMenu();
+      });
+    });
+  });
+
+  // Close mobile menu on page load/navigation
+  window.addEventListener('load', function () {
+    closeMobileMenu();
   });
 
   // Close dropdowns when clicking outside
