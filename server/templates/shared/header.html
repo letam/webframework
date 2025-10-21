@@ -39,7 +39,7 @@
       </nav>
 
       <!-- Theme Toggle -->
-      <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+      <button class="theme-toggle" id="theme-toggle" title="Toggle theme">
         <svg class="theme-toggle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
@@ -47,7 +47,7 @@
       </button>
 
       <!-- Mobile Menu Button -->
-      <button class="mobile-menu-button" onclick="toggleMobileMenu()" title="Open menu">
+      <button class="mobile-menu-button" id="mobile-menu-button" title="Open menu">
         <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
         </svg>
@@ -56,7 +56,7 @@
   </div>
 
   <!-- Mobile Menu Dropdown -->
-  <div id="mobile-menu" class="mobile-menu" style="display: none;">
+  <div id="mobile-menu" class="mobile-menu mobile-menu-hidden">
     <div class="mobile-menu-content">
       <a href="/" class="mobile-menu-link">
         <svg class="mobile-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -101,6 +101,14 @@
     border-radius: 0 0 calc(var(--radius) - 2px) calc(var(--radius) - 2px);
     box-shadow: 0 4px 6px -1px hsl(var(--foreground) / 0.1);
     z-index: 50;
+  }
+
+  .mobile-menu-hidden {
+    display: none;
+  }
+
+  .mobile-menu-visible {
+    display: block;
   }
 
   .mobile-menu-content {
@@ -152,19 +160,43 @@
 <script>
   function toggleMobileMenu() {
     const menu = document.getElementById('mobile-menu');
-    if (menu.style.display === 'none') {
-      menu.style.display = 'block';
+    if (menu.classList.contains('mobile-menu-hidden')) {
+      menu.classList.remove('mobile-menu-hidden');
+      menu.classList.add('mobile-menu-visible');
     } else {
-      menu.style.display = 'none';
+      menu.classList.remove('mobile-menu-visible');
+      menu.classList.add('mobile-menu-hidden');
     }
   }
+
+  // Add event listeners when DOM is loaded
+  document.addEventListener('DOMContentLoaded', function () {
+    // Theme toggle event listener
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+      themeToggle.addEventListener('click', function () {
+        if (window.toggleTheme) {
+          window.toggleTheme();
+        }
+      });
+    }
+
+    // Mobile menu button event listener
+    const mobileMenuButton = document.getElementById('mobile-menu-button');
+    if (mobileMenuButton) {
+      mobileMenuButton.addEventListener('click', function () {
+        toggleMobileMenu();
+      });
+    }
+  });
 
   // Close mobile menu when clicking outside
   document.addEventListener('click', function (event) {
     const menu = document.getElementById('mobile-menu');
     const button = event.target.closest('.mobile-menu-button');
     if (!button && !menu.contains(event.target)) {
-      menu.style.display = 'none';
+      menu.classList.remove('mobile-menu-visible');
+      menu.classList.add('mobile-menu-hidden');
     }
   });
 </script>
