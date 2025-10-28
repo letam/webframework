@@ -53,17 +53,39 @@ WEB_APP_URL="https://your-domain.com"
 ### Examples
 
 ```bash
-# Simple text post
+# Simple text post (doesn't open browser by default)
 text-to-web "Hello from Raycast!"
+
+# Text post with browser opening (using 'y')
+text-to-web "Hello from Raycast!" "" "y"
 
 # Longer content
 text-to-web "This is a longer post with multiple sentences. It can contain any text content that you want to share on your web application."
 
 # With special characters
 text-to-web "Check out this link: https://example.com 🚀"
+
+# With head and body (using both arguments)
+text-to-web "My Post Title" "This is the body content"
+
+# With head, body, and browser opening (using 'o')
+text-to-web "My Post Title" "This is the body content" "o"
+
+# With head, body, and no browser opening (explicit)
+text-to-web "My Post Title" "This is the body content" "0"
 ```
 
 ## Configuration Options
+
+### Script Parameters
+
+The script accepts three parameters:
+
+1. **head** (required): The title or headline for the post
+2. **body** (optional): The body content for the post  
+3. **open_url** (optional): Whether to open the created post in browser
+   - `"1"`, `"o"`, or `"y"`: Opens the post URL in your default browser
+   - `"0"` (default): Only displays the URL without opening it
 
 ### Environment Variables
 
@@ -77,8 +99,9 @@ You can customize the following variables in the script:
 The script includes several customizable features:
 
 1. **Colors**: Remove color codes if you prefer plain text output
-2. **Browser Opening**: The script automatically opens created posts in your default browser
+2. **Browser Opening**: Control whether to open created posts in browser via the `open_url` parameter
 3. **Error Messages**: Customize error messages and validation rules
+4. **Parameter Validation**: Input validation for all parameters including the new `open_url` option
 
 ## API Requirements
 
