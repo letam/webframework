@@ -13,7 +13,9 @@
 # @raycast.argument3 { "type": "text", "placeholder": "open_url", "optional": true, "default": "0" }
 
 # Documentation:
-# @raycast.description capture text input to web app
+# @raycast.description Create a new entry in the web app
+# @raycast.author Tam Le
+# @raycast.authorURL https://linkedin.com/in/letam
 
 # echo "Hello World!"
 
@@ -46,6 +48,11 @@ print_link() {
     echo -e "${YELLOW}🔗 $1${NC}"
 }
 
+# Function to URL decode text
+url_decode() {
+    printf '%b\n' "${1//%/\\x}"
+}
+
 # Check if text argument is provided
 if [ -z "$1" ]; then
     print_error "No text provided"
@@ -55,6 +62,8 @@ if [ -z "$1" ]; then
 fi
 
 TEXT="$1"
+# URL decode the text to handle spaces and special characters from Raycast
+TEXT=$(url_decode "$TEXT")
 OPEN_URL="${3:-0}"  # Default to 0 (false) if not provided
 
 # Validate text length
