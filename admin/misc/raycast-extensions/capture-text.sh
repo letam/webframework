@@ -7,6 +7,9 @@
 
 # Optional parameters:
 # @raycast.icon 🤖
+# @raycast.packageName Brainshart
+# @raycast.argument1 { "type": "text", "placeholder": "head", "percentEncoded": true }
+# @raycast.argument2 { "type": "text", "placeholder": "body", "percentEncoded": true, "optional": true }
 
 # Documentation:
 # @raycast.description capture text input to web app
