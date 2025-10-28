@@ -8,8 +8,8 @@
 # Optional parameters:
 # @raycast.icon 🤖
 # @raycast.packageName Brainshart
-# @raycast.argument1 { "type": "text", "placeholder": "head", "percentEncoded": true }
-# @raycast.argument2 { "type": "text", "placeholder": "body", "percentEncoded": true, "optional": true }
+# @raycast.argument1 { "type": "text", "placeholder": "body", "percentEncoded": true }
+# @raycast.argument2 { "type": "text", "placeholder": "head", "percentEncoded": true, "optional": true }
 # @raycast.argument3 { "type": "text", "placeholder": "open_url", "optional": true, "default": "0" }
 
 # Documentation:
@@ -56,14 +56,18 @@ url_decode() {
 # Check if text argument is provided
 if [ -z "$1" ]; then
     print_error "No text provided"
-    echo "Usage: text-to-web \"Your text here\" [\"body text\"] [open_url]"
+    echo "Usage: text-to-web \"body text\" [\"head text\"] [open_url]"
     echo "  open_url: '1', 'o', or 'y' (open browser), '0' (default, don't open)"
     exit 1
 fi
 
 TEXT="$1"
+HEAD="$2"
 # URL decode the text to handle spaces and special characters from Raycast
 TEXT=$(url_decode "$TEXT")
+if [ -n "$HEAD" ]; then
+    HEAD=$(url_decode "$HEAD")
+fi
 OPEN_URL="${3:-0}"  # Default to 0 (false) if not provided
 
 # Validate text length
@@ -86,10 +90,16 @@ fi
 
 print_info "Submitting text to web app..."
 
+# Prepare JSON payload
+JSON_PAYLOAD="{\"body\": \"$TEXT\"}"
+if [ -n "$HEAD" ]; then
+    JSON_PAYLOAD="{\"head\": \"$HEAD\", \"body\": \"$TEXT\"}"
+fi
+
 # Make API request to create post with minimal response
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${API_ENDPOINT}?minres=1" \
     -H "Content-Type: application/json" \
-    -d "{\"body\": \"$TEXT\"}")
+    -d "$JSON_PAYLOAD")
 
 # Extract HTTP status code and response body
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)

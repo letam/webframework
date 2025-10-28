@@ -65,14 +65,14 @@ text-to-web "This is a longer post with multiple sentences. It can contain any t
 # With special characters
 text-to-web "Check out this link: https://example.com 🚀"
 
-# With head and body (using both arguments)
-text-to-web "My Post Title" "This is the body content"
+# With body and head (using both arguments)
+text-to-web "This is the body content" "My Post Title"
 
-# With head, body, and browser opening (using 'o')
-text-to-web "My Post Title" "This is the body content" "o"
+# With body, head, and browser opening (using 'o')
+text-to-web "This is the body content" "My Post Title" "o"
 
-# With head, body, and no browser opening (explicit)
-text-to-web "My Post Title" "This is the body content" "0"
+# With body, head, and no browser opening (explicit)
+text-to-web "This is the body content" "My Post Title" "0"
 ```
 
 ## Configuration Options
@@ -81,8 +81,8 @@ text-to-web "My Post Title" "This is the body content" "0"
 
 The script accepts three parameters:
 
-1. **head** (required): The title or headline for the post
-2. **body** (optional): The body content for the post  
+1. **body** (required): The body content for the post
+2. **head** (optional): The title or headline for the post  
 3. **open_url** (optional): Whether to open the created post in browser
    - `"1"`, `"o"`, or `"y"`: Opens the post URL in your default browser
    - `"0"` (default): Only displays the URL without opening it
