@@ -56,8 +56,14 @@ WEB_APP_URL="https://your-domain.com"
 # Simple text post (doesn't open browser by default)
 text-to-web "Hello from Raycast!"
 
-# Text post with browser opening (using 'y')
+# Text post with browser opening (using any character)
 text-to-web "Hello from Raycast!" "" "y"
+
+# Text post with browser opening (using '1')
+text-to-web "Hello from Raycast!" "" "1"
+
+# Text post with browser opening (using any character)
+text-to-web "Hello from Raycast!" "" "x"
 
 # Longer content
 text-to-web "This is a longer post with multiple sentences. It can contain any text content that you want to share on your web application."
@@ -68,11 +74,14 @@ text-to-web "Check out this link: https://example.com 🚀"
 # With body and head (using both arguments)
 text-to-web "This is the body content" "My Post Title"
 
-# With body, head, and browser opening (using 'o')
+# With body, head, and browser opening (using any character)
 text-to-web "This is the body content" "My Post Title" "o"
 
 # With body, head, and no browser opening (explicit)
 text-to-web "This is the body content" "My Post Title" "0"
+
+# With body, head, and no browser opening (using 'false')
+text-to-web "This is the body content" "My Post Title" "false"
 ```
 
 ## Configuration Options
@@ -84,8 +93,8 @@ The script accepts three parameters:
 1. **body** (required): The body content for the post
 2. **head** (optional): The title or headline for the post  
 3. **open_url** (optional): Whether to open the created post in browser
-   - `"1"`, `"o"`, or `"y"`: Opens the post URL in your default browser
-   - `"0"` (default): Only displays the URL without opening it
+   - Any value: Opens the post URL in your default browser
+   - `"f"`, `"false"`, `"0"`, `"n"`, or `"no"` (default): Only displays the URL without opening it
 
 ### Environment Variables
 

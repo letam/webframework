@@ -57,7 +57,7 @@ url_decode() {
 if [ -z "$1" ]; then
     print_error "No text provided"
     echo "Usage: text-to-web \"body text\" [\"head text\"] [open_url]"
-    echo "  open_url: '1', 'o', or 'y' (open browser), '0' (default, don't open)"
+    echo "  open_url: any value (opens browser), or 'f', 'false', '0', 'n', 'no' (default, don't open)"
     exit 1
 fi
 
@@ -76,15 +76,10 @@ if [ ${#TEXT} -gt $MAX_TEXT_LENGTH ]; then
     exit 1
 fi
 
-# Validate open_url parameter
-if [ "$OPEN_URL" != "1" ] && [ "$OPEN_URL" != "0" ] && [ "$OPEN_URL" != "o" ] && [ "$OPEN_URL" != "y" ]; then
-    print_error "Invalid open_url parameter. Must be '1', '0', 'o', or 'y'"
-    exit 1
-fi
-
 # Determine if we should open the browser
+# Default to false (don't open browser) unless explicitly set to true values
 SHOULD_OPEN_BROWSER=false
-if [ "$OPEN_URL" = "1" ] || [ "$OPEN_URL" = "o" ] || [ "$OPEN_URL" = "y" ]; then
+if [ "$OPEN_URL" != "f" ] && [ "$OPEN_URL" != "false" ] && [ "$OPEN_URL" != "0" ] && [ "$OPEN_URL" != "n" ] && [ "$OPEN_URL" != "no" ]; then
     SHOULD_OPEN_BROWSER=true
 fi
 
