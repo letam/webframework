@@ -22,7 +22,7 @@
 # Configuration - Update these values for your setup
 WEB_APP_URL="http://localhost:8000"
 API_ENDPOINT="${WEB_APP_URL}/api/posts/"
-MAX_TEXT_LENGTH=1000
+MAX_HEAD_LENGTH=255
 
 # Colors for output (optional - remove if you prefer plain text)
 RED='\033[0;31m'
@@ -70,9 +70,9 @@ if [ -n "$HEAD" ]; then
 fi
 OPEN_URL="${3:-0}"  # Default to 0 (false) if not provided
 
-# Validate text length
-if [ ${#TEXT} -gt $MAX_TEXT_LENGTH ]; then
-    print_error "Text too long (max $MAX_TEXT_LENGTH characters)"
+# Validate head length if provided
+if [ -n "$HEAD" ] && [ ${#HEAD} -gt $MAX_HEAD_LENGTH ]; then
+    print_error "Head too long (max $MAX_HEAD_LENGTH characters)"
     exit 1
 fi
 

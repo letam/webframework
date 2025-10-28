@@ -101,7 +101,7 @@ The script accepts three parameters:
 You can customize the following variables in the script:
 
 - `WEB_APP_URL`: The base URL of your web application
-- `MAX_TEXT_LENGTH`: Maximum allowed text length (default: 1000)
+- `MAX_HEAD_LENGTH`: Maximum allowed head/title length (default: 255)
 
 ### Customization
 
@@ -126,7 +126,7 @@ This extension requires your web application to have:
 The script handles various error scenarios:
 
 - ❌ No text provided
-- ❌ Text too long (exceeds character limit)
+- ❌ Head too long (exceeds 255 character limit)
 - ❌ Server not running or unreachable
 - ❌ API errors (invalid response, server errors)
 
@@ -142,8 +142,8 @@ The script handles various error scenarios:
    - Make sure you're passing text as an argument to the script
    - Check Raycast configuration
 
-3. **"Text too long"**
-   - Reduce the text length or increase `MAX_TEXT_LENGTH` in the script
+3. **"Head too long"**
+   - Reduce the head/title length or increase `MAX_HEAD_LENGTH` in the script
 
 ### Debug Mode
 
