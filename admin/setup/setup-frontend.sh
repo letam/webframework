@@ -3,9 +3,19 @@
 # Exit on error
 set -e
 
+# Get the directory where the script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+
 # Function to log messages
 log() {
     echo "$1"
+}
+
+# Change to project root directory
+cd "$PROJECT_ROOT" || {
+    log "Error: Could not change to project root directory"
+    exit 1
 }
 
 log "Setting up frontend server..."
