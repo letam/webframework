@@ -74,7 +74,8 @@ RESPONSE_BODY=$(echo "$RESPONSE" | sed '$d')
 # Check if request was successful
 if [ "$HTTP_CODE" -eq 201 ]; then
     # Extract post ID from response using a more robust approach
-    POST_ID=$(echo "$RESPONSE_BODY" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')
+    # Match the first "id" field (which is the post ID) before any nested objects
+    POST_ID=$(echo "$RESPONSE_BODY" | sed -n 's/^{"id":\([0-9]*\).*/\1/p')
     
     if [ -n "$POST_ID" ]; then
         POST_URL="${WEB_APP_URL}/p/${POST_ID}/"
