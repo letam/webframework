@@ -39,7 +39,7 @@ export const getPosts = async (): Promise<Post[]> => {
 	}
 }
 
-export const createPost = async (data: CreatePostRequest): Promise<Post> => {
+export const createPost = async (data: CreatePostRequest, minres = false): Promise<Post> => {
 	try {
 		let response: Response
 		const formData = new FormData()
@@ -52,6 +52,9 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 		// 	media: data.media ? 'present' : 'absent',
 		// 	media_type: data.media_type,
 		// })
+
+		// Build the posts URL with optional minres parameter
+		const postsUrl = `${SERVER_API_URL}/posts/${minres ? '?minres=1' : ''}`
 
 		// Check environment variable to see if we upload to S3 cloud-compatible storage or local storage
 		if (data.media && UPLOAD_FILES_TO_S3) {
@@ -80,7 +83,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 			formData.append('s3_file_key', presignedUrl.file_path)
 			const postOptions = await getFetchOptions('POST', formData)
 
-			response = await fetch(`${SERVER_API_URL}/posts/`, postOptions)
+			response = await fetch(postsUrl, postOptions)
 		} else {
 			if (data.media) {
 				formData.append('media_type', data.media_type || 'audio')
@@ -89,7 +92,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 
 			const postOptions = await getFetchOptions('POST', formData)
 
-			response = await fetch(`${SERVER_API_URL}/posts/`, postOptions)
+			response = await fetch(postsUrl, postOptions)
 		}
 
 		if (!response.ok) {

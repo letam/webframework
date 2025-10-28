@@ -62,8 +62,8 @@ fi
 
 print_info "Submitting text to web app..."
 
-# Make API request to create post
-RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$API_ENDPOINT" \
+# Make API request to create post with minimal response
+RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${API_ENDPOINT}?minres=1" \
     -H "Content-Type: application/json" \
     -d "{\"body\": \"$TEXT\"}")
 

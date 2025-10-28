@@ -54,3 +54,11 @@ class PostCreateSerializer(serializers.ModelSerializer):
             'body',
             'media',
         ]
+
+
+class PostMinimalSerializer(serializers.ModelSerializer):
+    """Minimal serializer for lightweight post creation responses."""
+
+    class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
+        model = Post
+        fields = ['id', 'created']

@@ -13,7 +13,7 @@ from rest_framework.response import Response
 from werkzeug.http import parse_range_header
 
 from .models import Media, Post
-from .serializers import PostCreateSerializer, PostSerializer
+from .serializers import PostCreateSerializer, PostMinimalSerializer, PostSerializer
 from .transcription import transcribe_audio
 from .utils.get_file_mimetype import get_file_mime_type
 
@@ -72,9 +72,16 @@ class PostViewSet(viewsets.ModelViewSet):
             )
             serializer.instance.save()  # pyright: ignore [reportOptionalMemberAccess]
 
-        # Get the created instance and serialize it with PostSerializer
+        # Get the created instance and serialize it
         instance = serializer.instance
-        response_serializer = PostSerializer(instance)
+
+        # Check if minres response is requested
+        minres_response = request.query_params.get('minres', '').lower() in ['true', '1']
+
+        if minres_response:
+            response_serializer = PostMinimalSerializer(instance)
+        else:
+            response_serializer = PostSerializer(instance)
 
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
