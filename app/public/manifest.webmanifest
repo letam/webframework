@@ -1,0 +1,17 @@
+{
+  "name": "Web Framework Showcase",
+  "short_name": "WebFramework",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "description": "Explore the Web Framework demo application even when you are offline.",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
