@@ -69,6 +69,7 @@ if [ -n "$HEAD" ]; then
     HEAD=$(url_decode "$HEAD")
 fi
 OPEN_URL="${3:-0}"  # Default to 0 (false) if not provided
+OPEN_URL=DEBUG # DEBUG mode, open browser
 
 # Validate head length if provided
 if [ -n "$HEAD" ] && [ ${#HEAD} -gt $MAX_HEAD_LENGTH ]; then
@@ -85,10 +86,17 @@ fi
 
 print_info "Submitting text to web app..."
 
-# Prepare JSON payload
-JSON_PAYLOAD="{\"body\": \"$TEXT\"}"
+# Function to escape JSON string
+escape_json() {
+    echo "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g; s/\n/\\n/g'
+}
+
+# Prepare JSON payload with proper escaping
+ESCAPED_TEXT=$(escape_json "$TEXT")
+JSON_PAYLOAD="{\"body\": \"$ESCAPED_TEXT\"}"
 if [ -n "$HEAD" ]; then
-    JSON_PAYLOAD="{\"head\": \"$HEAD\", \"body\": \"$TEXT\"}"
+    ESCAPED_HEAD=$(escape_json "$HEAD")
+    JSON_PAYLOAD="{\"head\": \"$ESCAPED_HEAD\", \"body\": \"$ESCAPED_TEXT\"}"
 fi
 
 # Make API request to create post with minimal response
