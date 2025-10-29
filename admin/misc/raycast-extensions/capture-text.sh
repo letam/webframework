@@ -95,17 +95,25 @@ fi
 
 print_info "Submitting text to web app..."
 
-# Function to escape JSON string
-escape_json() {
-    echo "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g; s/\r/\\r/g; s/\n/\\n/g'
-}
-
-# Prepare JSON payload with proper escaping
-ESCAPED_TEXT=$(escape_json "$TEXT")
-JSON_PAYLOAD="{\"body\": \"$ESCAPED_TEXT\"}"
+# Check if jq is available for proper JSON escaping
+if command -v jq >/dev/null 2>&1; then
+    # Prepare JSON payload using jq for proper escaping
     if [ -n "$HEAD" ]; then
-    ESCAPED_HEAD=$(escape_json "$HEAD")
+        JSON_PAYLOAD=$(jq -n --arg head "$HEAD" --arg body "$TEXT" '{head: $head, body: $body}')
+    else
+        JSON_PAYLOAD=$(jq -n --arg body "$TEXT" '{body: $body}')
+    fi
+else
+    # Fallback: Basic escaping for common characters (not as robust as jq)
+    ESCAPED_TEXT=$(echo "$TEXT" | sed 's/\\/\\\\/g; s/"/\\"/g; s/'"'"'/\\'"'"'/g')
+    ESCAPED_HEAD=""
+    if [ -n "$HEAD" ]; then
+        ESCAPED_HEAD=$(echo "$HEAD" | sed 's/\\/\\\\/g; s/"/\\"/g; s/'"'"'/\\'"'"'/g')
         JSON_PAYLOAD="{\"head\": \"$ESCAPED_HEAD\", \"body\": \"$ESCAPED_TEXT\"}"
+    else
+        JSON_PAYLOAD="{\"body\": \"$ESCAPED_TEXT\"}"
+    fi
+    print_info "Using basic JSON escaping (install 'jq' for better handling of special characters)"
 fi
 
 # Make API request to create post with minimal response
