@@ -18,6 +18,24 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     SED_CMD="gsed"
 fi
 
+# Function to check if app URL is already taken (even if not in local fly apps list)
+check_app_url_taken() {
+    local app_name=$1
+    local app_url="https://${app_name}.fly.dev"
+    
+    echo "Checking if app URL is already taken: $app_url"
+    
+    # Use curl to check if the URL responds (with timeout)
+    if curl -s --max-time 10 --connect-timeout 5 "$app_url" > /dev/null 2>&1; then
+        echo "❌ App URL '$app_url' is already taken!"
+        echo "The app name '$app_name' is not available for use."
+        return 0  # URL is taken
+    else
+        echo "✅ App URL '$app_url' is available"
+        return 1  # URL is not taken
+    fi
+}
+
 # Function to check if app exists
 check_app_exists() {
     local app_name=$1
@@ -64,12 +82,17 @@ function specify_target_fly_toml() {
 }
 specify_target_fly_toml
 
-
 # Check if app already exists
 if check_app_exists "$FLY_APP_NAME"; then
     echo "App '$FLY_APP_NAME' already exists. Deploying to existing app..."
     DEPLOYED_APP_NAME="$FLY_APP_NAME"
 else
+    # App doesn't exist locally, check if URL is already taken
+    if check_app_url_taken "$FLY_APP_NAME"; then
+        echo "Deployment cancelled: App name '$FLY_APP_NAME' is already taken."
+        exit 1
+    fi
+    
     echo "Creating new app '$FLY_APP_NAME'..."
     # Create app without launching
     yes n | fly launch --name $FLY_APP_NAME --vm-memory 512 --ha=false --no-db --now --copy-config --build-only
