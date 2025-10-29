@@ -24,6 +24,14 @@ WEB_APP_URL="http://localhost:8000"
 API_ENDPOINT="${WEB_APP_URL}/api/posts/"
 MAX_HEAD_LENGTH=255
 
+# Load environment variables from .env file if it exists
+if [ -f ".env" ]; then
+    # Source the .env file to load environment variables
+    set -a  # automatically export all variables
+    source .env
+    set +a  # stop automatically exporting
+fi
+
 # Colors for output (optional - remove if you prefer plain text)
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -68,8 +76,9 @@ TEXT=$(url_decode "$TEXT")
 if [ -n "$HEAD" ]; then
     HEAD=$(url_decode "$HEAD")
 fi
-OPEN_URL="${3:-0}"  # Default to 0 (false) if not provided
-OPEN_URL=DEBUG # DEBUG mode, open browser
+# Use DEBUG_OPEN_URL from .env as default if present, otherwise default to 0
+DEFAULT_OPEN_URL="${DEBUG_OPEN_URL:-0}"
+OPEN_URL="${3:-$DEFAULT_OPEN_URL}"
 
 # Validate head length if provided
 if [ -n "$HEAD" ] && [ ${#HEAD} -gt $MAX_HEAD_LENGTH ]; then
@@ -94,9 +103,9 @@ escape_json() {
 # Prepare JSON payload with proper escaping
 ESCAPED_TEXT=$(escape_json "$TEXT")
 JSON_PAYLOAD="{\"body\": \"$ESCAPED_TEXT\"}"
-if [ -n "$HEAD" ]; then
+    if [ -n "$HEAD" ]; then
     ESCAPED_HEAD=$(escape_json "$HEAD")
-    JSON_PAYLOAD="{\"head\": \"$ESCAPED_HEAD\", \"body\": \"$ESCAPED_TEXT\"}"
+        JSON_PAYLOAD="{\"head\": \"$ESCAPED_HEAD\", \"body\": \"$ESCAPED_TEXT\"}"
 fi
 
 # Make API request to create post with minimal response
