@@ -19,11 +19,6 @@
 
 # echo "Hello World!"
 
-# Configuration - Update these values for your setup
-WEB_APP_URL="http://localhost:8000"
-API_ENDPOINT="${WEB_APP_URL}/api/posts/"
-MAX_HEAD_LENGTH=255
-
 # Load environment variables from .env file if it exists
 if [ -f ".env" ]; then
     # Source the .env file to load environment variables
@@ -31,6 +26,12 @@ if [ -f ".env" ]; then
     source .env
     set +a  # stop automatically exporting
 fi
+
+# Configuration - Get WEB_APP_URL from .env with fallback to localhost:8000
+WEB_APP_URL="${WEB_APP_URL:-http://localhost:8000}"
+API_ENDPOINT="${WEB_APP_URL}/api/posts/"
+
+MAX_HEAD_LENGTH=255
 
 # Colors for output (optional - remove if you prefer plain text)
 RED='\033[0;31m'
