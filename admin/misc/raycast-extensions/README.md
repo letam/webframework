@@ -194,3 +194,125 @@ To modify the script:
 ## License
 
 This extension is part of the Web Framework project and follows the same license terms.
+
+---
+
+# Testing
+
+This directory contains comprehensive tests for the `capture-text.sh` Raycast extension script.
+
+## Test Files
+
+- `capture-text.sh` - The main Raycast extension script for submitting text to the web app
+- `test-capture-text.sh` - Comprehensive test suite for the capture-text script
+- `README.md` - This documentation file
+
+## Test Coverage
+
+The test suite covers the following scenarios:
+
+### JSON Construction Tests
+- ✅ Basic text handling
+- ✅ Text with quotes (`"Hello world"`)
+- ✅ Text with apostrophes (`It's a beautiful day`)
+- ✅ Mixed quotes and apostrophes (`He said "It's a beautiful day"`)
+- ✅ Text with head and body
+- ✅ Complex multi-line text with special characters
+- ✅ Empty text handling
+- ✅ Very long text (stress test)
+- ✅ Text with backslashes (`C:\Users\test\file.txt`)
+- ✅ Unicode characters (`Hello 世界 🌍`)
+- ✅ Edge cases (only quotes, only apostrophes, mixed delimiters)
+
+### URL Decoding Tests
+- ✅ URL-encoded spaces (`Hello%20world`)
+- ✅ URL-encoded special characters (`Hello%21%20world`)
+- ✅ URL-encoded quotes (`He%20said%20%22Hello%22`)
+
+### Script Execution Tests
+- ✅ Basic script execution (body only)
+- ✅ Script execution with head and body
+- ✅ Script execution with special characters
+
+### Error Handling
+- ✅ Tests both `jq` and fallback JSON construction methods
+- ✅ Validates JSON structure and content
+- ✅ Handles server availability gracefully
+
+## Running the Tests
+
+### Prerequisites
+- The Django development server should be running (`uv run python server/manage.py runserver_plus`)
+- The script should be executable (`chmod +x test-capture-text.sh`)
+
+### Run All Tests
+```bash
+cd /Users/tam/code/webframework
+./admin/misc/raycast-extensions/test-capture-text.sh
+```
+
+### Test Output
+The test script provides colored output:
+- 🟢 **Green**: Tests that passed
+- 🔴 **Red**: Tests that failed
+- 🟡 **Yellow**: Warnings or informational messages
+- 🔵 **Blue**: Test section headers
+
+### Expected Results
+When all tests pass, you should see:
+```
+📊 Test Results
+Tests run: 32
+Tests passed: 32
+Tests failed: 0
+🎉 All tests passed!
+```
+
+## Test Categories
+
+### 1. JSON Construction Tests
+Tests the core functionality of constructing valid JSON payloads from user input. This is the most critical part since the original issue was JSON parsing errors.
+
+### 2. URL Decoding Tests
+Tests the URL decoding functionality that handles percent-encoded characters from Raycast input.
+
+### 3. Script Execution Tests
+Tests the actual script execution with the live server to ensure end-to-end functionality works correctly.
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"jq not available"**: The tests will still run using the fallback JSON construction method
+2. **"Server not running"**: Script execution tests will be skipped if the Django server isn't running
+3. **Permission denied**: Make sure the test script is executable (`chmod +x test-capture-text.sh`)
+
+### Debugging Failed Tests
+
+If a test fails, the output will show:
+- The test name that failed
+- Details about why it failed
+- The specific error message
+
+## Integration with CI/CD
+
+The test script returns appropriate exit codes:
+- `0`: All tests passed
+- `1`: Some tests failed
+
+This makes it suitable for integration with CI/CD pipelines or automated testing systems.
+
+## Adding New Tests
+
+To add new test cases:
+
+1. Add a new test function call in the main test section
+2. Follow the existing pattern for test naming and structure
+3. Ensure the test covers edge cases or specific scenarios
+4. Run the test suite to verify the new test works correctly
+
+Example:
+```bash
+# Add a new test
+test_json_construction "New test case" "test input" "optional head" "expected pattern"
+```
