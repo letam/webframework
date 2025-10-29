@@ -1,11 +1,11 @@
 {
-  "name": "Web Framework Showcase",
-  "short_name": "WebFramework",
+  "name": "Echo Sphere",
+  "short_name": "EchoSphere",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
-  "description": "Explore the Web Framework demo application even when you are offline.",
+  "description": "Explore the Echo Sphere demo application even when you are offline.",
   "icons": [
     {
       "src": "/pwa-icon.svg",
