@@ -10,8 +10,11 @@
   <link rel="icon" type="image/svg+xml" href="{% static 'vite-logo.svg' %}" />
   <link rel="apple-touch-icon" href="{% static 'vite-logo.png' %}" />
   {% else %}
-  <link rel="icon" type="image/svg+xml" href="/vite-logo.svg" />
-  <link rel="apple-touch-icon" href="/vite-logo.png" />
+  <link rel="icon" type="image/svg+xml" href="/static/app/vite-logo.svg" />
+  <link rel="apple-touch-icon" href="/static/app/pwa-icon.svg" />
+  <link rel="manifest" href="/static/app/manifest.webmanifest" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="application-name" content="Echo Sphere" />
   {% endif %}
 
   <title>Echo Sphere</title>
