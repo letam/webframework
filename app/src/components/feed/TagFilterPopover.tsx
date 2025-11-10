@@ -95,10 +95,26 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 		setPendingTags([])
 	}, [])
 
+	const canSubmit = useMemo(() => hasChanges && !isLoadingTags, [hasChanges, isLoadingTags])
+
 	const handleSubmit = useCallback(() => {
+		if (!canSubmit) {
+			return
+		}
+
 		onSubmit(pendingTags.map((tag) => `#${tag}`))
 		setIsOpen(false)
-	}, [onSubmit, pendingTags])
+	}, [canSubmit, onSubmit, pendingTags])
+
+	const handleKeyDown = useCallback(
+		(event: React.KeyboardEvent<HTMLDivElement>) => {
+			if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+				event.preventDefault()
+				handleSubmit()
+			}
+		},
+		[handleSubmit]
+	)
 
 	return (
 		<Popover
@@ -132,7 +148,7 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 					)}
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent className="w-80" align="end">
+			<PopoverContent className="w-80" align="end" onKeyDown={handleKeyDown}>
 				<div className="space-y-4">
 					<div>
 						<h3 className="text-sm font-medium text-foreground">Select tags</h3>
@@ -198,18 +214,23 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 							))
 						)}
 					</div>
-					<div className="flex items-center justify-end gap-2">
-						<Button
-							type="button"
-							variant="ghost"
-							onClick={handleClearAll}
-							disabled={pendingTags.length === 0}
-						>
-							Clear
-						</Button>
-						<Button type="button" onClick={handleSubmit} disabled={isLoadingTags || !hasChanges}>
-							Submit
-						</Button>
+					<div className="space-y-2">
+						<p className="text-xs text-muted-foreground">
+							Press Cmd+Enter or Ctrl+Enter to submit your tag filters quickly.
+						</p>
+						<div className="flex items-center justify-end gap-2">
+							<Button
+								type="button"
+								variant="ghost"
+								onClick={handleClearAll}
+								disabled={pendingTags.length === 0}
+							>
+								Clear
+							</Button>
+							<Button type="button" onClick={handleSubmit} disabled={!canSubmit}>
+								Submit
+							</Button>
+						</div>
 					</div>
 				</div>
 			</PopoverContent>
