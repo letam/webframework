@@ -372,8 +372,8 @@ const Feed: React.FC = () => {
 					</div>
 				)}
 			</div>
-			{/* Bottom padding for mobile */}
-			<div className="h-96 sm:h-0"></div>
+			{/* Bottom padding */}
+			<div className="h-96"></div>
 		</div>
 	)
 }

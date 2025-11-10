@@ -118,6 +118,27 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 		[handleSubmit]
 	)
 
+	const selectedTagBadgesContent =
+		pendingTags.length === 0 ? (
+			<span className="rounded-md border border-dashed border-muted-foreground/40 px-3 py-2 text-xs text-muted-foreground">
+				No tags selected yet.
+			</span>
+		) : (
+			pendingTags.map((tag) => (
+				<Badge key={tag} variant="secondary" className="flex items-center gap-1">
+					<span>#{tag}</span>
+					<button
+						type="button"
+						onClick={() => handleClearPendingTag(tag)}
+						className="rounded-full p-0.5 hover:bg-secondary-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						aria-label={`Remove tag ${tag}`}
+					>
+						<X className="size-3.5" />
+					</button>
+				</Badge>
+			))
+		)
+
 	return (
 		<Popover
 			open={isOpen}
@@ -156,12 +177,12 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 				</Button>
 			</PopoverTrigger>
 			<PopoverContent
-				className="w-80"
+				className={cn('w-80', !isMobile && 'w-[640px]')}
 				align="end"
 				{...(isMobile ? { side: 'top' as const, avoidCollisions: false } : {})}
 				onKeyDown={handleKeyDown}
 			>
-				<div className="space-y-4">
+				<div className="flex flex-col gap-4">
 					<div>
 						<h3 className="text-sm font-medium text-foreground">Select tags</h3>
 						<p className="mt-1 text-xs text-muted-foreground">
@@ -173,59 +194,59 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 							Unable to load tags. Try again.
 						</div>
 					) : null}
-					<Command>
-						<CommandInput placeholder="Search tags…" autoFocus />
-						<CommandList className="max-h-[180px] overflow-y-auto">
-							<CommandEmpty>No matching tags found.</CommandEmpty>
-							{isLoadingTags ? (
-								<div className="py-6 text-center text-sm text-muted-foreground">Loading tags…</div>
-							) : tags.length === 0 ? (
-								<div className="py-6 text-center text-sm text-muted-foreground">
-									No tags available yet.
+					<div className={cn('space-y-4', !isMobile && 'flex gap-4 space-y-0')}>
+						<Command className={cn(!isMobile && 'flex-1')}>
+							<CommandInput placeholder="Search tags…" autoFocus />
+							<CommandList
+								className={cn('max-h-[180px] overflow-y-auto', !isMobile && 'max-h-[240px]')}
+							>
+								<CommandEmpty>No matching tags found.</CommandEmpty>
+								{isLoadingTags ? (
+									<div className="py-6 text-center text-sm text-muted-foreground">
+										Loading tags…
+									</div>
+								) : tags.length === 0 ? (
+									<div className="py-6 text-center text-sm text-muted-foreground">
+										No tags available yet.
+									</div>
+								) : (
+									<CommandGroup>
+										{tags.map((tagInfo) => {
+											const isSelected = pendingTagSet.has(tagInfo.tag.toLowerCase())
+											return (
+												<CommandItem
+													key={tagInfo.tag}
+													value={tagInfo.tag}
+													keywords={[`#${tagInfo.tag}`]}
+													onSelect={(value) => handleTogglePendingTag(value)}
+													className="flex items-center gap-2"
+												>
+													<Check
+														className={cn('size-4', isSelected ? 'opacity-100' : 'opacity-0')}
+													/>
+													<span className="truncate">#{tagInfo.tag}</span>
+													<span className="ml-auto text-xs text-muted-foreground">
+														{tagInfo.count}
+													</span>
+												</CommandItem>
+											)
+										})}
+									</CommandGroup>
+								)}
+							</CommandList>
+						</Command>
+						{!isMobile ? (
+							<div className="flex w-[240px] flex-col gap-3 rounded-md border border-border/60 bg-muted/10 p-3">
+								<div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+									Selected tags
 								</div>
-							) : (
-								<CommandGroup>
-									{tags.map((tagInfo) => {
-										const isSelected = pendingTagSet.has(tagInfo.tag.toLowerCase())
-										return (
-											<CommandItem
-												key={tagInfo.tag}
-												value={tagInfo.tag}
-												keywords={[`#${tagInfo.tag}`]}
-												onSelect={(value) => handleTogglePendingTag(value)}
-												className="flex items-center gap-2"
-											>
-												<Check className={cn('size-4', isSelected ? 'opacity-100' : 'opacity-0')} />
-												<span className="truncate">#{tagInfo.tag}</span>
-												<span className="ml-auto text-xs text-muted-foreground">
-													{tagInfo.count}
-												</span>
-											</CommandItem>
-										)
-									})}
-								</CommandGroup>
-							)}
-						</CommandList>
-					</Command>
-					<div className="flex flex-wrap gap-2">
-						{pendingTags.length === 0 ? (
-							<span className="text-xs text-muted-foreground">No tags selected yet.</span>
-						) : (
-							pendingTags.map((tag) => (
-								<Badge key={tag} variant="secondary" className="flex items-center gap-1">
-									<span>#{tag}</span>
-									<button
-										type="button"
-										onClick={() => handleClearPendingTag(tag)}
-										className="rounded-full p-0.5 hover:bg-secondary-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-										aria-label={`Remove tag ${tag}`}
-									>
-										<X className="size-3.5" />
-									</button>
-								</Badge>
-							))
-						)}
+								<div className="flex max-h-[240px] flex-wrap content-start gap-2 overflow-y-auto pr-1">
+									{selectedTagBadgesContent}
+								</div>
+							</div>
+						) : null}
 					</div>
+					{isMobile ? <div className="flex flex-wrap gap-2">{selectedTagBadgesContent}</div> : null}
 					<div className="space-y-2">
 						{!isMobile ? (
 							<p className="text-xs text-muted-foreground">
