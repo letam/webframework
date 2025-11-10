@@ -6,6 +6,7 @@ import CreatePost from './post/create'
 import { usePosts } from '../hooks/usePosts'
 import type { CreatePostRequest, Post as PostType } from '@/types/post'
 import { toast } from '@/components/ui/sonner'
+import { TagFilterPopover } from './feed/TagFilterPopover'
 
 const Feed: React.FC = () => {
 	const { posts, isLoading, error, addPost, editPost, removePost, setPosts } = usePosts()
@@ -42,6 +43,11 @@ const Feed: React.FC = () => {
 			})
 		})
 	}, [filters, matchMode, posts])
+
+	const tagFilters = useMemo(
+		() => filters.filter((filter) => filter.token.trim().startsWith('#')),
+		[filters]
+	)
 
 	const totalPostCount = posts.length
 	const filteredPostCount = filteredPosts.length
@@ -128,6 +134,19 @@ const Feed: React.FC = () => {
 		)
 	}, [])
 
+	const handleApplyTagFilters = useCallback((tags: string[]) => {
+		setFilters((prev) => {
+			const nonTagFilters = prev.filter((filter) => !filter.token.trim().startsWith('#'))
+
+			const nextTagFilters = tags.map((tag) => ({
+				token: tag.startsWith('#') ? tag : `#${tag}`,
+				enabled: true,
+			}))
+
+			return [...nonTagFilters, ...nextTagFilters]
+		})
+	}, [])
+
 	const handlePostCreated = async (postData: CreatePostRequest) => {
 		try {
 			await addPost(postData)
@@ -209,6 +228,7 @@ const Feed: React.FC = () => {
 						>
 							Apply
 						</button>
+
 						<div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
 							<div className="flex items-center gap-2 rounded-md border border-transparent px-3 py-2 sm:border-border sm:bg-background/80 sm:px-2 sm:py-1">
 								<button
@@ -266,6 +286,11 @@ const Feed: React.FC = () => {
 								</div>
 							</div>
 						</div>
+
+						<TagFilterPopover
+							selectedTags={tagFilters.map((filter) => filter.token)}
+							onSubmit={handleApplyTagFilters}
+						/>
 					</div>
 				</form>
 
