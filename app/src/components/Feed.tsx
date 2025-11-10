@@ -229,7 +229,7 @@ const Feed: React.FC = () => {
 							Apply
 						</button>
 
-						<div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
+						<div className="flex w-full flex-row items-center gap-2">
 							<div className="flex items-center gap-2 rounded-md border border-transparent px-3 py-2 sm:border-border sm:bg-background/80 sm:px-2 sm:py-1">
 								<button
 									type="button"
@@ -285,12 +285,11 @@ const Feed: React.FC = () => {
 									</label>
 								</div>
 							</div>
+							<TagFilterPopover
+								selectedTags={tagFilters.map((filter) => filter.token)}
+								onSubmit={handleApplyTagFilters}
+							/>
 						</div>
-
-						<TagFilterPopover
-							selectedTags={tagFilters.map((filter) => filter.token)}
-							onSubmit={handleApplyTagFilters}
-						/>
 					</div>
 				</form>
 
