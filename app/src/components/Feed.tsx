@@ -22,6 +22,7 @@ const Feed: React.FC = () => {
 		matchMode,
 		setMatchMode,
 		filteredPosts,
+		filteredPostCount,
 		postCountLabel,
 		addFiltersFromText,
 		removeFilter,
@@ -111,6 +112,8 @@ const Feed: React.FC = () => {
 					selectedTags={tagFilters.map((filter) => filter.token)}
 					onTagsSubmit={applyTagFilters}
 					disabled={isLoading}
+					filters={filters}
+					filteredPostCount={filteredPostCount}
 				/>
 
 				<ActiveFiltersList

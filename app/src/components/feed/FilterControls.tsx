@@ -1,7 +1,8 @@
 import type React from 'react'
 import { cn } from '@/lib/utils'
 import { TagFilterPopover } from './TagFilterPopover'
-import type { MatchMode } from '@/hooks/usePostFilters'
+import type { FilterToken, MatchMode } from '@/hooks/usePostFilters'
+import { useEffect, useRef } from 'react'
 
 type FilterControlsProps = {
 	filterInputId: string
@@ -14,6 +15,8 @@ type FilterControlsProps = {
 	selectedTags: string[]
 	onTagsSubmit: (tags: string[]) => void
 	disabled?: boolean
+	filters: FilterToken[]
+	filteredPostCount: number
 }
 
 const matchModeLabel: Record<MatchMode, string> = {
@@ -32,12 +35,40 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 	selectedTags,
 	onTagsSubmit,
 	disabled = false,
+	filters,
+	filteredPostCount,
 }) => {
+	const labelRef = useRef<HTMLLabelElement | null>(null)
+	const previousFilteredPostCount = useRef<number | null>(null)
+
+	useEffect(() => {
+		if (previousFilteredPostCount.current === null) {
+			previousFilteredPostCount.current = filteredPostCount
+			return
+		}
+
+		const countChanged = filteredPostCount !== previousFilteredPostCount.current
+
+		previousFilteredPostCount.current = filteredPostCount
+		const labelElement = labelRef.current
+		if (!labelElement) {
+			return
+		}
+
+		const { top } = labelElement.getBoundingClientRect()
+
+		if (filters.length > 0 && countChanged) {
+			const offsetForHeader = 64
+			window.scrollTo({ top: top + window.scrollY - offsetForHeader, behavior: 'smooth' })
+		}
+	}, [filteredPostCount, filters])
+
 	return (
 		<form onSubmit={onSubmit}>
 			<label
 				className="block text-sm font-medium text-muted-foreground mb-2"
 				htmlFor={filterInputId}
+				ref={labelRef}
 			>
 				Filter posts
 			</label>
