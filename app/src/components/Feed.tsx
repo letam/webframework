@@ -193,7 +193,7 @@ const Feed: React.FC = () => {
 					<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
 						<input
 							id={filterInputId}
-							className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 sm:flex-1"
+							className="w-full rounded-md border border-input bg-background px-3 py-2 text-base shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 sm:flex-1 sm:text-sm"
 							type="text"
 							placeholder="Enter words to filter posts…"
 							value={filterText}
