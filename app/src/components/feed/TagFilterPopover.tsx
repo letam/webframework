@@ -111,7 +111,7 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 			}}
 		>
 			<PopoverTrigger asChild>
-				<Button type="button" variant="outline" className="min-w-[140px]">
+				<Button type="button" variant="outline" size="sm" className="min-w-[140px]">
 					{error ? (
 						<>
 							<X className="size-4 text-destructive" />

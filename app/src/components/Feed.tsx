@@ -230,7 +230,7 @@ const Feed: React.FC = () => {
 						</button>
 
 						<div className="flex w-full flex-row items-center gap-2">
-							<div className="flex items-center gap-2 rounded-md border border-transparent px-3 py-2 sm:border-border sm:bg-background/80 sm:px-2 sm:py-1">
+							<div className="flex items-center gap-2 rounded-md px-3 py-2 sm:bg-background/80 sm:px-2 sm:py-1">
 								<button
 									type="button"
 									onClick={() => setMatchMode((prev) => (prev === 'and' ? 'or' : 'and'))}
@@ -293,7 +293,7 @@ const Feed: React.FC = () => {
 					</div>
 				</form>
 
-				<div className="space-y-3 sm:mt-4">
+				<div className="space-y-3 mt-1">
 					{filters.length > 0 && (
 						<div className="flex flex-wrap items-center gap-2">
 							<span className="text-sm font-medium text-muted-foreground">
