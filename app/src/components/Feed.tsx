@@ -201,10 +201,18 @@ const Feed: React.FC = () => {
 							aria-label="Add a filter term for posts"
 						/>
 						<div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
-							<div className="flex items-center gap-2">
-								<span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
+							<div className="flex items-center gap-2 rounded-md border border-transparent px-3 py-2 sm:border-border sm:bg-background/80 sm:px-2 sm:py-1">
+								<button
+									type="button"
+									onClick={() => setMatchMode((prev) => (prev === 'and' ? 'or' : 'and'))}
+									tabIndex={-1}
+									className="text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground active:text-foreground sm:text-sm"
+									aria-label={`Toggle match mode (currently ${
+										matchMode === 'and' ? 'match all' : 'match any'
+									})`}
+								>
 									Match
-								</span>
+								</button>
 								<div
 									className="flex items-center gap-1"
 									role="radiogroup"
