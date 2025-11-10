@@ -1,70 +1,81 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Post, CreatePostRequest, UpdatePostRequest } from '../types/post'
 import { getPosts, createPost, deletePost, updatePost } from '../lib/api/posts'
 
-export const usePosts = () => {
-	const [posts, setPosts] = useState<Post[]>([])
-	const [isLoading, setIsLoading] = useState(true)
-	const [error, setError] = useState<Error | null>(null)
+const POSTS_QUERY_KEY = ['posts']
 
-	const fetchPosts = useCallback(async () => {
-		try {
-			setIsLoading(true)
-			const fetchedPosts = await getPosts()
-			setPosts(fetchedPosts)
-			setError(null)
-		} catch (err) {
-			setError(err instanceof Error ? err : new Error('Failed to fetch posts'))
-		} finally {
-			setIsLoading(false)
-		}
-	}, [])
+export const usePosts = () => {
+	const queryClient = useQueryClient()
+
+	const {
+		data: queryPosts = [],
+		isLoading,
+		isFetching,
+		error,
+		refetch,
+	} = useQuery<Post[], Error>({
+		queryKey: POSTS_QUERY_KEY,
+		queryFn: getPosts,
+		staleTime: 1000 * 60, // 1 minute
+	})
+
+	const addPostMutation = useMutation({
+		mutationFn: (postData: CreatePostRequest) => createPost(postData),
+		onSuccess: (newPost) => {
+			queryClient.setQueryData<Post[]>(POSTS_QUERY_KEY, (prev = []) => [newPost, ...prev])
+		},
+	})
+
+	const editPostMutation = useMutation({
+		mutationFn: ({ id, data }: { id: number; data: UpdatePostRequest }) => updatePost(id, data),
+		onSuccess: (updatedPost) => {
+			queryClient.setQueryData<Post[]>(POSTS_QUERY_KEY, (prev = []) =>
+				prev.map((post) => (post.id === updatedPost.id ? updatedPost : post))
+			)
+		},
+	})
+
+	const removePostMutation = useMutation({
+		mutationFn: (id: number) => deletePost(id),
+		onSuccess: (_, id) => {
+			queryClient.setQueryData<Post[]>(POSTS_QUERY_KEY, (prev = []) =>
+				prev.filter((post) => post.id !== id)
+			)
+		},
+	})
+
+	const setPosts = useCallback(
+		(updater: (prevPosts: Post[]) => Post[]) => {
+			queryClient.setQueryData<Post[]>(POSTS_QUERY_KEY, (prev = []) => updater([...prev]))
+		},
+		[queryClient]
+	)
 
 	const addPost = async (postData: CreatePostRequest) => {
-		try {
-			const newPost = await createPost(postData)
-			setPosts((prevPosts) => [newPost, ...prevPosts])
-			return newPost
-		} catch (err) {
-			setError(err instanceof Error ? err : new Error('Failed to create post'))
-			throw err
-		}
+		const newPost = await addPostMutation.mutateAsync(postData)
+		return newPost
 	}
 
 	const editPost = async (id: number, data: UpdatePostRequest) => {
-		try {
-			const updatedPost = await updatePost(id, data)
-			setPosts((prevPosts) =>
-				prevPosts.map((post) => (post.id === updatedPost.id ? updatedPost : post))
-			)
-		} catch (err) {
-			setError(err instanceof Error ? err : new Error('Failed to update post'))
-			throw err
-		}
+		await editPostMutation.mutateAsync({ id, data })
 	}
 
 	const removePost = async (id: number) => {
-		try {
-			await deletePost(id)
-			setPosts((prevPosts) => prevPosts.filter((post) => post.id !== id))
-		} catch (err) {
-			setError(err instanceof Error ? err : new Error('Failed to delete post'))
-			throw err
-		}
+		await removePostMutation.mutateAsync(id)
 	}
 
-	useEffect(() => {
-		fetchPosts()
-	}, [fetchPosts])
-
 	return {
-		posts,
+		posts: queryPosts,
 		isLoading,
 		error,
-		fetchPosts,
+		fetchPosts: refetch,
 		addPost,
 		editPost,
 		removePost,
 		setPosts,
+		isFetching,
+		isMutating:
+			addPostMutation.isPending || editPostMutation.isPending || removePostMutation.isPending,
 	}
 }
