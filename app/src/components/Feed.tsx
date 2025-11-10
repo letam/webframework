@@ -11,7 +11,9 @@ const Feed: React.FC = () => {
 	const { posts, isLoading, error, addPost, editPost, removePost, setPosts } = usePosts()
 	const [filterText, setFilterText] = useState('')
 	const [filters, setFilters] = useState<Array<{ token: string; enabled: boolean }>>([])
+	const [matchMode, setMatchMode] = useState<'and' | 'or'>('and')
 	const filterInputId = useId()
+	const matchModeFieldName = useId()
 
 	const filteredPosts = useMemo(() => {
 		const activeFilters = filters.filter((filter) => filter.enabled)
@@ -28,12 +30,18 @@ const Feed: React.FC = () => {
 				post.media?.alt_text,
 			]
 
-			return activeFilters.every((filter) => {
+			const matcher =
+				matchMode === 'and'
+					? (fn: (filter: { token: string; enabled: boolean }) => boolean) =>
+							activeFilters.every(fn)
+					: (fn: (filter: { token: string; enabled: boolean }) => boolean) => activeFilters.some(fn)
+
+			return matcher((filter) => {
 				const normalizedFilter = filter.token.toLowerCase()
 				return fieldsToSearch.some((field) => field?.toLowerCase().includes(normalizedFilter))
 			})
 		})
-	}, [filters, posts])
+	}, [filters, matchMode, posts])
 
 	const totalPostCount = posts.length
 	const filteredPostCount = filteredPosts.length
@@ -182,22 +190,71 @@ const Feed: React.FC = () => {
 					>
 						Filter posts
 					</label>
-					<div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+					<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
 						<input
 							id={filterInputId}
-							className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+							className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 sm:flex-1"
 							type="text"
 							placeholder="Enter words to filter posts…"
 							value={filterText}
 							onChange={(event) => setFilterText(event.target.value)}
 							aria-label="Add a filter term for posts"
 						/>
-						<button
-							type="submit"
-							className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-						>
-							Add
-						</button>
+						<div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
+							<div className="flex items-center gap-2">
+								<span className="text-xs font-medium uppercase tracking-wide text-muted-foreground sm:text-sm">
+									Match
+								</span>
+								<div
+									className="flex items-center gap-1"
+									role="radiogroup"
+									aria-label="Filter match mode"
+								>
+									<label
+										className={cn(
+											'inline-flex cursor-pointer items-center rounded-full px-3 py-1 text-xs sm:text-sm font-medium transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+											matchMode === 'and'
+												? 'bg-primary text-primary-foreground hover:bg-primary/90'
+												: 'bg-muted text-muted-foreground hover:bg-muted/70'
+										)}
+									>
+										<input
+											type="radio"
+											name={matchModeFieldName}
+											value="and"
+											checked={matchMode === 'and'}
+											onChange={() => setMatchMode('and')}
+											className="sr-only"
+										/>
+										<span>All</span>
+									</label>
+									<label
+										className={cn(
+											'inline-flex cursor-pointer items-center rounded-full px-3 py-1 text-xs sm:text-sm font-medium transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+											matchMode === 'or'
+												? 'bg-primary text-primary-foreground hover:bg-primary/90'
+												: 'bg-muted text-muted-foreground hover:bg-muted/70'
+										)}
+									>
+										<input
+											type="radio"
+											name={matchModeFieldName}
+											value="or"
+											checked={matchMode === 'or'}
+											onChange={() => setMatchMode('or')}
+											className="sr-only"
+										/>
+										<span>Any</span>
+									</label>
+								</div>
+							</div>
+							<button
+								type="submit"
+								className="inline-flex min-w-[96px] items-center justify-center rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 sm:px-3"
+							>
+								Add
+							</button>
+						</div>
 					</div>
 				</form>
 
@@ -205,7 +262,7 @@ const Feed: React.FC = () => {
 					{filters.length > 0 && (
 						<div className="flex flex-wrap items-center gap-2">
 							<span className="text-sm font-medium text-muted-foreground">
-								Active filters (match all enabled):
+								Active filters ({matchMode === 'and' ? 'match all' : 'match any'} enabled):
 							</span>
 							{filters.map((filter) => (
 								<div
