@@ -12,6 +12,7 @@ import {
 	CommandList,
 } from '@/components/ui/command'
 import { useTags } from '@/hooks/useTags'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 import { Check, Loader2, X } from 'lucide-react'
 
@@ -36,6 +37,7 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 	const { tags, isLoading, isFetching, error, refetch } = useTags()
 	const [isOpen, setIsOpen] = useState(false)
 	const [pendingTags, setPendingTags] = useState<string[]>([])
+	const isMobile = useIsMobile()
 
 	const normalizedSelectedTags = useMemo(
 		() => uniqueNormalizedTags(selectedTags ?? []),
@@ -215,9 +217,11 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 						)}
 					</div>
 					<div className="space-y-2">
-						<p className="text-xs text-muted-foreground">
-							Press Cmd+Enter or Ctrl+Enter to submit your tag filters quickly.
-						</p>
+						{!isMobile ? (
+							<p className="text-xs text-muted-foreground">
+								Press Cmd+Enter or Ctrl+Enter to submit your tag filters quickly.
+							</p>
+						) : null}
 						<div className="flex items-center justify-end gap-2">
 							<Button
 								type="button"
