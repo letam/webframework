@@ -35,6 +35,23 @@ const Feed: React.FC = () => {
 		})
 	}, [filters, posts])
 
+	const totalPostCount = posts.length
+	const filteredPostCount = filteredPosts.length
+
+	const postCountLabel = useMemo(() => {
+		if (isLoading) {
+			return null
+		}
+
+		const baseCountText = `${filteredPostCount} ${filteredPostCount === 1 ? 'post' : 'posts'}`
+
+		if (filteredPostCount === totalPostCount) {
+			return `Showing ${baseCountText}`
+		}
+
+		return `Showing ${baseCountText} (filtered)`
+	}, [filteredPostCount, isLoading, totalPostCount])
+
 	const handleAddFilters = useCallback(
 		(event: React.FormEvent<HTMLFormElement>) => {
 			event.preventDefault()
@@ -237,6 +254,10 @@ const Feed: React.FC = () => {
 					)}
 				</div>
 			</div>
+
+			{postCountLabel && (
+				<div className="text-sm text-muted-foreground mb-4 text-center">{postCountLabel}</div>
+			)}
 
 			<div className="space-y-4 my-6">
 				{isLoading ? (
