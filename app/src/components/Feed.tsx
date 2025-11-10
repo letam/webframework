@@ -1,13 +1,13 @@
 import type React from 'react'
 import { useCallback, useId } from 'react'
-import { cn } from '@/lib/utils'
 import { Post } from './post/Post'
 import CreatePost from './post/create'
 import { usePosts } from '../hooks/usePosts'
 import type { CreatePostRequest, Post as PostType } from '@/types/post'
 import { toast } from '@/components/ui/sonner'
-import { TagFilterPopover } from './feed/TagFilterPopover'
 import { usePostFilters } from '@/hooks/usePostFilters'
+import { FilterControls } from './feed/FilterControls'
+import { ActiveFiltersList } from './feed/ActiveFiltersList'
 
 const Feed: React.FC = () => {
 	const { posts, isLoading, error, addPost, editPost, removePost, setPosts } = usePosts()
@@ -100,147 +100,25 @@ const Feed: React.FC = () => {
 			</div>
 
 			<div className="my-6 max-w-lg mx-auto">
-				<form onSubmit={handleAddFilters}>
-					<label
-						className="block text-sm font-medium text-muted-foreground mb-2"
-						htmlFor={filterInputId}
-					>
-						Filter posts
-					</label>
-					<div className="flex flex-wrap items-center gap-2">
-						<input
-							id={filterInputId}
-							className="flex-1 min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 sm:text-sm"
-							type="text"
-							placeholder="Enter words to filter posts…"
-							value={filterText}
-							onChange={(event) => setFilterText(event.target.value)}
-							aria-label="Add a filter term for posts"
-						/>
-						<button
-							type="submit"
-							className="inline-flex min-w-[96px] items-center justify-center rounded-md bg-primary px-5 py-2 text-base font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 sm:px-3 sm:text-sm"
-						>
-							Apply
-						</button>
+				<FilterControls
+					filterInputId={filterInputId}
+					matchModeFieldName={matchModeFieldName}
+					filterText={filterText}
+					onFilterTextChange={setFilterText}
+					onSubmit={handleAddFilters}
+					matchMode={matchMode}
+					onMatchModeChange={(mode) => setMatchMode(mode)}
+					selectedTags={tagFilters.map((filter) => filter.token)}
+					onTagsSubmit={applyTagFilters}
+					disabled={isLoading}
+				/>
 
-						<div className="flex w-full flex-row items-center gap-2">
-							<div className="flex items-center gap-2 rounded-md px-3 py-2 sm:bg-background/80 sm:px-2 sm:py-1">
-								<button
-									type="button"
-									onClick={() => setMatchMode((prev) => (prev === 'and' ? 'or' : 'and'))}
-									tabIndex={-1}
-									className="text-xs font-medium tracking-wide text-muted-foreground transition-colors hover:text-foreground active:text-foreground sm:text-sm"
-									aria-label={`Toggle match mode (currently ${
-										matchMode === 'and' ? 'match all' : 'match any'
-									})`}
-								>
-									Match on
-								</button>
-								<div
-									className="flex items-center gap-1"
-									role="radiogroup"
-									aria-label="Filter match mode"
-								>
-									<label
-										className={cn(
-											'inline-flex cursor-pointer items-center rounded-full px-3 py-1 text-xs sm:text-sm font-medium transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
-											matchMode === 'and'
-												? 'bg-primary text-primary-foreground hover:bg-primary/90'
-												: 'bg-muted text-muted-foreground hover:bg-muted/70'
-										)}
-									>
-										<input
-											type="radio"
-											name={matchModeFieldName}
-											value="and"
-											checked={matchMode === 'and'}
-											onChange={() => setMatchMode('and')}
-											className="sr-only"
-										/>
-										<span>All</span>
-									</label>
-									<label
-										className={cn(
-											'inline-flex cursor-pointer items-center rounded-full px-3 py-1 text-xs sm:text-sm font-medium transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
-											matchMode === 'or'
-												? 'bg-primary text-primary-foreground hover:bg-primary/90'
-												: 'bg-muted text-muted-foreground hover:bg-muted/70'
-										)}
-									>
-										<input
-											type="radio"
-											name={matchModeFieldName}
-											value="or"
-											checked={matchMode === 'or'}
-											onChange={() => setMatchMode('or')}
-											className="sr-only"
-										/>
-										<span>Any</span>
-									</label>
-								</div>
-							</div>
-							<TagFilterPopover
-								selectedTags={tagFilters.map((filter) => filter.token)}
-								onSubmit={applyTagFilters}
-							/>
-						</div>
-					</div>
-				</form>
-
-				<div className="space-y-3 mt-1">
-					{filters.length > 0 && (
-						<div className="flex flex-wrap items-center gap-2">
-							<span className="text-sm font-medium text-muted-foreground">
-								Active filters{' '}
-								<button
-									type="button"
-									onClick={clearFilters}
-									className="text-sm font-medium text-primary hover:underline"
-								>
-									(Clear all)
-								</button>
-								:
-							</span>
-							{filters.map((filter) => (
-								<div
-									key={filter.token}
-									className="relative inline-flex text-sm text-secondary-foreground"
-								>
-									<button
-										type="button"
-										onClick={() => toggleFilter(filter.token)}
-										className={cn(
-											'inline-flex items-center rounded-full px-3 py-1 pr-7 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-											filter.enabled
-												? 'bg-primary text-primary-foreground hover:bg-primary/90'
-												: 'bg-muted text-muted-foreground hover:bg-muted/70'
-										)}
-										aria-label={`${filter.enabled ? 'Disable' : 'Enable'} filter ${filter.token}`}
-									>
-										<span>{filter.token}</span>
-									</button>
-									<button
-										type="button"
-										onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-											event.stopPropagation()
-											removeFilter(filter.token)
-										}}
-										className={cn(
-											'absolute right-1 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-base leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-											filter.enabled
-												? 'text-primary-foreground hover:bg-primary-foreground/80 hover:text-primary'
-												: 'text-muted-foreground hover:bg-muted-foreground hover:text-background'
-										)}
-										aria-label={`Remove filter ${filter.token}`}
-									>
-										<span aria-hidden="true">&times;</span>
-									</button>
-								</div>
-							))}
-						</div>
-					)}
-				</div>
+				<ActiveFiltersList
+					filters={filters}
+					onToggleFilter={toggleFilter}
+					onRemoveFilter={removeFilter}
+					onClearFilters={clearFilters}
+				/>
 			</div>
 
 			{!isLoading && postCountLabel && (
