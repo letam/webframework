@@ -123,8 +123,13 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 			open={isOpen}
 			onOpenChange={(nextOpen) => {
 				setIsOpen(nextOpen)
-				if (nextOpen && error) {
-					void refetch()
+				if (nextOpen) {
+					if (error) {
+						void refetch()
+					}
+					if (isMobile && typeof window !== 'undefined') {
+						window.scrollTo({ top: 0, behavior: 'smooth' })
+					}
 				}
 			}}
 		>
@@ -150,7 +155,12 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 					)}
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent className="w-80" align="end" onKeyDown={handleKeyDown}>
+			<PopoverContent
+				className="w-80"
+				align="end"
+				{...(isMobile ? { side: 'top' as const, avoidCollisions: false } : {})}
+				onKeyDown={handleKeyDown}
+			>
 				<div className="space-y-4">
 					<div>
 						<h3 className="text-sm font-medium text-foreground">Select tags</h3>
@@ -165,7 +175,7 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 					) : null}
 					<Command>
 						<CommandInput placeholder="Search tags…" autoFocus />
-						<CommandList>
+						<CommandList className="max-h-[180px] overflow-y-auto">
 							<CommandEmpty>No matching tags found.</CommandEmpty>
 							{isLoadingTags ? (
 								<div className="py-6 text-center text-sm text-muted-foreground">Loading tags…</div>
