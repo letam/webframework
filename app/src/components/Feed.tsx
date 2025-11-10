@@ -1,4 +1,5 @@
 import type React from 'react'
+import { useId, useMemo, useState } from 'react'
 import { Post } from './post/Post'
 import CreatePost from './post/create'
 import { usePosts } from '../hooks/usePosts'
@@ -7,6 +8,27 @@ import { toast } from '@/components/ui/sonner'
 
 const Feed: React.FC = () => {
 	const { posts, isLoading, error, addPost, editPost, removePost, setPosts } = usePosts()
+	const [filterText, setFilterText] = useState('')
+	const filterInputId = useId()
+
+	const filteredPosts = useMemo(() => {
+		if (!filterText.trim()) {
+			return posts
+		}
+
+		const normalizedFilter = filterText.trim().toLowerCase()
+
+		return posts.filter((post) => {
+			const fieldsToSearch: Array<string | undefined | null> = [
+				post.head,
+				post.body,
+				post.media?.transcript,
+				post.media?.alt_text,
+			]
+
+			return fieldsToSearch.some((field) => field?.toLowerCase().includes(normalizedFilter))
+		})
+	}, [filterText, posts])
 
 	const handlePostCreated = async (postData: CreatePostRequest) => {
 		try {
@@ -65,11 +87,29 @@ const Feed: React.FC = () => {
 				<CreatePost onPostCreated={handlePostCreated} />
 			</div>
 
+			<div className="my-6 max-w-lg mx-auto">
+				<label
+					className="block text-sm font-medium text-muted-foreground mb-2"
+					htmlFor={filterInputId}
+				>
+					Filter posts
+				</label>
+				<input
+					id={filterInputId}
+					className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40"
+					type="text"
+					placeholder="Search posts by content..."
+					value={filterText}
+					onChange={(event) => setFilterText(event.target.value)}
+					aria-label="Filter posts by text"
+				/>
+			</div>
+
 			<div className="space-y-4 my-6">
 				{isLoading ? (
 					<div className="max-w-2xl mx-auto text-center py-8">Loading posts...</div>
-				) : (
-					posts.map((post) => (
+				) : filteredPosts.length > 0 ? (
+					filteredPosts.map((post) => (
 						<Post
 							key={post.id}
 							post={post}
@@ -79,6 +119,10 @@ const Feed: React.FC = () => {
 							onTranscribed={handlePostTranscribed}
 						/>
 					))
+				) : (
+					<div className="max-w-2xl mx-auto text-center py-8 text-muted-foreground">
+						No posts match the current filter.
+					</div>
 				)}
 			</div>
 		</div>
