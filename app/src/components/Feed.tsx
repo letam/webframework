@@ -105,8 +105,11 @@ const Feed: React.FC = () => {
 			})
 
 			setFilterText('')
+
+			// Focus back on input
+			document.getElementById(filterInputId)?.focus()
 		},
-		[filterText]
+		[filterText, filterInputId]
 	)
 
 	const handleRemoveFilter = useCallback((tokenToRemove: string) => {
@@ -190,28 +193,34 @@ const Feed: React.FC = () => {
 					>
 						Filter posts
 					</label>
-					<div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+					<div className="flex flex-wrap items-center gap-2">
 						<input
 							id={filterInputId}
-							className="w-full rounded-md border border-input bg-background px-3 py-2 text-base shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 sm:flex-1 sm:text-sm"
+							className="flex-1 min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 sm:text-sm"
 							type="text"
 							placeholder="Enter words to filter posts…"
 							value={filterText}
 							onChange={(event) => setFilterText(event.target.value)}
 							aria-label="Add a filter term for posts"
 						/>
+						<button
+							type="submit"
+							className="inline-flex min-w-[96px] items-center justify-center rounded-md bg-primary px-5 py-2 text-base font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 sm:px-3 sm:text-sm"
+						>
+							Apply
+						</button>
 						<div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
 							<div className="flex items-center gap-2 rounded-md border border-transparent px-3 py-2 sm:border-border sm:bg-background/80 sm:px-2 sm:py-1">
 								<button
 									type="button"
 									onClick={() => setMatchMode((prev) => (prev === 'and' ? 'or' : 'and'))}
 									tabIndex={-1}
-									className="text-xs font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:text-foreground active:text-foreground sm:text-sm"
+									className="text-xs font-medium tracking-wide text-muted-foreground transition-colors hover:text-foreground active:text-foreground sm:text-sm"
 									aria-label={`Toggle match mode (currently ${
 										matchMode === 'and' ? 'match all' : 'match any'
 									})`}
 								>
-									Match
+									Match on
 								</button>
 								<div
 									className="flex items-center gap-1"
@@ -256,21 +265,23 @@ const Feed: React.FC = () => {
 									</label>
 								</div>
 							</div>
-							<button
-								type="submit"
-								className="inline-flex min-w-[96px] items-center justify-center rounded-md bg-primary px-5 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 sm:px-3"
-							>
-								Add
-							</button>
 						</div>
 					</div>
 				</form>
 
-				<div className="mt-4 space-y-3">
+				<div className="space-y-3 sm:mt-4">
 					{filters.length > 0 && (
 						<div className="flex flex-wrap items-center gap-2">
 							<span className="text-sm font-medium text-muted-foreground">
-								Active filters ({matchMode === 'and' ? 'match all' : 'match any'} enabled):
+								Active filters{' '}
+								<button
+									type="button"
+									onClick={handleClearFilters}
+									className="text-sm font-medium text-primary hover:underline"
+								>
+									(Clear all)
+								</button>
+								:
 							</span>
 							{filters.map((filter) => (
 								<div
@@ -308,13 +319,6 @@ const Feed: React.FC = () => {
 									</button>
 								</div>
 							))}
-							<button
-								type="button"
-								onClick={handleClearFilters}
-								className="text-sm font-medium text-primary hover:underline"
-							>
-								Clear all
-							</button>
 						</div>
 					)}
 				</div>
@@ -344,6 +348,8 @@ const Feed: React.FC = () => {
 					</div>
 				)}
 			</div>
+			{/* Bottom padding for mobile */}
+			<div className="h-96 sm:h-0"></div>
 		</div>
 	)
 }
