@@ -1,12 +1,33 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Post, CreatePostRequest, UpdatePostRequest } from '../types/post'
 import { getPosts, createPost, deletePost, updatePost } from '../lib/api/posts'
+import type { TagInfo } from '../types/tag'
+import { buildTagIndex } from '../utils/tags'
 
-const POSTS_QUERY_KEY = ['posts']
+export const POSTS_QUERY_KEY = ['posts'] as const
+export const POST_TAGS_QUERY_KEY = ['posts', 'tags'] as const
 
 export const usePosts = () => {
 	const queryClient = useQueryClient()
+
+	const updateTagsCache = useCallback(
+		(posts: Post[]) => {
+			queryClient.setQueryData<TagInfo[]>(POST_TAGS_QUERY_KEY, buildTagIndex(posts))
+		},
+		[queryClient]
+	)
+
+	const updatePostsCache = useCallback(
+		(updater: (prevPosts: Post[]) => Post[]) => {
+			queryClient.setQueryData<Post[]>(POSTS_QUERY_KEY, (prev = []) => {
+				const next = updater([...prev])
+				updateTagsCache(next)
+				return next
+			})
+		},
+		[queryClient, updateTagsCache]
+	)
 
 	const {
 		data: queryPosts = [],
@@ -20,17 +41,25 @@ export const usePosts = () => {
 		staleTime: 1000 * 60, // 1 minute
 	})
 
+	useEffect(() => {
+		const existingTags = queryClient.getQueryData<TagInfo[]>(POST_TAGS_QUERY_KEY)
+
+		if (!existingTags) {
+			updateTagsCache(queryPosts)
+		}
+	}, [queryClient, queryPosts, updateTagsCache])
+
 	const addPostMutation = useMutation({
 		mutationFn: (postData: CreatePostRequest) => createPost(postData),
 		onSuccess: (newPost) => {
-			queryClient.setQueryData<Post[]>(POSTS_QUERY_KEY, (prev = []) => [newPost, ...prev])
+			updatePostsCache((prev = []) => [newPost, ...prev])
 		},
 	})
 
 	const editPostMutation = useMutation({
 		mutationFn: ({ id, data }: { id: number; data: UpdatePostRequest }) => updatePost(id, data),
 		onSuccess: (updatedPost) => {
-			queryClient.setQueryData<Post[]>(POSTS_QUERY_KEY, (prev = []) =>
+			updatePostsCache((prev = []) =>
 				prev.map((post) => (post.id === updatedPost.id ? updatedPost : post))
 			)
 		},
@@ -39,17 +68,15 @@ export const usePosts = () => {
 	const removePostMutation = useMutation({
 		mutationFn: (id: number) => deletePost(id),
 		onSuccess: (_, id) => {
-			queryClient.setQueryData<Post[]>(POSTS_QUERY_KEY, (prev = []) =>
-				prev.filter((post) => post.id !== id)
-			)
+			updatePostsCache((prev = []) => prev.filter((post) => post.id !== id))
 		},
 	})
 
 	const setPosts = useCallback(
 		(updater: (prevPosts: Post[]) => Post[]) => {
-			queryClient.setQueryData<Post[]>(POSTS_QUERY_KEY, (prev = []) => updater([...prev]))
+			updatePostsCache(updater)
 		},
-		[queryClient]
+		[updatePostsCache]
 	)
 
 	const addPost = async (postData: CreatePostRequest) => {
