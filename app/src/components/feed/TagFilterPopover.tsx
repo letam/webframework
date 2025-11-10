@@ -178,7 +178,8 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 			</PopoverTrigger>
 			<PopoverContent
 				className={cn('w-80', !isMobile && 'w-[640px]')}
-				align="end"
+				align={isMobile ? 'end' : 'center'}
+				sideOffset={8}
 				{...(isMobile ? { side: 'top' as const, avoidCollisions: false } : {})}
 				onKeyDown={handleKeyDown}
 			>
