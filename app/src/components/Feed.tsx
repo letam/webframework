@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useCallback, useId, useMemo, useState } from 'react'
+import { useCallback, useId } from 'react'
 import { cn } from '@/lib/utils'
 import { Post } from './post/Post'
 import CreatePost from './post/create'
@@ -7,145 +7,40 @@ import { usePosts } from '../hooks/usePosts'
 import type { CreatePostRequest, Post as PostType } from '@/types/post'
 import { toast } from '@/components/ui/sonner'
 import { TagFilterPopover } from './feed/TagFilterPopover'
+import { usePostFilters } from '@/hooks/usePostFilters'
 
 const Feed: React.FC = () => {
 	const { posts, isLoading, error, addPost, editPost, removePost, setPosts } = usePosts()
-	const [filterText, setFilterText] = useState('')
-	const [filters, setFilters] = useState<Array<{ token: string; enabled: boolean }>>([])
-	const [matchMode, setMatchMode] = useState<'and' | 'or'>('and')
 	const filterInputId = useId()
 	const matchModeFieldName = useId()
 
-	const filteredPosts = useMemo(() => {
-		const activeFilters = filters.filter((filter) => filter.enabled)
-
-		if (activeFilters.length === 0) {
-			return posts
-		}
-
-		return posts.filter((post) => {
-			const fieldsToSearch: Array<string | undefined | null> = [
-				post.head,
-				post.body,
-				post.media?.transcript,
-				post.media?.alt_text,
-			]
-
-			const matcher =
-				matchMode === 'and'
-					? (fn: (filter: { token: string; enabled: boolean }) => boolean) =>
-							activeFilters.every(fn)
-					: (fn: (filter: { token: string; enabled: boolean }) => boolean) => activeFilters.some(fn)
-
-			return matcher((filter) => {
-				const normalizedFilter = filter.token.toLowerCase()
-				return fieldsToSearch.some((field) => field?.toLowerCase().includes(normalizedFilter))
-			})
-		})
-	}, [filters, matchMode, posts])
-
-	const tagFilters = useMemo(
-		() => filters.filter((filter) => filter.token.trim().startsWith('#')),
-		[filters]
-	)
-
-	const totalPostCount = posts.length
-	const filteredPostCount = filteredPosts.length
-
-	const postCountLabel = useMemo(() => {
-		if (isLoading) {
-			return null
-		}
-
-		const baseCountText = `${filteredPostCount} ${filteredPostCount === 1 ? 'post' : 'posts'}`
-
-		if (filteredPostCount === totalPostCount) {
-			return `Showing ${baseCountText}`
-		}
-
-		return `Showing ${baseCountText} (filtered)`
-	}, [filteredPostCount, isLoading, totalPostCount])
+	const {
+		filterText,
+		setFilterText,
+		filters,
+		tagFilters,
+		matchMode,
+		setMatchMode,
+		filteredPosts,
+		postCountLabel,
+		addFiltersFromText,
+		removeFilter,
+		clearFilters,
+		toggleFilter,
+		applyTagFilters,
+	} = usePostFilters(posts)
 
 	const handleAddFilters = useCallback(
 		(event: React.FormEvent<HTMLFormElement>) => {
 			event.preventDefault()
 
-			const normalizedInput = filterText.trim()
-
-			if (!normalizedInput) {
-				return
-			}
-
-			const tokens = Array.from(
-				new Set(
-					normalizedInput
-						.split(/\s+/)
-						.map((token) => token.trim())
-						.filter(Boolean)
-				)
-			)
-
-			if (tokens.length === 0) {
-				return
-			}
-
-			setFilters((prev) => {
-				const existingMap = new Map(prev.map((filter) => [filter.token.toLowerCase(), filter]))
-				const updatedFilters = prev.map((filter) =>
-					tokens.some((token) => token.toLowerCase() === filter.token.toLowerCase())
-						? { ...filter, enabled: true }
-						: filter
-				)
-
-				const nextTokens = tokens.filter((token) => !existingMap.has(token.toLowerCase()))
-
-				return nextTokens.length > 0
-					? [
-							...updatedFilters,
-							...nextTokens.map((token) => ({
-								token,
-								enabled: true,
-							})),
-						]
-					: updatedFilters
-			})
-
-			setFilterText('')
+			addFiltersFromText(filterText)
 
 			// Focus back on input
 			document.getElementById(filterInputId)?.focus()
 		},
-		[filterText, filterInputId]
+		[addFiltersFromText, filterInputId, filterText]
 	)
-
-	const handleRemoveFilter = useCallback((tokenToRemove: string) => {
-		setFilters((prev) => prev.filter((filter) => filter.token !== tokenToRemove))
-	}, [])
-
-	const handleClearFilters = useCallback(() => {
-		setFilters([])
-	}, [])
-
-	const handleToggleFilter = useCallback((tokenToToggle: string) => {
-		setFilters((prev) =>
-			prev.map((filter) =>
-				filter.token === tokenToToggle ? { ...filter, enabled: !filter.enabled } : filter
-			)
-		)
-	}, [])
-
-	const handleApplyTagFilters = useCallback((tags: string[]) => {
-		setFilters((prev) => {
-			const nonTagFilters = prev.filter((filter) => !filter.token.trim().startsWith('#'))
-
-			const nextTagFilters = tags.map((tag) => ({
-				token: tag.startsWith('#') ? tag : `#${tag}`,
-				enabled: true,
-			}))
-
-			return [...nonTagFilters, ...nextTagFilters]
-		})
-	}, [])
 
 	const handlePostCreated = async (postData: CreatePostRequest) => {
 		try {
@@ -287,7 +182,7 @@ const Feed: React.FC = () => {
 							</div>
 							<TagFilterPopover
 								selectedTags={tagFilters.map((filter) => filter.token)}
-								onSubmit={handleApplyTagFilters}
+								onSubmit={applyTagFilters}
 							/>
 						</div>
 					</div>
@@ -300,7 +195,7 @@ const Feed: React.FC = () => {
 								Active filters{' '}
 								<button
 									type="button"
-									onClick={handleClearFilters}
+									onClick={clearFilters}
 									className="text-sm font-medium text-primary hover:underline"
 								>
 									(Clear all)
@@ -314,7 +209,7 @@ const Feed: React.FC = () => {
 								>
 									<button
 										type="button"
-										onClick={() => handleToggleFilter(filter.token)}
+										onClick={() => toggleFilter(filter.token)}
 										className={cn(
 											'inline-flex items-center rounded-full px-3 py-1 pr-7 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
 											filter.enabled
@@ -329,7 +224,7 @@ const Feed: React.FC = () => {
 										type="button"
 										onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
 											event.stopPropagation()
-											handleRemoveFilter(filter.token)
+											removeFilter(filter.token)
 										}}
 										className={cn(
 											'absolute right-1 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-base leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
@@ -348,7 +243,7 @@ const Feed: React.FC = () => {
 				</div>
 			</div>
 
-			{postCountLabel && (
+			{!isLoading && postCountLabel && (
 				<div className="text-sm text-muted-foreground mb-4 text-center">{postCountLabel}</div>
 			)}
 
