@@ -2,7 +2,7 @@ import type React from 'react'
 import { cn } from '@/lib/utils'
 import { TagFilterPopover } from './TagFilterPopover'
 import type { FilterToken, MatchMode } from '@/hooks/usePostFilters'
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useIsMobile } from '@/hooks/use-mobile'
 
 type FilterControlsProps = {
@@ -43,6 +43,19 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 	const previousFilteredPostCount = useRef<number | null>(null)
 	const isMobile = useIsMobile()
 
+	const scrollToFilterPostsLabel = useCallback(() => {
+		if (typeof window === 'undefined') {
+			return
+		}
+		const labelElement = labelRef.current
+		if (!labelElement) {
+			return
+		}
+		const offsetForHeader = document.getElementsByTagName('header')[0].clientHeight + 16
+		const { top } = labelElement.getBoundingClientRect()
+		window.scrollTo({ top: top + window.scrollY - offsetForHeader, behavior: 'smooth' })
+	}, [])
+
 	useEffect(() => {
 		if (previousFilteredPostCount.current === null) {
 			previousFilteredPostCount.current = filteredPostCount
@@ -57,13 +70,10 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 			return
 		}
 
-		const { top } = labelElement.getBoundingClientRect()
-
 		if (filters.length > 0 && countChanged) {
-			const offsetForHeader = 64
-			window.scrollTo({ top: top + window.scrollY - offsetForHeader, behavior: 'smooth' })
+			scrollToFilterPostsLabel()
 		}
-	}, [filteredPostCount, filters])
+	}, [filteredPostCount, filters, scrollToFilterPostsLabel])
 
 	const onTagFilterOpenChange = (open: boolean) => {
 		if (!open) {
@@ -75,9 +85,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 			if (!labelElement) {
 				return
 			}
-			const { top } = labelElement.getBoundingClientRect()
-			const offsetForHeader = document.getElementsByTagName('header')[0].clientHeight + 16
-			window.scrollTo({ top: top + window.scrollY - offsetForHeader, behavior: 'smooth' })
+			scrollToFilterPostsLabel()
 		}
 	}
 
