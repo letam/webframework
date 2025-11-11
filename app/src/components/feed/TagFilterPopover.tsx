@@ -154,9 +154,6 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 					if (error) {
 						void refetch()
 					}
-					if (isMobile && typeof window !== 'undefined') {
-						window.scrollTo({ top: 0, behavior: 'smooth' })
-					}
 				}
 			}}
 		>
@@ -186,7 +183,6 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 				className={cn('w-80', !isMobile && 'w-[640px]')}
 				align={isMobile ? 'end' : 'center'}
 				sideOffset={8}
-				{...(isMobile ? { side: 'top' as const, avoidCollisions: false } : {})}
 				onKeyDown={handleKeyDown}
 			>
 				<div className="flex flex-col gap-4">

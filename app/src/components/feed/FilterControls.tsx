@@ -3,7 +3,6 @@ import { cn } from '@/lib/utils'
 import { TagFilterPopover } from './TagFilterPopover'
 import type { FilterToken, MatchMode } from '@/hooks/usePostFilters'
 import { useEffect, useRef } from 'react'
-import { useIsMobile } from '@/hooks/use-mobile'
 import { scrollToElement } from '@/lib/utils/ui'
 
 type FilterControlsProps = {
@@ -42,7 +41,6 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 }) => {
 	const labelRef = useRef<HTMLLabelElement | null>(null)
 	const previousFilteredPostCount = useRef<number | null>(null)
-	const isMobile = useIsMobile()
 
 	useEffect(() => {
 		if (previousFilteredPostCount.current === null) {
@@ -63,9 +61,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 		if (!open) {
 			return
 		}
-		if (!isMobile && typeof window !== 'undefined') {
-			scrollToElement(labelRef.current)
-		}
+		scrollToElement(labelRef.current)
 	}
 
 	return (
