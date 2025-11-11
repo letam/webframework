@@ -1,7 +1,7 @@
 import * as React from 'react'
 import type { DialogProps } from '@radix-ui/react-dialog'
-import { Command as CommandPrimitive } from 'cmdk'
-import { Search } from 'lucide-react'
+import { Command as CommandPrimitive, useCommandState } from 'cmdk'
+import { Search, X } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -35,22 +35,77 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
 	)
 }
 
+type CommandInputProps = React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input> & {
+	enableClearButton?: boolean
+}
+
 const CommandInput = React.forwardRef<
 	React.ElementRef<typeof CommandPrimitive.Input>,
-	React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
->(({ className, ...props }, ref) => (
-	<div className="flex items-center border-b px-3" cmdk-input-wrapper="">
-		<Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-		<CommandPrimitive.Input
-			ref={ref}
-			className={cn(
-				'flex h-11 w-full rounded-md bg-transparent py-3 text-base outline-hidden placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm',
-				className
-			)}
-			{...props}
-		/>
-	</div>
-))
+	CommandInputProps
+>(({ className, enableClearButton = false, ...props }, forwardedRef) => {
+	type InputElement = React.ElementRef<typeof CommandPrimitive.Input>
+
+	const inputRef = React.useRef<InputElement | null>(null)
+	const searchValue = useCommandState((state) => state.search)
+
+	const handleClear = React.useCallback(() => {
+		const input = inputRef.current
+		if (!input) {
+			return
+		}
+
+		const valueSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')?.set
+
+		valueSetter?.call(input, '')
+		if (!valueSetter) {
+			input.value = ''
+		}
+
+		input.dispatchEvent(new Event('input', { bubbles: true }))
+		props.onValueChange?.('')
+		input.focus()
+	}, [props.onValueChange])
+
+	const setRefs = React.useCallback(
+		(node: InputElement | null) => {
+			inputRef.current = node
+
+			if (typeof forwardedRef === 'function') {
+				forwardedRef(node)
+			} else if (forwardedRef) {
+				;(forwardedRef as React.MutableRefObject<InputElement | null>).current = node
+			}
+		},
+		[forwardedRef]
+	)
+
+	const showClearButton =
+		enableClearButton && typeof searchValue === 'string' && searchValue.length > 0
+
+	return (
+		<div className="flex items-center border-b px-3" cmdk-input-wrapper="">
+			<Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+			<CommandPrimitive.Input
+				ref={setRefs}
+				className={cn(
+					'flex h-11 w-full rounded-md bg-transparent py-3 text-base outline-hidden placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm',
+					className
+				)}
+				{...props}
+			/>
+			{showClearButton ? (
+				<button
+					type="button"
+					onClick={handleClear}
+					aria-label="Clear search"
+					className="ml-2 inline-flex size-5 items-center justify-center rounded-full text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+				>
+					<X className="size-3.5" />
+				</button>
+			) : null}
+		</div>
+	)
+})
 
 CommandInput.displayName = CommandPrimitive.Input.displayName
 

@@ -197,7 +197,7 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 					) : null}
 					<div className={cn('space-y-4', !isMobile && 'flex gap-4 space-y-0')}>
 						<Command className={cn(!isMobile && 'flex-1')}>
-							<CommandInput placeholder="Search tags…" autoFocus />
+							<CommandInput placeholder="Search tags…" autoFocus enableClearButton />
 							<CommandList
 								className={cn('max-h-[180px] overflow-y-auto', !isMobile && 'max-h-[240px]')}
 							>
