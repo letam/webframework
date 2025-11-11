@@ -31,7 +31,7 @@ tmux split-window -h -t $SESSION_NAME:servers
 tmux send-keys -t $SESSION_NAME:servers.0 " uv run python server/manage.py runserver_plus" Enter
 
 # Pane 1 (right): Frontend server
-tmux send-keys -t $SESSION_NAME:servers.1 " cd app && bun dev" Enter
+tmux send-keys -t $SESSION_NAME:servers.1 " cd app ; bun dev" Enter
 
 # Set pane titles for first window
 tmux select-pane -t $SESSION_NAME:servers.0 -T "Backend Server"
@@ -48,7 +48,7 @@ tmux split-window -h -t $SESSION_NAME:cli
 tmux send-keys -t $SESSION_NAME:cli.0 " clear" Enter
 
 # Pane 1 (right): CLI in app directory
-tmux send-keys -t $SESSION_NAME:cli.1 " cd app && clear" Enter
+tmux send-keys -t $SESSION_NAME:cli.1 " cd app ; clear" Enter
 
 # Set pane titles for second window
 tmux select-pane -t $SESSION_NAME:cli.0 -T "CLI (Root)"
