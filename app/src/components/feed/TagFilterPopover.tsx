@@ -19,6 +19,7 @@ import { Check, Loader2, X } from 'lucide-react'
 interface TagFilterPopoverProps {
 	selectedTags: string[]
 	onSubmit: (tags: string[]) => void
+	onOpenChange?: (open: boolean) => void
 }
 
 const normalizeTag = (tag: string) => tag.replace(/^#+/, '').trim()
@@ -33,7 +34,11 @@ const uniqueNormalizedTags = (tags: string[]) =>
 		).values()
 	)
 
-export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags, onSubmit }) => {
+export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
+	selectedTags,
+	onSubmit,
+	onOpenChange,
+}) => {
 	const { tags, isLoading, isFetching, error, refetch } = useTags()
 	const [isOpen, setIsOpen] = useState(false)
 	const [pendingTags, setPendingTags] = useState<string[]>([])
@@ -143,6 +148,7 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({ selectedTags
 		<Popover
 			open={isOpen}
 			onOpenChange={(nextOpen) => {
+				onOpenChange?.(nextOpen)
 				setIsOpen(nextOpen)
 				if (nextOpen) {
 					if (error) {

@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 import { TagFilterPopover } from './TagFilterPopover'
 import type { FilterToken, MatchMode } from '@/hooks/usePostFilters'
 import { useEffect, useRef } from 'react'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 type FilterControlsProps = {
 	filterInputId: string
@@ -40,6 +41,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 }) => {
 	const labelRef = useRef<HTMLLabelElement | null>(null)
 	const previousFilteredPostCount = useRef<number | null>(null)
+	const isMobile = useIsMobile()
 
 	useEffect(() => {
 		if (previousFilteredPostCount.current === null) {
@@ -62,6 +64,22 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 			window.scrollTo({ top: top + window.scrollY - offsetForHeader, behavior: 'smooth' })
 		}
 	}, [filteredPostCount, filters])
+
+	const onTagFilterOpenChange = (open: boolean) => {
+		if (!open) {
+			return
+		}
+		if (!isMobile && typeof window !== 'undefined') {
+			// scroll to filter posts label
+			const labelElement = labelRef.current
+			if (!labelElement) {
+				return
+			}
+			const { top } = labelElement.getBoundingClientRect()
+			const offsetForHeader = document.getElementsByTagName('header')[0].clientHeight + 16
+			window.scrollTo({ top: top + window.scrollY - offsetForHeader, behavior: 'smooth' })
+		}
+	}
 
 	return (
 		<form onSubmit={onSubmit}>
@@ -135,7 +153,11 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 							))}
 						</div>
 					</div>
-					<TagFilterPopover selectedTags={selectedTags} onSubmit={onTagsSubmit} />
+					<TagFilterPopover
+						selectedTags={selectedTags}
+						onSubmit={onTagsSubmit}
+						onOpenChange={onTagFilterOpenChange}
+					/>
 				</div>
 			</div>
 		</form>
