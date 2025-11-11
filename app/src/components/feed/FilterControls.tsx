@@ -2,8 +2,9 @@ import type React from 'react'
 import { cn } from '@/lib/utils'
 import { TagFilterPopover } from './TagFilterPopover'
 import type { FilterToken, MatchMode } from '@/hooks/usePostFilters'
-import { useCallback, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { scrollToElement } from '@/lib/utils/ui'
 
 type FilterControlsProps = {
 	filterInputId: string
@@ -43,19 +44,6 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 	const previousFilteredPostCount = useRef<number | null>(null)
 	const isMobile = useIsMobile()
 
-	const scrollToFilterPostsLabel = useCallback(() => {
-		if (typeof window === 'undefined') {
-			return
-		}
-		const labelElement = labelRef.current
-		if (!labelElement) {
-			return
-		}
-		const offsetForHeader = document.getElementsByTagName('header')[0].clientHeight + 16
-		const { top } = labelElement.getBoundingClientRect()
-		window.scrollTo({ top: top + window.scrollY - offsetForHeader, behavior: 'smooth' })
-	}, [])
-
 	useEffect(() => {
 		if (previousFilteredPostCount.current === null) {
 			previousFilteredPostCount.current = filteredPostCount
@@ -65,27 +53,18 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 		const countChanged = filteredPostCount !== previousFilteredPostCount.current
 
 		previousFilteredPostCount.current = filteredPostCount
-		const labelElement = labelRef.current
-		if (!labelElement) {
-			return
-		}
 
 		if (filters.length > 0 && countChanged) {
-			scrollToFilterPostsLabel()
+			scrollToElement(labelRef.current)
 		}
-	}, [filteredPostCount, filters, scrollToFilterPostsLabel])
+	}, [filteredPostCount, filters])
 
 	const onTagFilterOpenChange = (open: boolean) => {
 		if (!open) {
 			return
 		}
 		if (!isMobile && typeof window !== 'undefined') {
-			// scroll to filter posts label
-			const labelElement = labelRef.current
-			if (!labelElement) {
-				return
-			}
-			scrollToFilterPostsLabel()
+			scrollToElement(labelRef.current)
 		}
 	}
 
