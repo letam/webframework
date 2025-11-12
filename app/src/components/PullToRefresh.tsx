@@ -134,8 +134,23 @@ const PullToRefresh: React.FC<PullToRefreshProps> = ({
 		}
 
 		if (contentEl) {
-			contentEl.style.setProperty('--ptr-content-translate', `${pullDistance}px`)
 			contentEl.classList.toggle('ptr-content--dragging', isDragging)
+
+			if (pullDistance > 0) {
+				contentEl.style.setProperty('--ptr-content-translate', `${pullDistance}px`)
+				contentEl.classList.add('ptr-content--translated')
+			} else if (contentEl.classList.contains('ptr-content--translated')) {
+				contentEl.style.setProperty('--ptr-content-translate', '0px')
+
+				const handleTransitionEnd = () => {
+					contentEl.classList.remove('ptr-content--translated')
+					contentEl.style.removeProperty('--ptr-content-translate')
+				}
+
+				contentEl.addEventListener('transitionend', handleTransitionEnd, { once: true })
+			} else {
+				contentEl.style.removeProperty('--ptr-content-translate')
+			}
 		}
 
 		if (progressEl) {

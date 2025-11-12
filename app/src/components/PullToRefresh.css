@@ -9,8 +9,11 @@
 }
 
 .ptr-content {
-	transform: translateY(var(--ptr-content-translate, 0));
 	transition: transform 200ms ease-out;
+}
+
+.ptr-content--translated {
+	transform: translateY(var(--ptr-content-translate, 0));
 }
 
 .ptr-content--dragging {
