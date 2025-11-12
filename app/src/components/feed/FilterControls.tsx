@@ -57,11 +57,13 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 		}
 	}, [filteredPostCount, filters])
 
-	const onTagFilterOpenChange = (open: boolean) => {
+	const onTagFilterOpenChange = async (open: boolean) => {
 		if (!open) {
 			return
 		}
 		scrollToElement(labelRef.current)
+		// wait for the scroll to complete, as workound for sticky header to stay visible before we open keyboard for tag filter popover
+		await new Promise((resolve) => setTimeout(resolve, 300))
 	}
 
 	return (
