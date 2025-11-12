@@ -189,11 +189,21 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 				onKeyDown={handleKeyDown}
 			>
 				<div className="flex flex-col gap-4">
-					<div>
-						<h3 className="text-sm font-medium text-foreground">Select tags</h3>
-						<p className="mt-1 text-xs text-muted-foreground">
-							Add hashtags to filter posts. Changes apply after you submit.
-						</p>
+					<div className="flex items-start justify-between gap-2">
+						<div>
+							<h3 className="text-sm font-medium text-foreground">Select tags</h3>
+							<p className="mt-1 text-xs text-muted-foreground">
+								Add hashtags to filter posts. Changes apply after you submit.
+							</p>
+						</div>
+						<button
+							type="button"
+							onClick={() => setIsOpen(false)}
+							className="rounded-md p-1 text-muted-foreground transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							aria-label="Close tag filter"
+						>
+							<X className="size-4" />
+						</button>
 					</div>
 					{error ? (
 						<div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -259,13 +269,18 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 								Press Cmd+Enter or Ctrl+Enter to submit your tag filters quickly.
 							</p>
 						) : null}
-						<div className="flex items-center justify-end gap-2">
-							<Button type="button" variant="ghost" onClick={handleClearAll}>
-								Clear
+						<div className="flex items-center justify-between gap-2">
+							<Button type="button" variant="outline" onClick={() => setIsOpen(false)}>
+								Cancel
 							</Button>
-							<Button type="button" onClick={handleSubmit}>
-								Submit
-							</Button>
+							<div className="flex items-center gap-2">
+								<Button type="button" variant="ghost" onClick={handleClearAll}>
+									Clear
+								</Button>
+								<Button type="button" onClick={handleSubmit}>
+									Submit
+								</Button>
+							</div>
 						</div>
 					</div>
 				</div>
