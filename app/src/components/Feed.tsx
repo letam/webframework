@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useCallback, useId } from 'react'
+import { useCallback } from 'react'
 import { Post } from './post/Post'
 import CreatePost from './post/create'
 import { usePosts } from '../hooks/usePosts'
@@ -11,8 +11,6 @@ import { ActiveFiltersList } from './feed/ActiveFiltersList'
 
 const Feed: React.FC = () => {
 	const { posts, isLoading, error, addPost, editPost, removePost, setPosts } = usePosts()
-	const filterInputId = useId()
-	const matchModeFieldName = useId()
 
 	const {
 		filterText,
@@ -36,11 +34,8 @@ const Feed: React.FC = () => {
 			event.preventDefault()
 
 			addFiltersFromText(filterText)
-
-			// Focus back on input
-			document.getElementById(filterInputId)?.focus()
 		},
-		[addFiltersFromText, filterInputId, filterText]
+		[addFiltersFromText, filterText]
 	)
 
 	const handlePostCreated = async (postData: CreatePostRequest) => {
@@ -102,8 +97,6 @@ const Feed: React.FC = () => {
 
 			<div className="my-6 max-w-lg mx-auto">
 				<FilterControls
-					filterInputId={filterInputId}
-					matchModeFieldName={matchModeFieldName}
 					filterText={filterText}
 					onFilterTextChange={setFilterText}
 					onSubmit={handleAddFilters}

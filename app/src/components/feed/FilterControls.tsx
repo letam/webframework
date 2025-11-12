@@ -2,12 +2,10 @@ import type React from 'react'
 import { cn } from '@/lib/utils'
 import { TagFilterPopover } from './TagFilterPopover'
 import type { FilterToken, MatchMode } from '@/hooks/usePostFilters'
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { scrollToElement } from '@/lib/utils/ui'
 
 type FilterControlsProps = {
-	filterInputId: string
-	matchModeFieldName: string
 	filterText: string
 	onFilterTextChange: (value: string) => void
 	onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
@@ -26,8 +24,6 @@ const matchModeLabel: Record<MatchMode, string> = {
 }
 
 export const FilterControls: React.FC<FilterControlsProps> = ({
-	filterInputId,
-	matchModeFieldName,
 	filterText,
 	onFilterTextChange,
 	onSubmit,
@@ -41,6 +37,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 }) => {
 	const labelRef = useRef<HTMLLabelElement | null>(null)
 	const previousFilteredPostCount = useRef<number | null>(null)
+	const filterInputId = useId()
 
 	useEffect(() => {
 		if (previousFilteredPostCount.current === null) {
@@ -56,6 +53,22 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 			scrollToElement(labelRef.current)
 		}
 	}, [filteredPostCount, filters])
+
+	useEffect(() => {
+		const inputElement = document.getElementById(filterInputId) as HTMLInputElement
+		inputElement?.addEventListener('keyup', (keyboardEvent) => {
+			if (keyboardEvent.key === 'Enter') {
+				inputElement.blur()
+			}
+		})
+		return () => {
+			inputElement?.removeEventListener('keyup', (keyboardEvent) => {
+				if (keyboardEvent.key === 'Enter') {
+					inputElement.blur()
+				}
+			})
+		}
+	}, [filterInputId])
 
 	const onTagFilterOpenChange = async (open: boolean) => {
 		if (!open) {
@@ -126,7 +139,6 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 								>
 									<input
 										type="radio"
-										name={matchModeFieldName}
 										value={mode}
 										checked={matchMode === mode}
 										onChange={() => onMatchModeChange(mode)}
