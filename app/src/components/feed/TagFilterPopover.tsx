@@ -98,20 +98,21 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 		)
 	}, [])
 
-	const handleClearAll = useCallback(() => {
-		setPendingTags([])
-	}, [])
-
-	const canSubmit = useMemo(() => hasChanges && !isLoadingTags, [hasChanges, isLoadingTags])
-
 	const handleSubmit = useCallback(() => {
-		if (!canSubmit) {
+		if (pendingTags.length === 0 && !hasChanges) {
+			setIsOpen(false)
 			return
 		}
 
 		onSubmit(pendingTags.map((tag) => `#${tag}`))
 		setIsOpen(false)
-	}, [canSubmit, onSubmit, pendingTags])
+	}, [hasChanges, onSubmit, pendingTags])
+
+	const handleClearAll = useCallback(() => {
+		setPendingTags([])
+		onSubmit([])
+		setIsOpen(false)
+	}, [onSubmit])
 
 	const handleKeyDown = useCallback(
 		(event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -259,15 +260,10 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 							</p>
 						) : null}
 						<div className="flex items-center justify-end gap-2">
-							<Button
-								type="button"
-								variant="ghost"
-								onClick={handleClearAll}
-								disabled={pendingTags.length === 0}
-							>
+							<Button type="button" variant="ghost" onClick={handleClearAll}>
 								Clear
 							</Button>
-							<Button type="button" onClick={handleSubmit} disabled={!canSubmit}>
+							<Button type="button" onClick={handleSubmit}>
 								Submit
 							</Button>
 						</div>
