@@ -32,9 +32,14 @@ interface SignupFormData extends Record<string, unknown> {
 interface SignupModalProps {
 	triggerClassName?: string
 	onSignupSuccess?: () => void
+	onOpenChange?: (open: boolean) => void
 }
 
-export const SignupModal = ({ triggerClassName, onSignupSuccess }: SignupModalProps) => {
+export const SignupModal = ({
+	triggerClassName,
+	onSignupSuccess,
+	onOpenChange,
+}: SignupModalProps) => {
 	const [open, setOpen] = useState(false)
 	const { refreshAuthStatus } = useAuth()
 	const form = useForm<SignupFormData>()
@@ -45,7 +50,7 @@ export const SignupModal = ({ triggerClassName, onSignupSuccess }: SignupModalPr
 			await signup(data)
 
 			await refreshAuthStatus()
-			setOpen(false)
+			handleOpenChange(false)
 			if (onSignupSuccess) {
 				onSignupSuccess()
 			}
@@ -73,8 +78,15 @@ export const SignupModal = ({ triggerClassName, onSignupSuccess }: SignupModalPr
 		}
 	}
 
+	const handleOpenChange = (nextOpen: boolean) => {
+		setOpen(nextOpen)
+		if (onOpenChange) {
+			onOpenChange(nextOpen)
+		}
+	}
+
 	return (
-		<Dialog open={open} onOpenChange={setOpen}>
+		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogTrigger asChild>
 				<Button
 					variant="ghost"

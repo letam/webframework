@@ -32,9 +32,10 @@ interface LoginFormData extends Record<string, unknown> {
 interface LoginModalProps {
 	triggerClassName?: string
 	onLoginSuccess?: () => void
+	onOpenChange?: (open: boolean) => void
 }
 
-export const LoginModal = ({ triggerClassName, onLoginSuccess }: LoginModalProps) => {
+export const LoginModal = ({ triggerClassName, onLoginSuccess, onOpenChange }: LoginModalProps) => {
 	const [open, setOpen] = useState(false)
 	const { refreshAuthStatus } = useAuth()
 	const form = useForm<LoginFormData>()
@@ -54,7 +55,7 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess }: LoginModalProps
 			}
 
 			await refreshAuthStatus()
-			setOpen(false)
+			handleOpenChange(false)
 			if (onLoginSuccess) {
 				onLoginSuccess()
 			}
@@ -64,8 +65,15 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess }: LoginModalProps
 		}
 	}
 
+	const handleOpenChange = (nextOpen: boolean) => {
+		setOpen(nextOpen)
+		if (onOpenChange) {
+			onOpenChange(nextOpen)
+		}
+	}
+
 	return (
-		<Dialog open={open} onOpenChange={setOpen}>
+		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogTrigger asChild>
 				<Button
 					variant="ghost"

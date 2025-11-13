@@ -127,12 +127,22 @@ const Navbar = () => {
 										<LoginModal
 											triggerClassName="w-full justify-start text-black dark:text-white -ml-2"
 											onLoginSuccess={() => setDropdownOpen(false)}
+											onOpenChange={(open) => {
+												if (!open) {
+													setDropdownOpen(false)
+												}
+											}}
 										/>
 									</DropdownMenuItem>
 									<DropdownMenuItem asChild>
 										<SignupModal
 											triggerClassName="w-full justify-start text-black dark:text-white -ml-2"
 											onSignupSuccess={() => setDropdownOpen(false)}
+											onOpenChange={(open) => {
+												if (!open) {
+													setDropdownOpen(false)
+												}
+											}}
 										/>
 									</DropdownMenuItem>
 								</>
