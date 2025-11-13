@@ -21,6 +21,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { UserPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 interface SignupFormData extends Record<string, unknown> {
 	username: string
@@ -37,6 +38,7 @@ export const SignupModal = ({ triggerClassName, onSignupSuccess }: SignupModalPr
 	const [open, setOpen] = useState(false)
 	const { refreshAuthStatus } = useAuth()
 	const form = useForm<SignupFormData>()
+	const isMobile = useIsMobile()
 
 	const onSubmit = async (data: SignupFormData) => {
 		try {
@@ -87,7 +89,16 @@ export const SignupModal = ({ triggerClassName, onSignupSuccess }: SignupModalPr
 					</div>
 				</Button>
 			</DialogTrigger>
-			<DialogContent className="sm:max-w-[425px]">
+			<DialogContent
+				className="sm:max-w-[425px]"
+				onOpenAutoFocus={(event) => {
+					if (isMobile) {
+						event.preventDefault() // Prevent Radix's default autofocus
+						// Note: For iOS: Prevent mobile keyboard from rendering before dialog is fully rendered. Otherwise the dialog does not shift up into view, and we cannot press the arrow on virtual keyboard to focus the next input.
+						return
+					}
+				}}
+			>
 				<DialogHeader>
 					<DialogTitle className="text-2xl font-bold text-center">Create Account</DialogTitle>
 				</DialogHeader>
