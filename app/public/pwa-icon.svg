@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-labelledby="title desc">
+  <title id="title">Echo Sphere Icon</title>
+  <desc id="desc">Monogram of the letters E and S inside a circle.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" />
+      <stop offset="100%" stop-color="#334155" />
+    </linearGradient>
+  </defs>
+  <rect width="192" height="192" rx="32" fill="url(#bg)" />
+  <g fill="none" stroke="#f8fafc" stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M56 64h48c17.673 0 32 14.327 32 32s-14.327 32-32 32H56" />
+    <path d="M120 64H88c-17.673 0-32 14.327-32 32s14.327 32 32 32h32" opacity="0.7" />
+  </g>
+</svg>
