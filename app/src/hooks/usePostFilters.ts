@@ -21,9 +21,8 @@ export const sanitizeTokens = (rawInput: string) =>
 export const formatTagToken = (tag: string) => (tag.startsWith('#') ? tag : `#${tag}`)
 
 const createMatcher =
-	(matchMode: MatchMode, filters: FilterToken[]) =>
-		(fn: (filter: FilterToken) => boolean) =>
-			matchMode === 'and' ? filters.every(fn) : filters.some(fn)
+	(matchMode: MatchMode, filters: FilterToken[]) => (fn: (filter: FilterToken) => boolean) =>
+		matchMode === 'and' ? filters.every(fn) : filters.some(fn)
 
 const shouldEnableFilter = (filter: FilterToken, tokens: string[]) =>
 	tokens.some((token) => normalizeFilterToken(token) === normalizeFilterToken(filter.token))
@@ -90,7 +89,9 @@ export const usePostFilters = (posts: Post[]) => {
 				}))
 			}
 
-			const existingMap = new Map(prev.map((filter) => [normalizeFilterToken(filter.token), filter]))
+			const existingMap = new Map(
+				prev.map((filter) => [normalizeFilterToken(filter.token), filter])
+			)
 
 			const updatedFilters = prev.map((filter) =>
 				shouldEnableFilter(filter, tokens) ? { ...filter, enabled: true } : filter
