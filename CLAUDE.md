@@ -10,7 +10,8 @@ A Django + React web framework for rapid development of web applications. Featur
 
 ### Backend (Django)
 - **Location**: `server/` directory
-- **Framework**: Django 5.1.5 with Django REST Framework
+- **Framework**: Django 5.2.5 with Django REST Framework
+- **Python**: 3.13+
 - **Apps**: Located in `server/apps/`
   - `website` - Main website functionality
   - `users` - User management
@@ -121,7 +122,8 @@ npx @biomejs/biome check .
 - Line length: 99 characters
 
 ### TypeScript/React
-- Use Biome for formatting and linting
+- Use Biome for formatting (`bun run format`) and code checking (`bun run check`)
+- Use ESLint for linting (`bun run lint`)
 - Tab indentation with 2 spaces width
 - Single quotes for strings
 - Trailing commas in ES5 style
