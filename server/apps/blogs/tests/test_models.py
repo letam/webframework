@@ -215,8 +215,12 @@ class MediaModelTests(BaseTestCase):
 
     def test_media_duration_extraction_with_expected_duration(self):
         """Test duration extraction with a audio file with the expected duration."""
+        import shutil
         import subprocess
         import tempfile
+
+        if shutil.which('ffmpeg') is None:
+            self.skipTest("ffmpeg not available")
 
         expected_duration = timedelta(seconds=3.5)
 
