@@ -13,6 +13,9 @@ Includes some functionality for a basic public micro-blogging app.
 - [Bun](https://bun.sh)
 - [uv](https://docs.astral.sh/uv/)
 
+### Task Runner
+- [just](https://github.com/casey/just)
+
 ## Setup for Local Development
 
 ### Quick Setup (Recommended--or follow [Manual Setup](#manual-setup)):
@@ -26,12 +29,19 @@ Includes some functionality for a basic public micro-blogging app.
 	./admin/setup/setup-all.sh
 	```
 
-4. Start the development servers:
+4. Install [just](https://github.com/casey/just) (for project commands)
+
+5. Show the available project commands:
+	```
+	just --list
+	```
+
+6. Start the development servers:
 
    **Option A: Using tmux session (Recommended)**
 
 	```
-	./admin/dev/start-tmux-session.sh
+	just dev
 	```
 	This creates 2 tmux windows:
 
@@ -57,7 +67,8 @@ The web app during development is served via http://localhost:8000
 #### Install package managers and tools
 1. Install [uv](https://docs.astral.sh/uv/getting-started/installation/) (for Python package/project management)
 2. Install [Bun](https://bun.sh) (for JavaScript package/project management)
-3. Install [tmux](https://github.com/tmux/tmux) (for development session management):
+3. Install [just](https://github.com/casey/just) (for project commands)
+4. Install [tmux](https://github.com/tmux/tmux) (for development session management):
    - macOS: `brew install tmux`
    - Ubuntu/Debian: `sudo apt-get install tmux`
 
@@ -72,11 +83,11 @@ The web app during development is served via http://localhost:8000
 		```
 2. Apply database migrations:
 		```
-		uv run python server/manage.py migrate
+		just migrate
 		```
 3. Start the backend server:
 		```
-		uv run python server/manage.py runserver_plus
+		just runserver
 		```
 
 #### Frontend server
@@ -100,6 +111,7 @@ The web app during development is served via http://localhost:8000
 #### Misc setup stuff
 
 - If you're on macOS and you didn't follow the quick setup, then ensure that [gsed](https://www.gnu.org/software/sed/) is installed, which can be done via `brew install gsed` or `admin/setup/setup-mac.sh`. We use `gsed` in shell scripts to manage configuration-deployment of project.
+- Run `just --list` at any time to see the available project commands.
 
 ## Setup for Production
 
@@ -112,18 +124,58 @@ The web app during development is served via http://localhost:8000
 
 ## Deploying to fly.io
 
+Before using the Fly.io commands:
+
+1. Install [just](https://github.com/casey/just)
+2. Install the Fly.io CLI and make sure `fly` and `flyctl` are available in your shell
+3. Authenticate with Fly.io:
+   ```
+   fly auth login
+   ```
+4. On macOS, ensure `gsed` is installed if you plan to use the SQLite launch flow
+
+To see the available Fly.io recipes:
+```
+just --list
+```
+
 ### Config Type 1: Deploy on simple single webserver with SQLite database:
 
-1. Run app deployment script:
-```
-./admin/deploy/launch-fly.io-sqlite.sh <app_name>
-```
+1. Launch a new Fly app with SQLite:
+   ```
+   just fly-launch-app <app_name>
+   ```
+   `just fly-launch-app` is an alias for `just fly-launch-app-sqlite`.
+
+2. Deploy updates to an existing SQLite app:
+   ```
+   just fly-deploy-app-sqlite <app_name>
+   ```
 
 ### Config Type 2: Deploy using HA configuration with Postgres database:
 
-1. Run app deployment script:
+1. Launch a new Fly app with Postgres:
+   ```
+   just fly-launch-app-postgres <app_name>
+   ```
+
+2. Deploy updates to an existing Postgres app:
+   ```
+   just fly-deploy-app-postgres <app_name>
+   ```
+
+3. Launch the Postgres app and then clone database machines for HA:
+   ```
+   just fly-launch-app-ha <app_name>
+   ```
+
+### Other useful Fly.io commands
+
 ```
-./admin/deploy/launch-fly.io-postgres.sh <app_name>
+just fly-machine-clone <app_name>
+just fly-machine-clone-ha <app_name>-db
+just fly-delete-replicas <app_name>
+just fly-destroy-app-all <app_name>
 ```
 
 ### To use Cloudflare R2 object storage for user uploads (Required for Config Type 2):
