@@ -58,11 +58,12 @@ const Navbar = () => {
 							href="https://github.com/letam/webframework"
 							target="_blank"
 							rel="noopener noreferrer"
+							aria-label="GitHub repository"
+							title="GitHub repository"
 							className="transition-colors hover:text-foreground/80 text-foreground/60"
 						>
-							<div className="flex items-center gap-1">
+							<div className="flex items-center">
 								<Github className="h-4 w-4" />
-								<span>GitHub</span>
 							</div>
 						</a>
 						{isAuthenticated && (

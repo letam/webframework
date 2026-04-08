@@ -404,12 +404,11 @@
           </svg>
           <span>Home</span>
         </a>
-        <a href="https://github.com/letam/webframework" class="header-nav-link" target="_blank" rel="noopener noreferrer">
+        <a href="https://github.com/letam/webframework" class="header-nav-link" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository" title="GitHub repository">
           <svg class="header-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M16 18l6-6-6-6M8 6l-6 6 6 6" />
           </svg>
-          <span>GitHub</span>
         </a>
         {% if user.is_authenticated %}
         <a href="/profile" class="header-nav-link">
