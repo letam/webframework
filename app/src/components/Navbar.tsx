@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { Home, User, Menu, LogOut, Settings } from 'lucide-react'
+import { Home, User, Menu, LogOut, Settings, Github } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { useAuth } from '@/hooks/useAuth'
 import { logout } from '@/lib/api/auth'
@@ -54,6 +54,17 @@ const Navbar = () => {
 								<span>Settings</span>
 							</div>
 						</Link>
+						<a
+							href="https://github.com/letam/webframework"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="transition-colors hover:text-foreground/80 text-foreground/60"
+						>
+							<div className="flex items-center gap-1">
+								<Github className="h-4 w-4" />
+								<span>GitHub</span>
+							</div>
+						</a>
 						{isAuthenticated && (
 							<Link
 								to="/profile"
@@ -105,6 +116,17 @@ const Navbar = () => {
 									<Settings className="h-4 w-4" />
 									<span>Settings</span>
 								</Link>
+							</DropdownMenuItem>
+							<DropdownMenuItem asChild>
+								<a
+									href="https://github.com/letam/webframework"
+									target="_blank"
+									rel="noopener noreferrer"
+									className="flex items-center gap-2"
+								>
+									<Github className="h-4 w-4" />
+									<span>GitHub</span>
+								</a>
 							</DropdownMenuItem>
 							{isAuthenticated && (
 								<DropdownMenuItem asChild>
