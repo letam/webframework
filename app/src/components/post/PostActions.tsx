@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useState } from 'react'
 import { Heart, MessageCircle, Share2, Mic, Copy } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
 interface PostActionsProps {
@@ -14,6 +14,9 @@ interface PostActionsProps {
 	onTranscribe?: (id: number) => void
 }
 
+const actionBtn =
+	'group/action inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 font-mono text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card'
+
 const PostActions: React.FC<PostActionsProps> = ({
 	id,
 	likes,
@@ -24,8 +27,10 @@ const PostActions: React.FC<PostActionsProps> = ({
 	onTranscribe,
 }) => {
 	const [isTranscribing, setIsTranscribing] = useState(false)
+	const [popKey, setPopKey] = useState(0)
 
 	const handleLike = () => {
+		setPopKey((k) => k + 1)
 		onLike(id)
 	}
 
@@ -47,54 +52,58 @@ const PostActions: React.FC<PostActionsProps> = ({
 		}
 	}
 
+	const liked = likes > 0
+
 	return (
-		<div className="flex items-center mt-4 gap-2 sm:gap-6 flex-wrap">
-			<Button
-				variant="ghost"
-				size="sm"
-				className="text-muted-foreground hover:text-primary px-2 sm:px-3"
+		<div className="mt-4 flex flex-wrap items-center gap-1 border-t border-border/60 pt-2.5">
+			<button
+				type="button"
+				className={cn(actionBtn, 'hover:text-primary')}
 				onClick={handleLike}
+				aria-label="Like"
 			>
-				<Heart className={`h-4 w-4 sm:mr-1 ${likes > 0 ? 'fill-primary text-primary' : ''}`} />
-				<span className="hidden sm:inline">{likes}</span>
-				<span className="sm:hidden">{likes}</span>
-			</Button>
+				<Heart
+					key={popKey}
+					className={cn(
+						'h-4 w-4 transition-colors',
+						popKey > 0 && 'animate-heart-pop',
+						liked ? 'fill-primary text-primary' : 'group-hover/action:text-primary'
+					)}
+				/>
+				<span className={cn('tabular-nums', liked && 'text-primary')}>{likes}</span>
+			</button>
 
-			<Button variant="ghost" size="sm" className="text-muted-foreground px-2 sm:px-3">
-				<MessageCircle className="h-4 w-4 sm:mr-1" />
-				<span className="hidden sm:inline">0</span>
-				<span className="sm:hidden">0</span>
-			</Button>
+			<button type="button" className={actionBtn} aria-label="Comments">
+				<MessageCircle className="h-4 w-4" />
+				<span className="tabular-nums">0</span>
+			</button>
 
-			<Button variant="ghost" size="sm" className="text-muted-foreground px-2 sm:px-3">
-				<Share2 className="h-4 w-4 sm:mr-1" />
-			</Button>
+			<button type="button" className={actionBtn} aria-label="Share">
+				<Share2 className="h-4 w-4" />
+			</button>
 
 			{body && (
-				<Button
-					variant="ghost"
-					size="sm"
-					className="text-muted-foreground hover:text-primary px-2 sm:px-3"
+				<button
+					type="button"
+					className={cn(actionBtn, 'hover:text-primary')}
 					onClick={handleCopy}
+					aria-label="Copy text"
 				>
-					<Copy className="h-4 w-4 sm:mr-1" />
+					<Copy className="h-4 w-4" />
 					<span className="hidden sm:inline">Copy</span>
-				</Button>
+				</button>
 			)}
 
 			{mediaType && !transcript && onTranscribe && (
-				<Button
-					variant="ghost"
-					size="sm"
-					className="text-muted-foreground hover:text-primary px-2 sm:px-3"
+				<button
+					type="button"
+					className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1.5 font-mono text-xs font-medium uppercase tracking-wider text-gold transition-colors hover:bg-gold/20 disabled:opacity-60"
 					onClick={handleTranscribe}
 					disabled={isTranscribing}
 				>
-					<Mic className="h-4 w-4 sm:mr-1" />
-					<span className="hidden sm:inline">
-						{isTranscribing ? 'Transcribing...' : 'Transcribe'}
-					</span>
-				</Button>
+					<Mic className={cn('h-3.5 w-3.5', isTranscribing && 'animate-pulse')} />
+					<span>{isTranscribing ? 'Transcribing…' : 'Transcribe'}</span>
+				</button>
 			)}
 		</div>
 	)

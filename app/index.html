@@ -9,6 +9,14 @@
   <link rel="icon" type="image/svg+xml" href="/vite-logo.svg" />
   <link rel="apple-touch-icon" href="/vite-logo.png" />
 
+  <!-- Typography: Fraunces (editorial display), Hanken Grotesk (body), Space Mono (transcript metadata) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..900;1,9..144,300..900&family=Hanken+Grotesk:wght@400..800&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap"
+    rel="stylesheet"
+  />
+
   <title>Echo Sphere</title>
   <meta name="description" content="Echo Sphere" />
   <!-- <meta name="author" content="" /> -->
@@ -52,13 +60,15 @@
   </script>
 
   <style>
-    /* Prevent flash of unstyled content */
+    /* Prevent flash of unstyled content (warm paper / espresso, matching index.css tokens) */
     :root {
       color-scheme: light dark;
+      background-color: hsl(38 40% 95%);
     }
 
     .dark {
       color-scheme: dark;
+      background-color: hsl(24 16% 8%);
     }
   </style>
 

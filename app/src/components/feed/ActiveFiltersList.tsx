@@ -20,32 +20,28 @@ export const ActiveFiltersList: React.FC<ActiveFiltersListProps> = ({
 	}
 
 	return (
-		<div className="space-y-3 mt-1">
+		<div className="mt-1 space-y-3">
 			<div className="flex flex-wrap items-center gap-2">
-				<span className="text-sm font-medium text-muted-foreground">
+				<span className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground">
 					Active filters{' '}
 					<button
 						type="button"
 						onClick={onClearFilters}
-						className="text-sm font-medium text-primary hover:underline"
+						className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground underline-offset-2 transition-colors hover:text-primary hover:underline"
 					>
-						(Clear all)
+						Clear all
 					</button>
-					:
 				</span>
 				{filters.map((filter) => (
-					<div
-						key={filter.token}
-						className="relative inline-flex text-sm text-secondary-foreground"
-					>
+					<div key={filter.token} className="relative inline-flex">
 						<button
 							type="button"
 							onClick={() => onToggleFilter(filter.token)}
 							className={cn(
-								'inline-flex items-center rounded-full px-3 py-1 pr-7 shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+								'inline-flex items-center rounded-full border px-2.5 py-1 pr-6 font-mono text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
 								filter.enabled
-									? 'bg-primary text-primary-foreground hover:bg-primary/90'
-									: 'bg-muted text-muted-foreground hover:bg-muted/70'
+									? 'border-primary/40 bg-primary/10 text-primary hover:bg-primary/20'
+									: 'border-border bg-secondary text-muted-foreground hover:text-foreground'
 							)}
 							aria-label={`${filter.enabled ? 'Disable' : 'Enable'} filter ${filter.token}`}
 						>
@@ -58,10 +54,10 @@ export const ActiveFiltersList: React.FC<ActiveFiltersListProps> = ({
 								onRemoveFilter(filter.token)
 							}}
 							className={cn(
-								'absolute right-1 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-base leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+								'absolute right-1 top-1/2 flex h-4 w-4 -translate-y-1/2 items-center justify-center rounded-full text-xs leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
 								filter.enabled
-									? 'text-primary-foreground hover:bg-primary-foreground/80 hover:text-primary'
-									: 'text-muted-foreground hover:bg-muted-foreground hover:text-background'
+									? 'text-primary/60 hover:bg-primary/10 hover:text-primary'
+									: 'text-muted-foreground/60 hover:bg-muted hover:text-foreground'
 							)}
 							aria-label={`Remove filter ${filter.token}`}
 						>

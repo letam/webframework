@@ -81,17 +81,13 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 
 	return (
 		<form onSubmit={onSubmit}>
-			<label
-				className="block text-sm font-medium text-muted-foreground mb-2"
-				htmlFor={filterInputId}
-				ref={labelRef}
-			>
+			<label className="eyebrow mb-2 block" htmlFor={filterInputId} ref={labelRef}>
 				Filter posts
 			</label>
 			<div className="flex flex-wrap items-center gap-2">
 				<input
 					id={filterInputId}
-					className="flex-1 min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+					className="flex-1 min-w-0 rounded-md border border-input bg-background/60 px-3 py-2 text-base shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
 					type="text"
 					placeholder="Enter words to filter posts…"
 					value={filterText}
@@ -113,7 +109,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 							type="button"
 							onClick={() => onMatchModeChange(matchMode === 'and' ? 'or' : 'and')}
 							tabIndex={-1}
-							className="text-xs font-medium tracking-wide text-muted-foreground transition-colors hover:text-foreground active:text-foreground sm:text-sm"
+							className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground transition-colors hover:text-foreground active:text-foreground"
 							aria-label={`Toggle match mode (currently ${
 								matchMode === 'and' ? 'match all' : 'match any'
 							})`}
@@ -130,7 +126,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 								<label
 									key={mode}
 									className={cn(
-										'inline-flex cursor-pointer items-center rounded-full px-3 py-1 text-xs sm:text-sm font-medium transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+										'inline-flex cursor-pointer items-center rounded-full px-3 py-1 font-mono text-[0.65rem] uppercase tracking-[0.15em] transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
 										matchMode === mode
 											? 'bg-primary text-primary-foreground hover:bg-primary/90'
 											: 'bg-muted text-muted-foreground hover:bg-muted/70',

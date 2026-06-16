@@ -19,7 +19,6 @@ const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
 	const handleCopyLink = async () => {
 		try {
 			await navigator.clipboard.writeText(post.url)
-			// You could add a toast notification here if you have one
 		} catch (err) {
 			console.error('Failed to copy link:', err)
 		}
@@ -30,29 +29,38 @@ const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
 	}
 
 	return (
-		<div className="flex items-center gap-2">
-			<Avatar className="h-10 w-10">
-				<AvatarImage src={post.author.avatar} alt={post.author.username} />
-				<AvatarFallback>
-					{post.author.first_name[0]}
-					{post.author.last_name[0]}
-				</AvatarFallback>
-			</Avatar>
-			<div className="flex-1">
-				<div className="flex items-center gap-1">
-					<span className="font-semibold">
+		<div className="flex min-w-0 items-center gap-3">
+			{/* Avatar framed by a faint echo ring */}
+			<div className="relative shrink-0">
+				<span className="absolute -inset-1 rounded-full border border-border/70" />
+				<Avatar className="h-10 w-10 border border-border">
+					<AvatarImage src={post.author.avatar} alt={post.author.username} />
+					<AvatarFallback className="bg-secondary font-display text-sm font-semibold text-secondary-foreground">
+						{post.author.first_name[0]}
+						{post.author.last_name[0]}
+					</AvatarFallback>
+				</Avatar>
+			</div>
+			<div className="min-w-0 flex-1">
+				<div className="flex items-baseline gap-1.5">
+					<span className="truncate font-semibold leading-tight text-foreground">
 						{post.author.first_name} {post.author.last_name}
 					</span>
-					<span className="text-muted-foreground">@{post.author.username}</span>
+					<span className="truncate font-mono text-xs text-muted-foreground">
+						@{post.author.username}
+					</span>
 				</div>
 				<TooltipProvider>
 					<Tooltip>
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
 								<TooltipTrigger asChild>
-									<div className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+									<button
+										type="button"
+										className="font-mono text-[0.7rem] uppercase tracking-wider text-muted-foreground/80 transition-colors hover:text-primary"
+									>
 										{formatDistanceToNow(post.created, { addSuffix: true })}
-									</div>
+									</button>
 								</TooltipTrigger>
 							</DropdownMenuTrigger>
 							<DropdownMenuContent align="start">
@@ -67,7 +75,7 @@ const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
 							</DropdownMenuContent>
 						</DropdownMenu>
 						<TooltipContent>
-							<p>{format(post.created, 'PPpp')}</p>
+							<p className="font-mono text-xs">{format(post.created, 'PPpp')}</p>
 						</TooltipContent>
 					</Tooltip>
 				</TooltipProvider>

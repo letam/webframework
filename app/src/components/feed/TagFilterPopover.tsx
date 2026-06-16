@@ -1,7 +1,6 @@
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
 	Command,
@@ -126,22 +125,25 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 
 	const selectedTagBadgesContent =
 		pendingTags.length === 0 ? (
-			<span className="rounded-md border border-dashed border-muted-foreground/40 px-3 py-2 text-xs text-muted-foreground">
+			<span className="rounded-md border border-dashed border-muted-foreground/30 px-3 py-2 font-mono text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground">
 				No tags selected yet.
 			</span>
 		) : (
 			pendingTags.map((tag) => (
-				<Badge key={tag} variant="secondary" className="flex items-center gap-1">
+				<span
+					key={tag}
+					className="inline-flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-2.5 py-1 font-mono text-xs text-primary"
+				>
 					<span>#{tag}</span>
 					<button
 						type="button"
 						onClick={() => handleClearPendingTag(tag)}
-						className="rounded-full p-0.5 hover:bg-secondary-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+						className="ml-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full text-primary/60 transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 						aria-label={`Remove tag ${tag}`}
 					>
-						<X className="size-3.5" />
+						<X className="size-3" />
 					</button>
-				</Badge>
+				</span>
 			))
 		)
 
@@ -161,7 +163,12 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 			}}
 		>
 			<PopoverTrigger asChild>
-				<Button type="button" variant="outline" size="sm" className="min-w-[140px]">
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					className="min-w-[140px] rounded-md border border-border bg-secondary font-mono text-[0.7rem] uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:border-primary/40 hover:bg-secondary hover:text-foreground"
+				>
 					{error ? (
 						<>
 							<X className="size-4 text-destructive" />
@@ -176,7 +183,9 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 						<>
 							<span>Filter by Tags</span>
 							{selectedTags.length > 0 ? (
-								<span className="text-xs text-muted-foreground">({selectedTags.length})</span>
+								<span className="font-mono text-[0.65rem] text-primary">
+									({selectedTags.length})
+								</span>
 							) : null}
 						</>
 					)}
@@ -191,8 +200,8 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 				<div className="flex flex-col gap-4">
 					<div className="flex items-start justify-between gap-2">
 						<div>
-							<h3 className="text-sm font-medium text-foreground">Select tags</h3>
-							<p className="mt-1 text-xs text-muted-foreground">
+							<h3 className="font-display text-sm font-medium text-foreground">Select tags</h3>
+							<p className="mt-1 font-mono text-[0.65rem] uppercase tracking-[0.1em] text-muted-foreground">
 								Add hashtags to filter posts. Changes apply after you submit.
 							</p>
 						</div>
@@ -241,7 +250,7 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 														className={cn('size-4', isSelected ? 'opacity-100' : 'opacity-0')}
 													/>
 													<span className="truncate">#{tagInfo.tag}</span>
-													<span className="ml-auto text-xs text-muted-foreground">
+													<span className="ml-auto font-mono text-[0.65rem] tabular-nums text-muted-foreground">
 														{tagInfo.count}
 													</span>
 												</CommandItem>
@@ -253,7 +262,7 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 						</Command>
 						{!isMobile ? (
 							<div className="flex w-[240px] flex-col gap-3 rounded-md border border-border/60 bg-muted/10 p-3">
-								<div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+								<div className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground">
 									Selected tags
 								</div>
 								<div className="flex max-h-[240px] flex-wrap content-start gap-2 overflow-y-auto pr-1">
@@ -265,7 +274,7 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 					{isMobile ? <div className="flex flex-wrap gap-2">{selectedTagBadgesContent}</div> : null}
 					<div className="space-y-2">
 						{!isMobile ? (
-							<p className="text-xs text-muted-foreground">
+							<p className="font-mono text-[0.65rem] uppercase tracking-[0.1em] text-muted-foreground">
 								Press Cmd+Enter or Ctrl+Enter to submit your tag filters quickly.
 							</p>
 						) : null}

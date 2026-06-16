@@ -3,7 +3,7 @@ import { useState, useRef } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
-import { Mic, Video, Image, Loader2, Upload } from 'lucide-react'
+import { Mic, Video, Image, Loader2, Upload, Send } from 'lucide-react'
 import { AudioRecorderModal } from './AudioRecorder'
 import { VideoRecorderModal } from './VideoRecorder'
 import MediaPreview from './MediaPreview'
@@ -198,7 +198,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			toast.success('Post created successfully!')
 			// Focus back on text area
 			textareaRef.current?.focus()
-		} catch (error) {
+		} catch {
 			toast.error('Failed to create post')
 		} finally {
 			setSubmitStatus('')
@@ -213,17 +213,28 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		imageInputRef.current?.click()
 	}
 
+	const mediaTiles = [
+		{ icon: Mic, label: 'Record Audio', onClick: () => setIsAudioModalOpen(true) },
+		{ icon: Video, label: 'Record Video', onClick: () => setIsVideoModalOpen(true) },
+		{ icon: Image, label: 'Image', onClick: openImageFileSelector },
+		{ icon: Upload, label: 'Upload', onClick: openUploadFileSelector },
+	]
+
 	return (
-		<div className="bg-card rounded-lg shadow-xs border max-w-lg mx-auto px-4 py-2">
-			<form onSubmit={handleSubmit} className="flex flex-col w-full">
+		<div className="dispatch mx-auto max-w-lg rounded-xl border border-border bg-card px-4 py-3.5 shadow-[0_1px_0_hsl(var(--border))] sm:px-5">
+			<div className="mb-2 flex items-center gap-2">
+				<span className="on-air-dot" />
+				<span className="eyebrow">Compose · New Dispatch</span>
+			</div>
+			<form onSubmit={handleSubmit} className="flex w-full flex-col">
 				<div className="-mx-2">
 					<Textarea
 						ref={textareaRef}
-						placeholder="What's on your mind? Share your thoughts, upload media, or record something..."
+						placeholder="What are you hearing? Share a thought, record a voice note, or drop some media…"
 						value={postText}
 						onChange={handlePostTextChange}
 						onKeyDown={handleKeyDown}
-						className="w-full resize-none mb-4 border-none focus-visible:ring-0 py-1 px-2 text-base max-w-lg"
+						className="mb-4 w-full max-w-lg resize-none border-none bg-transparent px-2 py-1 text-base leading-relaxed placeholder:text-muted-foreground/70 focus-visible:ring-0"
 						rows={4}
 						disabled={!!submitStatus}
 					/>
@@ -242,47 +253,19 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				</div>
 
 				{hasNoMedia && (
-					<div className="grid grid-cols-2 gap-3 mb-4">
-						<Button
-							type="button"
-							variant="outline"
-							className="flex items-center gap-2 py-4"
-							onClick={() => setIsAudioModalOpen(true)}
-							disabled={!!submitStatus}
-						>
-							<Mic className="h-5 w-5" />
-							<span className="text-base font-medium">Record Audio</span>
-						</Button>
-						<Button
-							type="button"
-							variant="outline"
-							className="flex items-center gap-2 py-4"
-							onClick={() => setIsVideoModalOpen(true)}
-							disabled={!!submitStatus}
-						>
-							<Video className="h-5 w-5" />
-							<span className="text-base font-medium">Record Video</span>
-						</Button>
-						<Button
-							type="button"
-							variant="outline"
-							className="flex items-center gap-2 py-4"
-							onClick={openImageFileSelector}
-							disabled={!!submitStatus}
-						>
-							<Image className="h-5 w-5" />
-							<span className="text-base font-medium">Image</span>
-						</Button>
-						<Button
-							type="button"
-							variant="outline"
-							className="flex items-center gap-2 py-4"
-							onClick={openUploadFileSelector}
-							disabled={!!submitStatus}
-						>
-							<Upload className="h-5 w-5" />
-							<span className="text-base font-medium">Upload</span>
-						</Button>
+					<div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+						{mediaTiles.map(({ icon: Icon, label, onClick }) => (
+							<button
+								key={label}
+								type="button"
+								className="group/tile flex flex-col items-center gap-1.5 rounded-lg border border-border bg-background/60 px-2 py-3 text-foreground transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/5 disabled:pointer-events-none disabled:opacity-50"
+								onClick={onClick}
+								disabled={!!submitStatus}
+							>
+								<Icon className="h-5 w-5 text-muted-foreground transition-colors group-hover/tile:text-primary" />
+								<span className="font-mono text-[0.62rem] uppercase tracking-wide">{label}</span>
+							</button>
+						))}
 						<input
 							type="file"
 							ref={audioInputRef}
@@ -314,23 +297,24 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				)}
 
 				{submitStatus && (
-					<div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-						<Loader2 className="h-4 w-4 animate-spin" />
+					<div className="mb-2 flex items-center gap-2 font-mono text-xs uppercase tracking-wider text-muted-foreground">
+						<Loader2 className="h-4 w-4 animate-spin text-primary" />
 						<span>
 							{submitStatus === 'compressing'
-								? 'Compressing media...'
+								? 'Compressing media…'
 								: submitStatus === 'preparing'
-									? 'Preparing post...'
-									: 'Submitting post...'}
+									? 'Preparing dispatch…'
+									: 'Broadcasting…'}
 						</span>
 					</div>
 				)}
 				<Button
 					type="submit"
 					disabled={!!submitStatus}
-					className="w-full py-4 text-base font-medium"
+					className="group/post w-full gap-2 py-5 text-base font-semibold tracking-wide shadow-[0_2px_0_hsl(var(--primary)/0.5)] transition-all hover:shadow-[0_1px_0_hsl(var(--primary)/0.5)] active:translate-y-0.5"
 				>
-					Post
+					<Send className="h-4 w-4 transition-transform group-hover/post:translate-x-0.5 group-hover/post:-translate-y-0.5" />
+					Broadcast
 				</Button>
 			</form>
 

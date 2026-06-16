@@ -28,7 +28,7 @@ const Profile: React.FC<ProfileProps> = ({ username = 'user1' }) => {
 			author: {
 				id: 1,
 				username: 'user1',
-				avatar: 'https://ui-avatars.com/api/?name=User&background=7c3aed&color=fff',
+				avatar: 'https://ui-avatars.com/api/?name=User&background=e8552f&color=fff',
 				first_name: 'John',
 				last_name: 'Doe',
 			},
@@ -50,7 +50,7 @@ const Profile: React.FC<ProfileProps> = ({ username = 'user1' }) => {
 			author: {
 				id: 1,
 				username: 'user1',
-				avatar: 'https://ui-avatars.com/api/?name=User&background=7c3aed&color=fff',
+				avatar: 'https://ui-avatars.com/api/?name=User&background=e8552f&color=fff',
 				first_name: 'John',
 				last_name: 'Doe',
 			},
@@ -71,57 +71,76 @@ const Profile: React.FC<ProfileProps> = ({ username = 'user1' }) => {
 
 	return (
 		<div className="max-w-2xl mx-auto">
-			<div className="bg-card rounded-lg shadow-xs overflow-hidden mb-4 border">
-				<div className="h-32 bg-linear-to-r from-primary to-secondary" />
+			<div className="rounded-xl border border-border bg-card overflow-hidden mb-4 shadow-[0_1px_0_hsl(var(--border))]">
+				{/* Banner: vermilion→gold gradient with faint echo-field overlay */}
+				<div className="relative h-32 overflow-hidden bg-[linear-gradient(135deg,hsl(var(--primary))_0%,hsl(var(--gold))_100%)]">
+					<span className="echo-field absolute inset-0" />
+				</div>
 
 				<div className="p-4 relative">
-					<Avatar className="absolute -top-16 border-4 border-background w-24 h-24">
+					<Avatar className="absolute -top-12 border-4 border-card w-24 h-24 shadow-md">
 						<AvatarImage
-							src="https://ui-avatars.com/api/?name=User&background=7c3aed&color=fff"
+							src="https://ui-avatars.com/api/?name=User&background=e8552f&color=fff"
 							alt={username}
 						/>
 						<AvatarFallback>{username[0]}</AvatarFallback>
 					</Avatar>
 
-					<div className="mt-10 flex items-center justify-between">
+					<div className="mt-14 flex items-center justify-between">
 						<div>
-							<h1 className="text-xl font-bold">User Name</h1>
-							<p className="text-muted-foreground">@{username}</p>
+							<h1 className="font-display text-2xl font-semibold leading-tight">User Name</h1>
+							<p className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-muted-foreground mt-0.5">
+								@{username}
+							</p>
 						</div>
 
 						<Button>Edit Profile</Button>
 					</div>
 
-					<p className="mt-4">
+					<p className="mt-4 text-[0.975rem] leading-relaxed text-foreground/80">
 						Digital content creator and audio enthusiast. Sharing thoughts, ideas, and sounds with
 						the world.
 					</p>
 
-					<div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground">
-						<div className="flex items-center">
-							<MapPin className="h-4 w-4 mr-1" />
+					<div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 font-mono text-[0.7rem] uppercase tracking-[0.12em] text-muted-foreground">
+						<div className="flex items-center gap-1">
+							<MapPin className="h-3.5 w-3.5 shrink-0" />
 							<span>San Francisco, CA</span>
 						</div>
-						<div className="flex items-center">
-							<LinkIcon className="h-4 w-4 mr-1" />
-							<a href="https://example.com" className="text-primary">
+						<div className="flex items-center gap-1">
+							<LinkIcon className="h-3.5 w-3.5 shrink-0" />
+							<a href="https://example.com" className="text-primary hover:underline">
 								example.com
 							</a>
 						</div>
-						<div className="flex items-center">
-							<Calendar className="h-4 w-4 mr-1" />
+						<div className="flex items-center gap-1">
+							<Calendar className="h-3.5 w-3.5 shrink-0" />
 							<span>Joined April 2025</span>
 						</div>
 					</div>
 
-					<div className="mt-4 flex gap-4">
-						<Link to="#" className="hover:underline">
-							<span className="font-semibold">248</span>{' '}
-							<span className="text-muted-foreground">Following</span>
+					<div className="mt-4 flex gap-5">
+						<Link
+							to="#"
+							className="group flex items-baseline gap-1.5 hover:text-foreground transition-colors"
+						>
+							<span className="font-display text-xl font-semibold tabular-nums text-foreground">
+								248
+							</span>
+							<span className="font-mono text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground">
+								Following
+							</span>
 						</Link>
-						<Link to="#" className="hover:underline">
-							<span className="font-semibold">1,024</span>{' '}
-							<span className="text-muted-foreground">Followers</span>
+						<Link
+							to="#"
+							className="group flex items-baseline gap-1.5 hover:text-foreground transition-colors"
+						>
+							<span className="font-display text-xl font-semibold tabular-nums text-foreground">
+								1,024
+							</span>
+							<span className="font-mono text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground">
+								Followers
+							</span>
 						</Link>
 					</div>
 				</div>

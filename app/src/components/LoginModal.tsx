@@ -76,9 +76,9 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess, onOpenChange }: L
 		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogTrigger asChild>
 				<Button
-					variant="ghost"
+					variant="outline"
 					className={cn(
-						'transition-colors hover:text-foreground/80 text-foreground/60',
+						'border-border font-mono text-[0.7rem] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary',
 						triggerClassName
 					)}
 				>
@@ -89,7 +89,7 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess, onOpenChange }: L
 				</Button>
 			</DialogTrigger>
 			<DialogContent
-				className="sm:max-w-[425px]"
+				className="sm:max-w-[425px] rounded-xl border border-border bg-card"
 				onOpenAutoFocus={(event) => {
 					if (isMobile) {
 						// Note: For iOS: Prevent mobile keyboard from rendering before dialog is fully rendered. Otherwise the dialog does not shift up into view, and we cannot press the arrow on virtual keyboard to focus the next input.
@@ -98,17 +98,24 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess, onOpenChange }: L
 					}
 				}}
 			>
-				<DialogHeader>
-					<DialogTitle className="text-2xl font-bold text-center">Welcome Back</DialogTitle>
+				<DialogHeader className="space-y-1 pb-2">
+					<p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground text-center">
+						Welcome Back
+					</p>
+					<DialogTitle className="font-display text-3xl font-light text-center text-foreground">
+						Sign <span className="italic text-primary">In</span>
+					</DialogTitle>
 				</DialogHeader>
 				<Form {...form}>
-					<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+					<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-2">
 						<FormField
 							control={form.control}
 							name="username"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>Username</FormLabel>
+									<FormLabel className="font-mono text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground">
+										Username
+									</FormLabel>
 									<FormControl>
 										<Input placeholder="Enter your username" {...field} />
 									</FormControl>
@@ -121,7 +128,9 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess, onOpenChange }: L
 							name="password"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>Password</FormLabel>
+									<FormLabel className="font-mono text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground">
+										Password
+									</FormLabel>
 									<FormControl>
 										<Input type="password" placeholder="Enter your password" {...field} />
 									</FormControl>
@@ -134,7 +143,10 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess, onOpenChange }: L
 								{form.formState.errors.root.message}
 							</p>
 						)}
-						<Button type="submit" className="w-full bg-primary hover:bg-primary/90">
+						<Button
+							type="submit"
+							className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-mono text-[0.7rem] uppercase tracking-[0.15em]"
+						>
 							Sign In
 						</Button>
 					</form>

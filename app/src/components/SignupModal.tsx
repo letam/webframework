@@ -89,9 +89,9 @@ export const SignupModal = ({
 		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogTrigger asChild>
 				<Button
-					variant="ghost"
+					variant="default"
 					className={cn(
-						'transition-colors hover:text-foreground/80 text-foreground/60',
+						'bg-primary text-primary-foreground font-mono text-[0.7rem] uppercase tracking-[0.18em] hover:bg-primary/90 transition-colors',
 						triggerClassName
 					)}
 				>
@@ -102,7 +102,7 @@ export const SignupModal = ({
 				</Button>
 			</DialogTrigger>
 			<DialogContent
-				className="sm:max-w-[425px]"
+				className="sm:max-w-[425px] rounded-xl border border-border bg-card"
 				onOpenAutoFocus={(event) => {
 					if (isMobile) {
 						event.preventDefault() // Prevent Radix's default autofocus
@@ -111,17 +111,24 @@ export const SignupModal = ({
 					}
 				}}
 			>
-				<DialogHeader>
-					<DialogTitle className="text-2xl font-bold text-center">Create Account</DialogTitle>
+				<DialogHeader className="space-y-1 pb-2">
+					<p className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground text-center">
+						Join the Sphere
+					</p>
+					<DialogTitle className="font-display text-3xl font-light text-center text-foreground">
+						Create <span className="italic text-primary">Account</span>
+					</DialogTitle>
 				</DialogHeader>
 				<Form {...form}>
-					<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+					<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-2">
 						<FormField
 							control={form.control}
 							name="username"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>Username</FormLabel>
+									<FormLabel className="font-mono text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground">
+										Username
+									</FormLabel>
 									<FormControl>
 										<Input placeholder="Choose a username" {...field} />
 									</FormControl>
@@ -134,7 +141,9 @@ export const SignupModal = ({
 							name="password1"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>Password</FormLabel>
+									<FormLabel className="font-mono text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground">
+										Password
+									</FormLabel>
 									<FormControl>
 										<Input type="password" placeholder="Create a password" {...field} />
 									</FormControl>
@@ -147,7 +156,9 @@ export const SignupModal = ({
 							name="password2"
 							render={({ field }) => (
 								<FormItem>
-									<FormLabel>Confirm Password</FormLabel>
+									<FormLabel className="font-mono text-[0.65rem] uppercase tracking-[0.15em] text-muted-foreground">
+										Confirm Password
+									</FormLabel>
 									<FormControl>
 										<Input type="password" placeholder="Confirm your password" {...field} />
 									</FormControl>
@@ -160,7 +171,10 @@ export const SignupModal = ({
 								{form.formState.errors.root.message}
 							</p>
 						)}
-						<Button type="submit" className="w-full bg-primary hover:bg-primary/90">
+						<Button
+							type="submit"
+							className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-mono text-[0.7rem] uppercase tracking-[0.15em]"
+						>
 							Create Account
 						</Button>
 					</form>
