@@ -23,6 +23,13 @@ console_command = '/code/manage.py shell'
   min_machines_running = 1
   processes = ['app']
 
+[[http_service.checks]]
+  interval = '30s'
+  timeout = '5s'
+  grace_period = '15s'
+  method = 'GET'
+  path = '/healthz/'
+
 [[vm]]
   memory = '512mb'
   cpu_kind = 'shared'

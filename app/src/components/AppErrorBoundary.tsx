@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { captureException } from '@/lib/monitoring'
 import { Component, type ErrorInfo, type ReactNode } from 'react'
 
 type AppErrorBoundaryProps = {
@@ -20,6 +21,7 @@ class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorBoundary
 
 	componentDidCatch(error: Error, info: ErrorInfo) {
 		console.error('Unhandled render error:', error, info)
+		captureException(error)
 	}
 
 	render() {

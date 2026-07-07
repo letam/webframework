@@ -170,6 +170,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    # Must stay first so platform health checks bypass host validation.
+    'config.middleware.HealthCheckMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -223,6 +225,12 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
     )
     sqlite_options.setdefault('transaction_mode', 'IMMEDIATE')
     sqlite_options.setdefault('timeout', 20)
+
+if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
+    # Persistent, health-checked connections; the managed Postgres is a
+    # network hop away and per-request reconnects are expensive.
+    DATABASES['default']['CONN_MAX_AGE'] = env.int('DB_CONN_MAX_AGE', default=60)
+    DATABASES['default']['CONN_HEALTH_CHECKS'] = True
 
 
 # Password validation
@@ -445,6 +453,7 @@ AWS_S3_REGION_NAME = 'auto'  # R2 doesn't need a specific region
 AWS_DEFAULT_ACL = 'public-read'
 AWS_QUERYSTRING_AUTH = False  # Don't add complex authentication-related query parameters to URLs
 AWS_S3_ENDPOINT_FOR_CSP = os.getenv('R2_ENDPOINT_DOMAIN_FOR_CSP')
+SENTRY_FRONTEND_INGEST_FOR_CSP = os.getenv('SENTRY_FRONTEND_INGEST_FOR_CSP')
 
 # Media files configuration
 MEDIA_URL = env.str('MEDIA_URL', default='/media/')
@@ -562,6 +571,14 @@ if AWS_S3_ENDPOINT_FOR_CSP:
         }
     )
 
+# The browser Sentry SDK posts events directly to the ingest host, which CSP
+# must allow (e.g. 'https://o12345.ingest.us.sentry.io').
+if SENTRY_FRONTEND_INGEST_FOR_CSP:
+    CONTENT_SECURITY_POLICY_DIRECTIVES['connect-src'] = [
+        *CONTENT_SECURITY_POLICY_DIRECTIVES.get('connect-src', []),
+        SENTRY_FRONTEND_INGEST_FOR_CSP,
+    ]
+
 CONTENT_SECURITY_POLICY = {
     # 'EXCLUDE_URL_PREFIXES': ['/excluded-path/'],
     'DIRECTIVES': CONTENT_SECURITY_POLICY_DIRECTIVES,
@@ -570,3 +587,15 @@ CONTENT_SECURITY_POLICY = {
 
 # OpenAI API Key
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+# Error monitoring — a no-op unless a DSN is configured.
+SENTRY_DSN = os.getenv('SENTRY_DSN')
+if SENTRY_DSN:
+    import sentry_sdk
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment='development' if DEBUG else 'production',
+        send_default_pii=False,
+        traces_sample_rate=env.float('SENTRY_TRACES_SAMPLE_RATE', default=0.0),
+    )

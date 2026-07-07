@@ -38,6 +38,7 @@ A Django + React web framework for rapid development of web applications. The pr
 
 ### Key API Endpoints
 
+- `GET /healthz/` - Health check endpoint that verifies database readiness
 - `POST /auth/csrf/` - Get CSRF token
 - `POST /auth/login/`, `/auth/signup/`, `/auth/logout/`, `/auth/status/` - Authentication
 - `GET/POST /api/posts/` - List/create posts (DRF router)
@@ -324,5 +325,6 @@ Multi-stage Dockerfile:
 - **Anonymous posts**: Supported via a dedicated anonymous user (ID=2), created by `init_users` command
 - **S3 URLs**: Presigned URLs for media are cached for 1 minute on the frontend
 - **Transcription tasks**: Transcription runs via django-tasks (immediate backend in dev/tests, DB backend + `db_worker` in production, started by `server/start-prod.sh`; `just worker` runs it locally)
+- **Sentry**: Env-gated error monitoring (`SENTRY_DSN` backend, `VITE_SENTRY_DSN` + `SENTRY_FRONTEND_INGEST_FOR_CSP` frontend)
 - **Media streaming**: Supports HTTP range requests for Safari audio/video compatibility
 - **Open Graph**: Post detail pages (`/p/<id>/`) render OG metadata for social sharing
