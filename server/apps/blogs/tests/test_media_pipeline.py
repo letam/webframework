@@ -1,5 +1,6 @@
 """Tests for media upload validation, S3-backed media, and signed URLs."""
 
+import os
 import tempfile
 from datetime import timedelta
 from unittest import mock
@@ -7,12 +8,14 @@ from unittest import mock
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import IntegrityError, transaction
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
 from ..models import Media, Post
 from ..serializers import PostSerializer
+from ..utils import MediaProbeError
 from . import ViewTestCase
 
 User = get_user_model()
@@ -54,7 +57,7 @@ class MediaPipelineTests(ViewTestCase):
         with (
             mock.patch('apps.blogs.views.head_object', return_value=head),
             mock.patch('apps.blogs.views.download_to_file'),
-            mock.patch('apps.blogs.views.get_media_duration', return_value=expected_duration),
+            mock.patch('apps.blogs.views.probe_media_duration', return_value=expected_duration),
             mock.patch(
                 'apps.blogs.serializers.generate_presigned_get_url',
                 return_value='https://example.com/signed-get',
@@ -68,6 +71,8 @@ class MediaPipelineTests(ViewTestCase):
         self.assertEqual(post.media.s3_file_key, self.key)
         self.assertEqual(post.media.duration, expected_duration)
         self.assertEqual(response.data['media']['signed_url'], 'https://example.com/signed-get')
+        # The frontend derives MIME type and download extension from the key.
+        self.assertEqual(response.data['media']['s3_file_key'], self.key)
 
     def test_media_and_s3_file_key_are_mutually_exclusive(self):
         """A create request cannot include both upload styles."""
@@ -149,13 +154,32 @@ class MediaPipelineTests(ViewTestCase):
         with (
             mock.patch('apps.blogs.views.head_object', return_value=head),
             mock.patch('apps.blogs.views.download_to_file'),
-            mock.patch('apps.blogs.views.get_media_duration', return_value=None),
+            mock.patch('apps.blogs.views.probe_media_duration', return_value=None),
             mock.patch('apps.blogs.views.delete_object') as mock_delete,
         ):
             response = self._post_with_s3_key()
 
         self.assertEqual(response.status_code, 400)
         mock_delete.assert_called_once_with(self.key)
+        self.assertEqual(Post.objects.count(), 0)
+
+    def test_probe_environment_failure_returns_500_and_keeps_object(self):
+        """A broken probing environment must not delete the upload or blame the file."""
+        head = {'ContentLength': 512, 'ContentType': 'audio/mpeg'}
+
+        with (
+            mock.patch('apps.blogs.views.head_object', return_value=head),
+            mock.patch('apps.blogs.views.download_to_file'),
+            mock.patch(
+                'apps.blogs.views.probe_media_duration',
+                side_effect=MediaProbeError('ffprobe could not run'),
+            ),
+            mock.patch('apps.blogs.views.delete_object') as mock_delete,
+        ):
+            response = self._post_with_s3_key()
+
+        self.assertEqual(response.status_code, 500)
+        mock_delete.assert_not_called()
         self.assertEqual(Post.objects.count(), 0)
 
     def test_direct_upload_rejects_plain_text_content_type(self):
@@ -214,3 +238,132 @@ class MediaPipelineTests(ViewTestCase):
                 data = PostSerializer(post).data
 
         self.assertIsNone(data['media']['signed_url'])
+
+    def test_local_copy_downloads_s3_media_to_a_temp_file(self):
+        """local_copy should download S3-only media and clean up afterwards."""
+        media = Media.objects.create(s3_file_key=self.key, media_type='audio')
+
+        def fake_download(key, fileobj):
+            fileobj.write(b'audio-bytes')
+
+        with mock.patch('apps.blogs.models.download_to_file', side_effect=fake_download):
+            with media.local_copy() as path:
+                self.assertTrue(path.endswith('.mp3'))
+                with open(path, 'rb') as handle:
+                    self.assertEqual(handle.read(), b'audio-bytes')
+
+        self.assertFalse(os.path.exists(path))
+
+    def test_duplicate_s3_file_key_is_rejected_at_the_database(self):
+        """The DB constraint should close the create-time exists() race."""
+        Media.objects.create(s3_file_key=self.key, media_type='audio')
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Media.objects.create(s3_file_key=self.key, media_type='audio')
+
+        # Rows without a key (local-file media) must not collide.
+        Media.objects.create(media_type='audio')
+        Media.objects.create(media_type='audio')
+
+    def test_local_copy_without_any_source_raises(self):
+        """local_copy should raise when the media row has no backing bytes."""
+        media = Media.objects.create(media_type='audio')
+
+        with self.assertRaises(FileNotFoundError):
+            with media.local_copy():
+                pass
+
+    def test_transcribe_saves_transcript_from_local_media(self):
+        """The transcribe action should persist the transcript for local media."""
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(file=self._audio_file(), media_type='audio')
+                post = Post.objects.create(author=self.user, head='Voice note', media=media)
+
+                with mock.patch(
+                    'apps.blogs.views.transcribe_audio', return_value='hello world'
+                ) as mock_transcribe:
+                    response = self.client.post(reverse('post-transcribe', args=[post.id]))
+
+        self.assertEqual(response.status_code, 200)
+        mock_transcribe.assert_called_once()
+        media.refresh_from_db()
+        self.assertEqual(media.transcript, 'hello world')
+        self.assertEqual(response.data['media']['transcript'], 'hello world')
+
+    def test_post_detail_returns_json_when_requested(self):
+        """The post detail page should serve JSON to Accept: application/json."""
+        post = Post.objects.create(author=self.user, head='Hello', body='World')
+
+        response = self.client.get(
+            reverse('post_detail', args=[post.id]), HTTP_ACCEPT='application/json'
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['id'], post.id)
+
+
+class StreamPostMediaRangeTests(ViewTestCase):
+    """Tests for HTTP range handling on the media streaming endpoint."""
+
+    CONTENT = b'0123456789'
+
+    def setUp(self):
+        """Create a post backed by a local media file with known bytes."""
+        super().setUp()
+        self.client = APIClient()
+        self.user = User.objects.create_user(username='stream_author', password='testpass123')
+
+        self._media_root = tempfile.TemporaryDirectory()
+        self.addCleanup(self._media_root.cleanup)
+        self._overrides = override_settings(
+            MEDIA_ROOT=self._media_root.name, USE_LOCAL_FILE_STORAGE=True
+        )
+        self._overrides.enable()
+        self.addCleanup(self._overrides.disable)
+
+        media = Media.objects.create(
+            file=SimpleUploadedFile('clip.mp3', self.CONTENT, content_type='audio/mpeg'),
+            media_type='audio',
+        )
+        self.post = Post.objects.create(author=self.user, head='Stream', media=media)
+        self.url = reverse('stream_post_media', args=[self.post.id])
+
+    def test_no_range_header_returns_full_file(self):
+        """Requests without a Range header should get the whole file."""
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b''.join(response.streaming_content), self.CONTENT)
+
+    def test_bounded_range_returns_partial_content(self):
+        """A bounded range should return exactly the requested bytes."""
+        response = self.client.get(self.url, HTTP_RANGE='bytes=2-5')
+
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(response.content, b'2345')
+        self.assertEqual(response['Content-Length'], '4')
+        self.assertEqual(response['Content-Range'], f'bytes 2-5/{len(self.CONTENT)}')
+
+    def test_suffix_range_returns_final_bytes(self):
+        """A suffix range (bytes=-N) should return the last N bytes as a 206."""
+        response = self.client.get(self.url, HTTP_RANGE='bytes=-4')
+
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(response.content, b'6789')
+        self.assertEqual(response['Content-Range'], f'bytes 6-9/{len(self.CONTENT)}')
+
+    def test_open_ended_range_returns_remaining_bytes(self):
+        """An open-ended range (bytes=N-) should return the rest of the file."""
+        response = self.client.get(self.url, HTTP_RANGE='bytes=3-')
+
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(response.content, b'3456789')
+        self.assertEqual(response['Content-Range'], f'bytes 3-9/{len(self.CONTENT)}')
+
+    def test_unsatisfiable_range_returns_416(self):
+        """A range past the end of the file should return 416 with the size."""
+        response = self.client.get(self.url, HTTP_RANGE='bytes=50-60')
+
+        self.assertEqual(response.status_code, 416)
+        self.assertEqual(response['Content-Range'], f'bytes */{len(self.CONTENT)}')

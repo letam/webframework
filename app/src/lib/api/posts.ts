@@ -24,6 +24,11 @@ interface PaginatedPostsResponse {
 	results: Post[]
 }
 
+export interface AuthorStats {
+	post_count: number
+	likes_received: number
+}
+
 const revivePost = (post: Post): Post => ({
 	...post,
 	created: new Date(post.created),
@@ -95,19 +100,24 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 				content_type: data.media.type,
 			})
 			response = await fetch(`${SERVER_API_URL}/uploads/presign/`, options)
-			// get presigned url from response
+			if (!response.ok) {
+				throw new Error('Failed to get an upload URL')
+			}
 			const presignedUrl = (await response.json()) as { url: string; file_path: string }
 
 			// upload file to s3
 			// NOTE: Must edit CORS settings for the bucket, refer to project's server/config/s3-cors.json
 			// https://dash.cloudflare.com/<ACCOUNT_ID>/r2/default/buckets/<bucket_name>/cors/edit
-			await fetch(presignedUrl.url, {
+			const uploadResponse = await fetch(presignedUrl.url, {
 				method: 'PUT',
 				headers: {
 					'Content-Type': data.media.type,
 				},
 				body: data.media,
 			})
+			if (!uploadResponse.ok) {
+				throw new Error('Failed to upload media')
+			}
 
 			// create post with file url
 			formData.append('media_type', data.media_type || 'audio')
@@ -130,11 +140,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 			throw new Error('Failed to create post')
 		}
 		const record: Post = await response.json()
-		return {
-			...record,
-			created: new Date(record.created),
-			modified: new Date(record.modified),
-		}
+		return revivePost(record)
 	} catch (error) {
 		console.error('Error creating post:', error)
 		throw error
@@ -162,11 +168,7 @@ export const transcribePost = async (id: number): Promise<Post> => {
 		}
 
 		const post: Post = await response.json()
-		return {
-			...post,
-			created: new Date(post.created),
-			modified: new Date(post.modified),
-		}
+		return revivePost(post)
 	} catch (error) {
 		console.error('Error transcribing post:', error)
 		throw error
@@ -240,9 +242,18 @@ export const updatePost = async (id: number, data: UpdatePostRequest): Promise<P
 			throw new Error('Failed to update post')
 		}
 		const post: Post = await response.json()
-		return { ...post, created: new Date(post.created), modified: new Date(post.modified) }
+		return revivePost(post)
 	} catch (error) {
 		console.error('Error updating post:', error)
 		throw error
 	}
+}
+
+export const getAuthorStats = async (authorId: number): Promise<AuthorStats> => {
+	const response = await fetch(`${SERVER_API_URL}/posts/stats/?author=${authorId}`)
+
+	if (!response.ok) {
+		throw new Error('Failed to fetch profile stats')
+	}
+	return response.json()
 }

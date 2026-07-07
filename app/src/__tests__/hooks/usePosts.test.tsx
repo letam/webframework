@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider, type InfiniteData } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from '@/components/ui/sonner'
 import { usePosts } from '@/hooks/usePosts'
 import * as postsApi from '@/lib/api/posts'
 import type { PostsPage } from '@/lib/api/posts'
@@ -14,6 +15,10 @@ vi.mock('@/lib/api/posts', () => ({
 	updatePost: vi.fn(),
 	likePost: vi.fn(),
 	unlikePost: vi.fn(),
+}))
+
+vi.mock('@/components/ui/sonner', () => ({
+	toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }))
 
 const createQueryClient = () =>
@@ -90,6 +95,7 @@ describe('usePosts hook', () => {
 
 	it('rolls back an optimistic like when the API rejects', async () => {
 		const queryClient = createQueryClient()
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 		const post = makePost({ id: 5, liked: false, like_count: 2 })
 		let rejectLike: (error: Error) => void = () => {}
 		vi.mocked(postsApi.getPosts).mockResolvedValueOnce(makePostsPage([post], null))
@@ -121,6 +127,8 @@ describe('usePosts hook', () => {
 		await waitFor(() => {
 			expect(result.current.posts[0]).toMatchObject({ liked: false, like_count: 2 })
 		})
+		expect(toast.error).toHaveBeenCalledWith('Failed to update like')
+		consoleError.mockRestore()
 	})
 
 	it('reconciles optimistic like state with the server response', async () => {

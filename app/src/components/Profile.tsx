@@ -1,5 +1,6 @@
 import type React from 'react'
 import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -7,6 +8,7 @@ import { Post } from './post/Post'
 import { LoginModal } from './LoginModal'
 import { useAuth } from '@/hooks/useAuth'
 import { usePostHandlers } from '@/hooks/usePostHandlers'
+import { getAuthorStats } from '@/lib/api/posts'
 import type { Post as PostType } from '@/types/post'
 import { InfiniteScrollSentinel } from './feed/InfiniteScrollSentinel'
 
@@ -21,10 +23,19 @@ const Profile: React.FC = () => {
 
 	const myPosts = mine.posts
 	const mediaPosts = useMemo(() => myPosts.filter((post) => post.media), [myPosts])
-	const likesReceived = useMemo(
-		() => myPosts.reduce((total, post) => total + post.like_count, 0),
-		[myPosts]
-	)
+
+	// The feed is paginated, so loaded posts undercount for prolific authors:
+	// header totals come from a server aggregate, with the loaded pages as a
+	// fallback while it loads.
+	const { data: stats } = useQuery({
+		queryKey: ['profile-stats', userId],
+		queryFn: () => getAuthorStats(userId as number),
+		enabled: profileQueriesEnabled,
+		staleTime: 60_000,
+	})
+	const postCount = stats?.post_count ?? myPosts.length
+	const likesReceived =
+		stats?.likes_received ?? myPosts.reduce((total, post) => total + post.like_count, 0)
 
 	const displayName = useMemo(() => {
 		const author = myPosts[0]?.author
@@ -105,9 +116,9 @@ const Profile: React.FC = () => {
 
 					<div className="mt-4 flex gap-4 text-sm">
 						<div>
-							<span className="font-semibold">{myPosts.length}</span>{' '}
+							<span className="font-semibold">{postCount}</span>{' '}
 							<span className="text-muted-foreground">
-								{myPosts.length === 1 ? 'Post' : 'Posts'}
+								{postCount === 1 ? 'Post' : 'Posts'}
 							</span>
 						</div>
 						<div>

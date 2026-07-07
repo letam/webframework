@@ -42,6 +42,19 @@ class Media(models.Model):
     transcript = models.TextField(blank=True)
     alt_text = models.TextField(blank=True)
 
+    class Meta:
+        """Model options for media."""
+
+        constraints = [
+            # Two rows sharing a key would delete each other's R2 object;
+            # the create-time exists() check alone is race-prone.
+            models.UniqueConstraint(
+                fields=['s3_file_key'],
+                condition=~models.Q(s3_file_key=''),
+                name='unique_nonempty_s3_file_key',
+            ),
+        ]
+
     def __str__(self):
         """Return a readable media label."""
         return self.file.name or self.s3_file_key or f'Media {self.id}'

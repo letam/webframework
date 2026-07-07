@@ -9,12 +9,22 @@ import traceback
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import BooleanField, Count, Exists, OuterRef, Value
-from django.http import FileResponse, HttpResponse, HttpResponseRedirect
+from django.db.models import (
+    BooleanField,
+    Count,
+    Exists,
+    IntegerField,
+    OuterRef,
+    Subquery,
+    Value,
+)
+from django.db.models.functions import Coalesce
+from django.http import FileResponse, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_GET
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
@@ -32,7 +42,7 @@ from .models import MEDIA_TYPE_CHOICES, Comment, Like, Media, Post
 from .pagination import PostCursorPagination
 from .serializers import CommentSerializer, PostCreateSerializer, PostSerializer
 from .transcription import transcribe_audio
-from .utils import convert_to_mp3, get_media_duration
+from .utils import MediaProbeError, convert_to_mp3, probe_media_duration
 from .utils.get_file_mimetype import get_file_mime_type
 
 logger = logging.getLogger(__name__)
@@ -58,6 +68,25 @@ class MediaValidationError(ValueError):
     pass
 
 
+def _related_count(model):
+    """Count a post's related rows via a subquery.
+
+    Joining two to-many relations into one aggregate produces an L×C row
+    fan-out per post; independent subqueries keep each count linear.
+    """
+    return Coalesce(
+        Subquery(
+            model.objects.filter(post=OuterRef('pk'))
+            .order_by()
+            .values('post')
+            .annotate(total=Count('pk'))
+            .values('total'),
+            output_field=IntegerField(),
+        ),
+        0,
+    )
+
+
 class TranscribeRateThrottle(UserRateThrottle):
     """Throttle for the transcribe action, which calls a paid external API."""
 
@@ -78,8 +107,8 @@ class PostViewSet(viewsets.ModelViewSet):
             Post.objects.select_related('author', 'media')
             .prefetch_related('post_set')
             .annotate(
-                like_count=Count('likes', distinct=True),
-                comment_count=Count('comments', distinct=True),
+                like_count=_related_count(Like),
+                comment_count=_related_count(Comment),
             )
         )
 
@@ -96,7 +125,9 @@ class PostViewSet(viewsets.ModelViewSet):
             try:
                 queryset = queryset.filter(author_id=int(author_id))
             except (TypeError, ValueError):
-                pass
+                # Silently ignoring the filter would serve the whole feed as
+                # if it were one author's posts.
+                raise ValidationError({'author': 'must be an integer'}) from None
 
         if self.request.query_params.get('liked', '').lower() == 'true':
             if user.is_authenticated:
@@ -129,6 +160,14 @@ class PostViewSet(viewsets.ModelViewSet):
             media_payload = self._validate_media_payload(request)
         except MediaValidationError as error:
             return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        except MediaProbeError:
+            # An environment failure (e.g. missing ffprobe), not a bad upload:
+            # keep the uploaded object and don't blame the user's file.
+            logger.exception('Media probing unavailable while validating an upload')
+            return Response(
+                {'error': 'Media validation is temporarily unavailable. Please try again.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
         request_data = request.data.copy()
         for media_field in ('media', 'media_type', 's3_file_key'):
@@ -241,7 +280,7 @@ class PostViewSet(viewsets.ModelViewSet):
                 temp_path = temp_file.name
                 download_to_file(s3_file_key, temp_file)
 
-            duration = get_media_duration(temp_path)
+            duration = probe_media_duration(temp_path)
         finally:
             if temp_path:
                 try:
@@ -302,7 +341,6 @@ class PostViewSet(viewsets.ModelViewSet):
                 media_updates['alt_text'] = alt_text
 
             if media_updates:
-                print(f'Media updates: {media_updates}')
                 instance.media.save(update_fields=media_updates.keys())
 
         return Response(serializer.data)
@@ -370,6 +408,28 @@ class PostViewSet(viewsets.ModelViewSet):
 
         comment.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Return aggregate post/like totals for an author.
+
+        The paginated feed only ever holds the loaded pages client-side, so
+        profile headers need a server-side aggregate to show true totals.
+        """
+        try:
+            author_id = int(request.query_params.get('author', ''))
+        except (TypeError, ValueError):
+            return Response(
+                {'error': 'author is required and must be an integer'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                'post_count': Post.objects.filter(author_id=author_id).count(),
+                'likes_received': Like.objects.filter(post__author_id=author_id).count(),
+            }
+        )
 
     @action(detail=True, methods=['post'], throttle_classes=[TranscribeRateThrottle])
     def transcribe(self, request, pk=None):
@@ -515,28 +575,21 @@ def stream_post_media(request, post_id):
             'Only one range request is supported', status=status.HTTP_400_BAD_REQUEST
         )
 
-    if len(ranges.ranges) == 1 and (ranges.ranges[0][1] is None or ranges.ranges[0][1] == 2):
-        # return the whole file
-        mime_type = get_file_mime_type(file_path)
-        response = FileResponse(open(file_path, 'rb'), content_type=mime_type)
+    # Resolves suffix (bytes=-N) and open-ended (bytes=N-) ranges against the
+    # file size, returning end-exclusive bounds, or None when unsatisfiable.
+    bounds = ranges.range_for_length(file_size)
+    if bounds is None:
+        response = HttpResponse(status=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE)
+        response['Content-Range'] = f'bytes */{file_size}'
         return response
 
-    # For simplicity, handle only single range requests
-    try:
-        start, end = ranges.ranges[0]
-    except Exception as e:
-        logger.info(f'Error getting range for post {post.id}: {str(e)}')  # pyright: ignore [reportAttributeAccessIssue]
-        mime_type = get_file_mime_type(file_path)
-        response = FileResponse(open(file_path, 'rb'), content_type=mime_type)
-        return response
-
-    # werkzeug range tuples are end-exclusive; HTTP Content-Range is end-inclusive
-    end = min(end, file_size)
+    start, end = bounds
     with open(file_path, 'rb') as file_to_send:
         file_to_send.seek(start)
         data = file_to_send.read(end - start)
 
-    response = HttpResponse(data, content_type='application/octet-stream')
+    # HTTP Content-Range is end-inclusive, hence end - 1.
+    response = HttpResponse(data, content_type=get_file_mime_type(file_path))
     response['Content-Length'] = len(data)
     response['Content-Range'] = f'bytes {start}-{end - 1}/{file_size}'
     response['Accept-Ranges'] = 'bytes'
@@ -563,8 +616,9 @@ def post_detail(request, post_id):
     # Check if client wants JSON response
     accept_header = request.META.get('HTTP_ACCEPT', '')
     if 'application/json' in accept_header:
-        serializer = PostSerializer(post)
-        return Response(serializer.data)
+        # Plain Django view: a DRF Response would never get rendered here.
+        serializer = PostSerializer(post, context={'request': request})
+        return JsonResponse(serializer.data)
 
     # Prepare context for HTML template
     context = {

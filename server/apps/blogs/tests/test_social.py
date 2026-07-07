@@ -72,6 +72,36 @@ class LikeTests(ViewTestCase):
         self.assertEqual(post_data['like_count'], 1)
         self.assertFalse(post_data['liked'], "liked should be False for anonymous users")
 
+    def test_counts_are_correct_when_a_post_has_both_likes_and_comments(self):
+        """like_count and comment_count must not multiply through joined aggregates."""
+        Like.objects.create(user=self.user, post=self.post)
+        Like.objects.create(user=self.other_user, post=self.post)
+        Comment.objects.create(author=self.user, post=self.post, body='First')
+        Comment.objects.create(author=self.other_user, post=self.post, body='Second')
+
+        response = self.client.get(reverse('post-list'))
+        post_data = next(p for p in response.data['results'] if p['id'] == self.post.id)
+        self.assertEqual(post_data['like_count'], 2, "like_count must not be inflated")
+        self.assertEqual(post_data['comment_count'], 2, "comment_count must not be inflated")
+
+    def test_stats_returns_author_totals(self):
+        """The stats endpoint should aggregate an author's posts and likes received."""
+        second_post = Post.objects.create(author=self.other_user, head='Second', body='Body')
+        Like.objects.create(user=self.user, post=self.post)
+        Like.objects.create(user=self.other_user, post=self.post)
+        Like.objects.create(user=self.user, post=second_post)
+
+        response = self.client.get(reverse('post-stats'), {'author': self.other_user.id})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['post_count'], 2)
+        self.assertEqual(response.data['likes_received'], 3)
+
+    def test_stats_requires_a_valid_author(self):
+        """The stats endpoint should reject missing or non-integer authors."""
+        for params in ({}, {'author': 'abc'}):
+            response = self.client.get(reverse('post-stats'), params)
+            self.assertEqual(response.status_code, 400)
+
 
 class CommentTests(ViewTestCase):
     """Tests for the post comments endpoints."""

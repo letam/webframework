@@ -529,6 +529,11 @@ if AWS_S3_ENDPOINT_FOR_CSP:
                 *CONTENT_SECURITY_POLICY_DIRECTIVES.get('media-src', []),
                 AWS_S3_ENDPOINT_FOR_CSP,
             ],
+            # Signed R2 URLs are used directly as <img src> for image posts.
+            'img-src': [
+                *CONTENT_SECURITY_POLICY_DIRECTIVES.get('img-src', []),
+                AWS_S3_ENDPOINT_FOR_CSP,
+            ],
         }
     )
 

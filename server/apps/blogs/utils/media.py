@@ -9,8 +9,20 @@ from datetime import timedelta
 logger = logging.getLogger('server.apps.blogs')
 
 
-def get_media_duration(file_path: str) -> timedelta | None:
-    """Returns the duration of a media file as a timedelta object using ffprobe."""
+class MediaProbeError(Exception):
+    """Raised when ffprobe cannot run at all (missing binary, OS failure).
+
+    Distinct from ffprobe running and rejecting the file, which is the
+    caller's signal that the bytes are not valid media.
+    """
+
+
+def probe_media_duration(file_path: str) -> timedelta | None:
+    """Return the media duration, or None when ffprobe rejects the file.
+
+    Raises MediaProbeError when ffprobe itself cannot run, so callers can
+    distinguish an invalid file from a broken environment.
+    """
     try:
         result = subprocess.run(
             [
@@ -27,9 +39,24 @@ def get_media_duration(file_path: str) -> timedelta | None:
             text=True,
             check=True,
         )
-        seconds = float(result.stdout.strip())
-        return timedelta(seconds=seconds)
-    except Exception as e:
+    except subprocess.CalledProcessError as e:
+        logger.info(f'ffprobe rejected {file_path}: {e.stderr.strip() if e.stderr else e}')
+        return None
+    except OSError as e:
+        raise MediaProbeError(f'ffprobe could not run: {e}') from e
+
+    try:
+        return timedelta(seconds=float(result.stdout.strip()))
+    except ValueError:
+        logger.info(f'ffprobe found no duration for {file_path}')
+        return None
+
+
+def get_media_duration(file_path: str) -> timedelta | None:
+    """Returns the duration of a media file as a timedelta object using ffprobe."""
+    try:
+        return probe_media_duration(file_path)
+    except MediaProbeError as e:
         logger.error(f'Error getting duration for {file_path}: {str(e)}')
         return None
 

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import type { Comment, Post } from '../types/post'
 import { getComments, createComment, deleteComment, type PostsPage } from '../lib/api/posts'
-import { POSTS_QUERY_KEY } from './usePosts'
+import { POSTS_QUERY_KEY, isPostsQueryKey } from './usePosts'
 
 const commentsQueryKey = (postId: number) => [...POSTS_QUERY_KEY, postId, 'comments'] as const
 
@@ -23,10 +23,7 @@ export const useComments = (postId: number, enabled = true) => {
 		queryClient.setQueriesData<InfiniteData<PostsPage>>(
 			{
 				queryKey: POSTS_QUERY_KEY,
-				predicate: (query) =>
-					query.queryKey.length === 2 &&
-					query.queryKey[0] === POSTS_QUERY_KEY[0] &&
-					typeof query.queryKey[1] === 'object',
+				predicate: (query) => isPostsQueryKey(query.queryKey),
 			},
 			(data) =>
 				data

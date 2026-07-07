@@ -58,6 +58,13 @@ class PostPaginationTests(ViewTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data['results']), 50)
 
+    def test_author_filter_rejects_non_integer_values(self):
+        """A malformed author filter should 400 rather than serve the whole feed."""
+        self._create_posts(2)
+
+        response = self.client.get(reverse('post-list'), {'author': 'abc'})
+        self.assertEqual(response.status_code, 400)
+
     def test_author_filter_returns_only_that_authors_posts(self):
         """The author query param should restrict the feed by author id."""
         self._create_posts(3, author=self.user)
@@ -82,6 +89,27 @@ class PostPaginationTests(ViewTestCase):
         self.assertEqual(
             {post['id'] for post in response.data['results']}, {posts[0].id, posts[2].id}
         )
+
+    def test_cursor_pagination_is_stable_when_created_timestamps_collide(self):
+        """Posts sharing a created timestamp must not be skipped or duplicated.
+
+        The -id secondary ordering is what keeps cursors stable for
+        bulk-inserted rows; without it this walk drops or repeats posts.
+        """
+        posts = self._create_posts(25)
+        shared_created = posts[0].created
+        Post.objects.update(created=shared_created)
+
+        seen_ids = []
+        url = reverse('post-list')
+        while url:
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            seen_ids.extend(post['id'] for post in response.data['results'])
+            url = response.data['next']
+
+        expected_ids = sorted((post.id for post in posts), reverse=True)
+        self.assertEqual(seen_ids, expected_ids)
 
     def test_liked_filter_returns_empty_results_for_anonymous_user(self):
         """Anonymous liked=true requests should return an empty page."""

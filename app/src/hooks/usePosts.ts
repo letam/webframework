@@ -17,6 +17,7 @@ import {
 	type PostsPage,
 	type PostsQueryScope,
 } from '../lib/api/posts'
+import { toast } from '@/components/ui/sonner'
 import type { TagInfo } from '../types/tag'
 import { buildTagIndex } from '../utils/tags'
 
@@ -40,7 +41,7 @@ const getPostsQueryKey = (scope: PostsQueryScope) => [...POSTS_QUERY_KEY, scope]
 const isPostsScope = (value: unknown): value is PostsQueryScope =>
 	value != null && typeof value === 'object' && !Array.isArray(value)
 
-const isPostsQueryKey = (queryKey: QueryKey) =>
+export const isPostsQueryKey = (queryKey: QueryKey) =>
 	queryKey.length === 2 && queryKey[0] === POSTS_QUERY_KEY[0] && isPostsScope(queryKey[1])
 
 const getScopeFromQueryKey = (queryKey: QueryKey): PostsQueryScope =>
@@ -88,6 +89,9 @@ export const usePosts = (
 
 	const updateTagsCacheFromFeed = useCallback(() => {
 		const feedData = queryClient.getQueryData<InfiniteData<PostsPage>>(UNSCOPED_POSTS_QUERY_KEY)
+		// Mutating from a scoped view (e.g. Profile) before the feed has ever
+		// loaded must not wipe the tag index with an empty post list.
+		if (!feedData) return
 		updateTagsCacheFromPosts(flattenPosts(feedData))
 	}, [queryClient, updateTagsCacheFromPosts])
 
@@ -190,11 +194,13 @@ export const usePosts = (
 			)
 			return { previousPosts }
 		},
-		onError: (_error, _variables, context) => {
+		onError: (error, _variables, context) => {
 			for (const [cachedQueryKey, cachedData] of context?.previousPosts ?? []) {
 				queryClient.setQueryData(cachedQueryKey, cachedData)
 			}
 			updateTagsCacheFromFeed()
+			console.error('Failed to update like:', error)
+			toast.error('Failed to update like')
 		},
 		onSuccess: (result, { id }) => {
 			updatePostsCaches((prev = []) =>

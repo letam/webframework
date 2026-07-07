@@ -1,11 +1,15 @@
 """Serializers for blog API resources."""
 
+import logging
+
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from apps.uploads.s3 import generate_presigned_get_url
 
 from .models import Comment, Media, Post
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 
@@ -48,6 +52,7 @@ class MediaSerializer(serializers.ModelSerializer):
             'modified',
             'file',
             'mp3_file',
+            's3_file_key',
             'media_type',
             'duration',
             'thumbnail',
@@ -63,6 +68,9 @@ class MediaSerializer(serializers.ModelSerializer):
         try:
             return generate_presigned_get_url(obj.s3_file_key)
         except Exception:
+            # A null signed_url is also what media without an S3 key returns,
+            # so leave a trail distinguishing signing failures from that.
+            logger.exception('Failed to generate signed URL for media %s', obj.pk)
             return None
 
 

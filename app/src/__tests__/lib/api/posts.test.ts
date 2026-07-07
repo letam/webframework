@@ -125,6 +125,40 @@ describe('posts API', () => {
 			expect(formData.get('media_type')).toBe('audio')
 			expect(formData.get('s3_file_key')).toBe('uploads/clip.webm')
 			expect(result.modified).toBeInstanceOf(Date)
+			expect(result.url).toBe(`${window.location.origin}/p/9/`)
+		})
+
+		it('throws when the presign request fails and skips the upload', async () => {
+			const { createPost } = await importPostsApi(true)
+			const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+			const file = new File(['audio'], 'clip.webm', { type: 'audio/webm' })
+			fetchMock.mockResolvedValueOnce(await response({ error: 'nope' }, false))
+
+			await expect(
+				createPost({ text: 'Doomed.', media: file, media_type: 'audio' })
+			).rejects.toThrow('Failed to get an upload URL')
+			expect(fetchMock).toHaveBeenCalledTimes(1)
+			consoleError.mockRestore()
+		})
+
+		it('throws when the S3 upload fails and never creates the post', async () => {
+			const { createPost } = await importPostsApi(true)
+			const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+			const file = new File(['audio'], 'clip.webm', { type: 'audio/webm' })
+			fetchMock
+				.mockResolvedValueOnce(
+					await response({
+						url: 'https://upload.example.com/signed-put',
+						file_path: 'uploads/clip.webm',
+					})
+				)
+				.mockResolvedValueOnce(await response({}, false))
+
+			await expect(
+				createPost({ text: 'Doomed.', media: file, media_type: 'audio' })
+			).rejects.toThrow('Failed to upload media')
+			expect(fetchMock).toHaveBeenCalledTimes(2)
+			consoleError.mockRestore()
 		})
 
 		it('appends media directly when S3 uploads are disabled', async () => {
@@ -150,6 +184,18 @@ describe('posts API', () => {
 
 			expect(getMediaUrl(s3AudioPost)).toBe('https://signed.example.com/s3-audio.webm')
 			expect(getMediaUrl(localImagePost)).toBe('/api/posts/3/media/')
+		})
+	})
+
+	describe('getAuthorStats', () => {
+		it('fetches aggregate totals for an author', async () => {
+			const { getAuthorStats } = await importPostsApi()
+			fetchMock.mockResolvedValueOnce(await response({ post_count: 45, likes_received: 300 }))
+
+			const stats = await getAuthorStats(7)
+
+			expect(fetchMock).toHaveBeenCalledWith('/api/posts/stats/?author=7')
+			expect(stats).toEqual({ post_count: 45, likes_received: 300 })
 		})
 	})
 })
