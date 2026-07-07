@@ -187,6 +187,20 @@ describe('posts API', () => {
 		})
 	})
 
+	describe('getPost', () => {
+		it('fetches and revives a single post', async () => {
+			const { getPost } = await importPostsApi()
+			const post = makePost({ id: 7, body: 'Post detail.' })
+			fetchMock.mockResolvedValueOnce(await response(toServerPost(post)))
+
+			const result = await getPost(7)
+
+			expect(fetchMock).toHaveBeenCalledWith('/api/posts/7/')
+			expect(result.modified).toBeInstanceOf(Date)
+			expect(result.url).toBe(`${window.location.origin}/p/7/`)
+		})
+	})
+
 	describe('getAuthorStats', () => {
 		it('fetches aggregate totals for an author', async () => {
 			const { getAuthorStats } = await importPostsApi()

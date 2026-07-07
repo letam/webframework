@@ -281,15 +281,49 @@ class MediaPipelineTests(ViewTestCase):
                 post = Post.objects.create(author=self.user, head='Voice note', media=media)
 
                 with mock.patch(
-                    'apps.blogs.views.transcribe_audio', return_value='hello world'
+                    'apps.blogs.tasks.transcribe_audio', return_value='hello world'
                 ) as mock_transcribe:
                     response = self.client.post(reverse('post-transcribe', args=[post.id]))
 
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 202)
         mock_transcribe.assert_called_once()
         media.refresh_from_db()
         self.assertEqual(media.transcript, 'hello world')
+        self.assertEqual(media.transcript_status, 'done')
         self.assertEqual(response.data['media']['transcript'], 'hello world')
+        self.assertEqual(response.data['media']['transcript_status'], 'done')
+
+    def test_transcribe_failure_marks_status_error(self):
+        """Failed transcription tasks should leave a visible error status."""
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(file=self._audio_file(), media_type='audio')
+                post = Post.objects.create(author=self.user, head='Voice note', media=media)
+
+                with mock.patch(
+                    'apps.blogs.tasks.transcribe_audio', side_effect=RuntimeError('boom')
+                ):
+                    response = self.client.post(reverse('post-transcribe', args=[post.id]))
+
+        self.assertEqual(response.status_code, 202)
+        media.refresh_from_db()
+        self.assertEqual(media.transcript_status, 'error')
+        self.assertEqual(media.transcript, '')
+
+    def test_transcribe_is_idempotent_while_pending(self):
+        """Pending transcription requests should not enqueue duplicate work."""
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(
+                    file=self._audio_file(), media_type='audio', transcript_status='pending'
+                )
+                post = Post.objects.create(author=self.user, head='Voice note', media=media)
+
+                with mock.patch('apps.blogs.tasks.transcribe_audio') as mock_transcribe:
+                    response = self.client.post(reverse('post-transcribe', args=[post.id]))
+
+        self.assertEqual(response.status_code, 202)
+        mock_transcribe.assert_not_called()
 
     def test_post_detail_returns_json_when_requested(self):
         """The post detail page should serve JSON to Accept: application/json."""

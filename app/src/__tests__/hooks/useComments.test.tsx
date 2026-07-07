@@ -10,6 +10,7 @@ import { makeAuthor, makePost, makePostsPage } from '../data/mockPosts'
 
 vi.mock('@/lib/api/posts', () => ({
 	getPosts: vi.fn(),
+	getPost: vi.fn(),
 	createPost: vi.fn(),
 	deletePost: vi.fn(),
 	updatePost: vi.fn(),

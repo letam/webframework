@@ -136,4 +136,4 @@ ENV PYTHONUNBUFFERED=1
 # Serve the integrated app
 EXPOSE 8000
 
-CMD ["gunicorn","--bind",":8000","--workers","2","config.wsgi"]
+CMD ["bash", "start-prod.sh"]

@@ -42,7 +42,7 @@ A Django + React web framework for rapid development of web applications. The pr
 - `POST /auth/login/`, `/auth/signup/`, `/auth/logout/`, `/auth/status/` - Authentication
 - `GET/POST /api/posts/` - List/create posts (DRF router)
 - `GET/PUT/PATCH/DELETE /api/posts/<id>/` - Post detail operations
-- `POST /api/posts/<id>/transcribe/` - Transcribe post media via OpenAI Whisper
+- `POST /api/posts/<id>/transcribe/` - Enqueue post media transcription via OpenAI Whisper (returns 202)
 - `GET /api/uploads/presign/` - Get presigned S3 upload URL
 - `GET /api/posts/<id>/media/` - Stream post media (supports range requests)
 - `GET /p/<id>/` - Post detail page with Open Graph metadata
@@ -323,5 +323,6 @@ Multi-stage Dockerfile:
 - **CORS**: Configured for `localhost:3000`, `localhost:5173`, `127.0.0.1:5173` in development
 - **Anonymous posts**: Supported via a dedicated anonymous user (ID=2), created by `init_users` command
 - **S3 URLs**: Presigned URLs for media are cached for 1 minute on the frontend
+- **Transcription tasks**: Transcription runs via django-tasks (immediate backend in dev/tests, DB backend + `db_worker` in production, started by `server/start-prod.sh`; `just worker` runs it locally)
 - **Media streaming**: Supports HTTP range requests for Safari audio/video compatibility
 - **Open Graph**: Post detail pages (`/p/<id>/`) render OG metadata for social sharing

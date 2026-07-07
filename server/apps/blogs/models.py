@@ -27,6 +27,12 @@ MEDIA_TYPE_CHOICES = [
     ('image', 'Image'),
 ]
 
+TRANSCRIPT_STATUS_CHOICES = [
+    ('pending', 'Pending'),
+    ('done', 'Done'),
+    ('error', 'Error'),
+]
+
 
 class Media(models.Model):
     """A media asset attached to a post."""
@@ -40,6 +46,9 @@ class Media(models.Model):
     duration = models.DurationField(null=True, blank=True)
     thumbnail = models.ImageField(upload_to=media_file_path, blank=True)
     transcript = models.TextField(blank=True)
+    transcript_status = models.CharField(
+        max_length=16, blank=True, default='', choices=TRANSCRIPT_STATUS_CHOICES
+    )
     alt_text = models.TextField(blank=True)
 
     class Meta:

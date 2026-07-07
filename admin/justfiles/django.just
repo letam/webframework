@@ -17,6 +17,10 @@ makemigrations:
 migrate:
     uv run python server/manage.py migrate
 
+# Run the background task worker (only needed when TASKS_IMMEDIATE=False)
+worker:
+    uv run python server/manage.py db_worker
+
 # Create a Django superuser
 createsuperuser:
     uv run python server/manage.py createsuperuser

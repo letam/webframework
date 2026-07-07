@@ -160,6 +160,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'django_extensions',
+    'django_tasks',
+    'django_tasks_db',
     #
     # project apps
     'apps.users.apps.UsersConfig',
@@ -211,6 +213,16 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
+    # The db_worker process polls and claims tasks in the same SQLite file;
+    # WAL + busy timeout prevent "database is locked" errors.
+    sqlite_options = DATABASES['default'].setdefault('OPTIONS', {})
+    sqlite_options.setdefault(
+        'init_command', 'PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;'
+    )
+    sqlite_options.setdefault('transaction_mode', 'IMMEDIATE')
+    sqlite_options.setdefault('timeout', 20)
 
 
 # Password validation
@@ -374,6 +386,20 @@ REST_FRAMEWORK = {
         'user': '1000/hour',
         'transcribe': '10/hour',
     },
+}
+
+# Background tasks (django-tasks, a backport of Django 6's django.tasks).
+# Dev and CI run tasks inline so no worker process is needed; production uses
+# the database backend, drained by `manage.py db_worker` (see server/start-prod.sh).
+TASKS_IMMEDIATE = env.bool('TASKS_IMMEDIATE', default=DEBUG)
+TASKS = {
+    'default': {
+        'BACKEND': (
+            'django_tasks.backends.immediate.ImmediateBackend'
+            if TASKS_IMMEDIATE
+            else 'django_tasks_db.DatabaseBackend'
+        ),
+    }
 }
 
 # Handle server headers required for Cross-Origin Resource Sharing (CORS)

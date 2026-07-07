@@ -78,6 +78,22 @@ export const getPosts = async (
 	}
 }
 
+export const getPost = async (id: number): Promise<Post> => {
+	try {
+		const response = await fetch(`${SERVER_API_URL}/posts/${id}/`)
+
+		if (!response.ok) {
+			throw new Error('Failed to fetch post')
+		}
+
+		const record: Post = await response.json()
+		return revivePost(record)
+	} catch (error) {
+		console.error('Error fetching post:', error)
+		throw error
+	}
+}
+
 export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 	try {
 		let response: Response

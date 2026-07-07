@@ -5,9 +5,13 @@ import tempfile
 
 from django.conf import settings
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 
+# Tests must run tasks inline regardless of the env's TASKS_IMMEDIATE.
+@override_settings(
+    TASKS={'default': {'BACKEND': 'django_tasks.backends.immediate.ImmediateBackend'}}
+)
 class BaseTestCase(TestCase):
     """Base test case for all tests."""
 
@@ -23,6 +27,7 @@ class ViewTestCase(BaseTestCase):
     """Base test case for view tests that handles static directory setup and cleanup."""
 
     def setUp(self):
+        """Create a temporary static directory for view tests."""
         super().setUp()
         # Create a temporary static directory
         self.static_dir = tempfile.mkdtemp()
@@ -32,6 +37,7 @@ class ViewTestCase(BaseTestCase):
         settings.STATIC_ROOT = self.static_dir
 
     def tearDown(self):
+        """Restore static settings and remove the temporary static directory."""
         # Restore original static root
         settings.STATIC_ROOT = self.original_static_root
         # Remove temporary static directory

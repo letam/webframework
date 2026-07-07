@@ -57,6 +57,7 @@ class MediaSerializer(serializers.ModelSerializer):
             'duration',
             'thumbnail',
             'transcript',
+            'transcript_status',
             'alt_text',
             'signed_url',
         ]

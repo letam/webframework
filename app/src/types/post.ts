@@ -16,6 +16,7 @@ export interface Media {
 	duration?: string
 	thumbnail?: string
 	transcript?: string
+	transcript_status?: '' | 'pending' | 'done' | 'error'
 	alt_text?: string
 	created: Date
 	modified: Date

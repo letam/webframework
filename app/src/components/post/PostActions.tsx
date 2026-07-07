@@ -17,6 +17,7 @@ interface PostActionsProps {
 	mediaType?: 'audio' | 'video' | 'image'
 	body?: string
 	transcript?: string
+	transcriptStatus?: '' | 'pending' | 'done' | 'error'
 	onTranscribe?: (id: number) => void
 }
 
@@ -33,9 +34,11 @@ const PostActions: React.FC<PostActionsProps> = ({
 	mediaType,
 	body,
 	transcript,
+	transcriptStatus,
 	onTranscribe,
 }) => {
 	const [isTranscribing, setIsTranscribing] = useState(false)
+	const transcribing = isTranscribing || transcriptStatus === 'pending'
 
 	const handleLike = () => {
 		onLike(id)
@@ -63,7 +66,7 @@ const PostActions: React.FC<PostActionsProps> = ({
 	}
 
 	const handleTranscribe = async () => {
-		if (onTranscribe && !isTranscribing) {
+		if (onTranscribe && !transcribing) {
 			setIsTranscribing(true)
 			try {
 				await onTranscribe(id)
@@ -134,11 +137,11 @@ const PostActions: React.FC<PostActionsProps> = ({
 					size="sm"
 					className="text-muted-foreground hover:text-primary px-2 sm:px-3"
 					onClick={handleTranscribe}
-					disabled={isTranscribing}
+					disabled={transcribing}
 				>
 					<Mic className="h-4 w-4 sm:mr-1" />
 					<span className="hidden sm:inline">
-						{isTranscribing ? 'Transcribing...' : 'Transcribe'}
+						{transcribing ? 'Transcribing...' : 'Transcribe'}
 					</span>
 				</Button>
 			)}

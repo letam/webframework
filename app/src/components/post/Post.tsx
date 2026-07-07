@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import { cn } from '@/lib/utils'
 import PostHeader from './PostHeader'
@@ -10,9 +10,12 @@ import type { Post as PostType } from '../../types/post'
 import { AudioPlayer, VideoPlayer } from './MediaPlayer'
 import { toast } from '@/components/ui/sonner'
 import { useAuth } from '@/hooks/useAuth'
-import { getMediaUrl, transcribePost } from '@/lib/api/posts'
+import { getMediaUrl, getPost, transcribePost } from '@/lib/api/posts'
 import { getMimeTypeFromPath } from '@/lib/utils/file'
 import { parseDurationString } from '@/lib/utils/media'
+
+const TRANSCRIPTION_POLL_INTERVAL_MS = 3_000
+const TRANSCRIPTION_TIMEOUT_MS = 3 * 60 * 1000
 
 interface PostProps {
 	post: PostType
@@ -50,6 +53,7 @@ const FormatText: React.FC<{ children: string; className?: string }> = ({
 export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTranscribed }) => {
 	const { isAuthenticated, userId, isSuperuser } = useAuth()
 	const [commentsOpen, setCommentsOpen] = useState(false)
+	const timedOutTranscriptionsRef = useRef<Set<number>>(new Set())
 	// The transcribe endpoint only allows the post author or an admin
 	const canTranscribe = isAuthenticated && (userId === post.author.id || isSuperuser)
 	const mediaUrl = post.media ? getMediaUrl(post) : undefined
@@ -62,15 +66,79 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 	const handleTranscribe = async (id: number) => {
 		try {
 			const updatedPost = await transcribePost(id)
-			toast.success('Media transcribed successfully')
-			if (onTranscribed) {
-				onTranscribed(updatedPost)
+			onTranscribed?.(updatedPost)
+			if (updatedPost.media?.transcript_status === 'done') {
+				toast.success('Media transcribed successfully')
+			}
+			if (updatedPost.media?.transcript_status === 'error') {
+				toast.error('Failed to transcribe media')
 			}
 		} catch (error) {
 			console.error('Error transcribing media:', error)
 			toast.error('Failed to transcribe media')
 		}
 	}
+
+	useEffect(() => {
+		if (post.media?.transcript_status !== 'pending') {
+			timedOutTranscriptionsRef.current.delete(post.id)
+			return
+		}
+		if (!canTranscribe || timedOutTranscriptionsRef.current.has(post.id)) {
+			return
+		}
+
+		let active = true
+		let intervalId: ReturnType<typeof window.setInterval> | undefined
+		const startedAt = Date.now()
+		const stopPolling = () => {
+			active = false
+			if (intervalId !== undefined) {
+				window.clearInterval(intervalId)
+			}
+		}
+		const pollPost = async () => {
+			if (!active) {
+				return
+			}
+			if (Date.now() - startedAt >= TRANSCRIPTION_TIMEOUT_MS) {
+				timedOutTranscriptionsRef.current.add(post.id)
+				toast.info(
+					'Transcription is taking longer than expected — it will appear when ready'
+				)
+				stopPolling()
+				return
+			}
+
+			try {
+				const freshPost = await getPost(post.id)
+				if (!active) {
+					return
+				}
+				if (freshPost.media?.transcript_status === 'done') {
+					timedOutTranscriptionsRef.current.delete(post.id)
+					onTranscribed?.(freshPost)
+					toast.success('Media transcribed successfully')
+					stopPolling()
+				}
+				if (freshPost.media?.transcript_status === 'error') {
+					timedOutTranscriptionsRef.current.delete(post.id)
+					onTranscribed?.(freshPost)
+					toast.error('Failed to transcribe media')
+					stopPolling()
+				}
+			} catch {
+				// Ignore transient fetch failures; the interval continues until timeout.
+			}
+		}
+
+		intervalId = window.setInterval(() => {
+			void pollPost()
+		}, TRANSCRIPTION_POLL_INTERVAL_MS)
+		void pollPost()
+
+		return stopPolling
+	}, [canTranscribe, onTranscribed, post.id, post.media?.transcript_status])
 
 	return (
 		<div
@@ -130,6 +198,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 					mediaType={post.media?.media_type}
 					body={post.body}
 					transcript={post.media?.transcript}
+					transcriptStatus={post.media?.transcript_status}
 					onTranscribe={canTranscribe ? handleTranscribe : undefined}
 				/>
 

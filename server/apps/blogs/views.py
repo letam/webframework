@@ -4,7 +4,6 @@ import logging
 import mimetypes
 import os
 import tempfile
-import traceback
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -41,25 +40,13 @@ from apps.uploads.s3 import (
 from .models import MEDIA_TYPE_CHOICES, Comment, Like, Media, Post
 from .pagination import PostCursorPagination
 from .serializers import CommentSerializer, PostCreateSerializer, PostSerializer
-from .transcription import transcribe_audio
-from .utils import MediaProbeError, convert_to_mp3, probe_media_duration
+from .tasks import transcribe_post_media
+from .utils import MediaProbeError, probe_media_duration
 from .utils.get_file_mimetype import get_file_mime_type
 
 logger = logging.getLogger(__name__)
 
 VALID_MEDIA_TYPES = {choice[0] for choice in MEDIA_TYPE_CHOICES}
-WHISPER_FORMATS = {
-    '.flac',
-    '.m4a',
-    '.mp3',
-    '.mp4',
-    '.mpeg',
-    '.mpga',
-    '.oga',
-    '.ogg',
-    '.wav',
-    '.webm',
-}
 
 
 class MediaValidationError(ValueError):
@@ -461,40 +448,20 @@ class PostViewSet(viewsets.ModelViewSet):
             )
 
         try:
-            converted_path = None
-            with post.media.local_copy() as path:
-                transcription_path = path
-                if os.path.splitext(path)[1].lower() not in WHISPER_FORMATS:
-                    converted_path = convert_to_mp3(path)
-                    transcription_path = converted_path
-
-                try:
-                    transcript = transcribe_audio(transcription_path)
-                finally:
-                    if converted_path:
-                        try:
-                            os.unlink(converted_path)
-                        except FileNotFoundError:
-                            pass
-
-            post.media.transcript = transcript
-            post.media.save(update_fields=['transcript'])
-
-            serializer = self.get_serializer(post)
-            return Response(serializer.data)
-
-        except FileNotFoundError:
-            return Response(
-                {'error': 'No media file found for this post'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        except Exception as e:
-            logger.error(f'Error transcribing audio for post {post.id}: {str(e)}')
-            logger.error(traceback.format_exc())
+            if post.media.transcript_status != 'pending':
+                post.media.transcript_status = 'pending'
+                post.media.save(update_fields=['transcript_status'])
+                transcribe_post_media.enqueue(post.media.pk)
+                post.media.refresh_from_db()
+        except Exception:
+            logger.exception('Error transcribing audio for post %s', post.id)
             return Response(
                 {'error': 'An error occurred while transcribing the media file'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
+
+        serializer = self.get_serializer(post)
+        return Response(serializer.data, status=status.HTTP_202_ACCEPTED)
 
     def destroy(self, request, *args, **kwargs):
         """Override destroy method to check permissions.
