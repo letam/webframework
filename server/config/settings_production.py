@@ -1,9 +1,9 @@
 # NOTE: This file is not used. Leave it here for reference.
 # We are using .env file for environment variable settings.
 
-from .settings import *
 from pathlib import Path
 
+from .settings import *
 
 DEBUG = False
 

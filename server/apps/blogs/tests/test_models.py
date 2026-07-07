@@ -129,7 +129,6 @@ class MediaModelTests(BaseTestCase):
 
     def test_media_duration_extraction_with_real_file(self):
         """Test duration extraction with a more realistic file scenario."""
-        import subprocess
         import tempfile
 
         # Create a temporary file that ffprobe can analyze
