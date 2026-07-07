@@ -1,11 +1,10 @@
 import json
 
+from apps.ratelimit import rate_limit
 from django.contrib.auth import get_user_model
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from django.views.decorators.http import require_http_methods, require_POST
@@ -25,6 +24,7 @@ def csrf(request):
 
 
 @require_POST
+@rate_limit('login', limit=10, window_seconds=300)
 def login(request):
     """Reference: https://docs.djangoproject.com/en/5.1/topics/auth/default/#django.contrib.auth.login."""
     data = json.loads(request.body) if request.body else {}
@@ -43,6 +43,7 @@ def login(request):
 
 
 @require_POST
+@rate_limit('signup', limit=10, window_seconds=3600)
 def signup(request):
     """Handle user registration and auto-login."""
     data = json.loads(request.body) if request.body else {}
@@ -74,7 +75,7 @@ def signup(request):
     )
 
 
-@require_http_methods(["GET", "POST", "DELETE"])
+@require_http_methods(["POST", "DELETE"])
 def logout(request):
     """Reference: https://docs.djangoproject.com/en/5.1/topics/auth/default/#django.contrib.auth.logout."""
     auth_logout(request)

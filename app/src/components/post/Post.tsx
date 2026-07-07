@@ -9,6 +9,7 @@ import CommentSection from './CommentSection'
 import type { Post as PostType } from '../../types/post'
 import { AudioPlayer, VideoPlayer } from './MediaPlayer'
 import { toast } from '@/components/ui/sonner'
+import { useAuth } from '@/hooks/useAuth'
 import { getMediaUrl, transcribePost } from '@/lib/api/posts'
 import { getMimeTypeFromPath } from '@/lib/utils/file'
 import { parseDurationString } from '@/lib/utils/media'
@@ -47,7 +48,10 @@ const FormatText: React.FC<{ children: string; className?: string }> = ({
 }
 
 export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTranscribed }) => {
+	const { isAuthenticated, userId, isSuperuser } = useAuth()
 	const [commentsOpen, setCommentsOpen] = useState(false)
+	// The transcribe endpoint only allows the post author or an admin
+	const canTranscribe = isAuthenticated && (userId === post.author.id || isSuperuser)
 	const mediaUrl = post.media ? getMediaUrl(post) : undefined
 	const mediaAltText = post.media ? post.media.alt_text : undefined
 	const mimeType = post.media
@@ -126,7 +130,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 					mediaType={post.media?.media_type}
 					body={post.body}
 					transcript={post.media?.transcript}
-					onTranscribe={handleTranscribe}
+					onTranscribe={canTranscribe ? handleTranscribe : undefined}
 				/>
 
 				{commentsOpen && <CommentSection postId={post.id} />}

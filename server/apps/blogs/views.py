@@ -3,6 +3,7 @@ import os
 import traceback
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db.models import BooleanField, Count, Exists, OuterRef, Value
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, render
@@ -11,6 +12,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import UserRateThrottle
 from werkzeug.http import parse_range_header
 
 from .models import Comment, Like, Media, Post
@@ -19,6 +21,12 @@ from .transcription import transcribe_audio
 from .utils.get_file_mimetype import get_file_mime_type
 
 logger = logging.getLogger(__name__)
+
+
+class TranscribeRateThrottle(UserRateThrottle):
+    """Throttle for the transcribe action, which calls a paid external API."""
+
+    scope = 'transcribe'
 
 
 class PostViewSet(viewsets.ModelViewSet):
@@ -54,13 +62,12 @@ class PostViewSet(viewsets.ModelViewSet):
         return super().get_serializer_class()
 
     def perform_create(self, serializer):
-        ANONYMOUS_USER_ID = 2
-        user_id = (
-            self.request.user.id  # pyright: ignore [reportAttributeAccessIssue]
-            if self.request.user.is_authenticated
-            else ANONYMOUS_USER_ID
-        )
-        serializer.save(author_id=user_id)
+        if self.request.user.is_authenticated:
+            serializer.save(author=self.request.user)
+        else:
+            # Anonymous posts are attributed to the dedicated 'anonymous' user
+            # (created by migrations / init_users).
+            serializer.save(author=get_user_model().objects.get(username='anonymous'))
 
     def create(self, request, *args, **kwargs):
         media = request.data.get('media')
@@ -105,7 +112,8 @@ class PostViewSet(viewsets.ModelViewSet):
         # Check if user is authenticated
         if not request.user.is_authenticated:
             return Response(
-                {'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED,
             )
 
         # Allow update if user is the author or an admin
@@ -153,7 +161,8 @@ class PostViewSet(viewsets.ModelViewSet):
         """Like (POST) or unlike (DELETE) a post as the authenticated user."""
         if not request.user.is_authenticated:
             return Response(
-                {'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED,
             )
 
         post = self.get_object()
@@ -179,7 +188,8 @@ class PostViewSet(viewsets.ModelViewSet):
 
         if not request.user.is_authenticated:
             return Response(
-                {'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED,
             )
 
         serializer = CommentSerializer(data=request.data)
@@ -192,7 +202,8 @@ class PostViewSet(viewsets.ModelViewSet):
         """Delete a comment. Only the comment author or an admin may delete it."""
         if not request.user.is_authenticated:
             return Response(
-                {'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED,
             )
 
         comment = get_object_or_404(Comment, id=comment_id, post_id=pk)
@@ -209,15 +220,33 @@ class PostViewSet(viewsets.ModelViewSet):
         comment.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], throttle_classes=[TranscribeRateThrottle])
     def transcribe(self, request, pk=None):
         """Transcribe the audio of a media file of an existing post.
+
+        Restricted to the post author or an admin because transcription calls a
+        paid external API.
         """
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
         post = self.get_object()
+
+        is_author = request.user.id == post.author_id
+        is_admin = request.user.is_superuser
+        if not (is_author or is_admin):
+            return Response(
+                {'error': 'Permission denied. Only the author or admin can transcribe this post.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         if not post.media:
             return Response(
-                {'error': 'No media file found for this post'}, status=status.HTTP_400_BAD_REQUEST
+                {'error': 'No media file found for this post'},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
@@ -230,7 +259,8 @@ class PostViewSet(viewsets.ModelViewSet):
             # if the media file is not mp3, return an error
             if not field_file.path.endswith('.mp3'):
                 return Response(
-                    {'error': 'Media file is not mp3'}, status=status.HTTP_400_BAD_REQUEST
+                    {'error': 'Media file is not mp3'},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
 
             transcript = transcribe_audio(field_file)
@@ -257,7 +287,8 @@ class PostViewSet(viewsets.ModelViewSet):
         # Check if user is authenticated
         if not request.user.is_authenticated:
             return Response(
-                {'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED,
             )
 
         # Allow deletion if user is the author or an admin
@@ -297,10 +328,9 @@ def stream_post_media(request, post_id):
 
     file_size = os.path.getsize(post.media.file.path)
 
-    if request.is_secure():
-        range_header = request.META.get('HTTPS_RANGE')
-    else:
-        range_header = request.META.get('HTTP_RANGE')
+    # The Range header is always HTTP_RANGE in request.META, regardless of the
+    # request scheme ('HTTPS_RANGE' is not a thing).
+    range_header = request.META.get('HTTP_RANGE')
 
     ranges = parse_range_header(range_header)
     if not ranges:
@@ -308,7 +338,8 @@ def stream_post_media(request, post_id):
 
     if len(ranges.ranges) > 1:
         return Response(
-            {'error': 'Only one range request is supported'}, status=status.HTTP_400_BAD_REQUEST
+            {'error': 'Only one range request is supported'},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     if len(ranges.ranges) == 1 and (ranges.ranges[0][1] is None or ranges.ranges[0][1] == 2):

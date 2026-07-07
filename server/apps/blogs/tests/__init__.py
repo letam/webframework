@@ -2,14 +2,21 @@
 
 import os
 import tempfile
-from django.test import TestCase
+
 from django.conf import settings
+from django.core.cache import cache
+from django.test import TestCase
 
 
 class BaseTestCase(TestCase):
     """Base test case for all tests."""
 
-    pass
+    def setUp(self):
+        """Reset shared state between tests."""
+        super().setUp()
+        # Rate-limit counters live in the shared cache; clear it so requests
+        # made by earlier tests don't trip throttles in later ones.
+        cache.clear()
 
 
 class ViewTestCase(BaseTestCase):

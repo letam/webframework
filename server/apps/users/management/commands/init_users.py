@@ -1,4 +1,4 @@
-import sys
+import os
 from getpass import getpass
 
 from django.core.management.base import BaseCommand, CommandError
@@ -13,28 +13,37 @@ class Command(BaseCommand):
         # Optional argument
         parser.add_argument('--superuser-only', action='store_true', help='Create only superuser')
 
+    def create_superuser(self):
+        """Create a superuser from DJANGO_SUPERUSER_* env vars or interactive prompts."""
+        username = os.environ.get('DJANGO_SUPERUSER_USERNAME') or input(
+            'Enter a username for the superuser: '
+        )
+        password = os.environ.get('DJANGO_SUPERUSER_PASSWORD') or getpass(
+            'Enter a password for the superuser: '
+        )
+        if not username or not password:
+            raise CommandError('A superuser needs a username and a non-empty password.')
+        User.objects.create_superuser(username=username, password=password)
+        self.stdout.write(self.style.SUCCESS(f'Created superuser "{username}".'))
+
     def handle(self, *args, **options):
-        user_count = User.objects.count()
-
-        # Exit if users already exist
-        if user_count >= 2:
-            self.stdout.write(self.style.ERROR('Users already exist.'))
-            sys.exit()
-
         if options['superuser_only']:
-            User.objects.create_superuser(username='admin', password='admin')
-            self.stdout.write(
-                self.style.SUCCESS('Created superuser "admin". Please update the password ASAP.')
-            )
-            exit()
+            self.create_superuser()
+            return
 
-        # Create superuser
-        if user_count == 0:
-            username = input('Enter a username for the superuser: ')
-            password = getpass('Enter a password for the superuser: ')
-            User.objects.create_superuser(username=username, password=password)
-            self.stdout.write(self.style.SUCCESS(f'Created superuser "{username}".'))
+        created_any = False
+
+        # Create superuser if none exists. Note that migrations already create
+        # the anonymous user, so the database is never fully empty here.
+        if not User.objects.filter(is_superuser=True).exists():
+            self.create_superuser()
+            created_any = True
 
         # Create anonymous user--for anonymous posts
-        User.objects.create(username='anonymous')
-        self.stdout.write(self.style.SUCCESS('Created user "anonymous".'))
+        _, created = User.objects.get_or_create(username='anonymous')
+        if created:
+            self.stdout.write(self.style.SUCCESS('Created user "anonymous".'))
+            created_any = True
+
+        if not created_any:
+            self.stdout.write(self.style.ERROR('Users already exist.'))

@@ -1,9 +1,11 @@
 """Tests for the auth app views."""
+
 # pyright: reportAttributeAccessIssue=false
 
 import json
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import Client, TestCase, override_settings
 
 User = get_user_model()
@@ -15,10 +17,16 @@ class AuthViewsTestCase(TestCase):
         self.signup_url = '/auth/signup/'
         self.login_url = '/auth/login/'
         self.status_url = '/auth/status/'
+        # Rate-limit counters live in the shared cache; reset them per test.
+        cache.clear()
 
     def test_signup_success(self):
         """Test successful user registration."""
-        data = {'username': 'testuser', 'password1': 'testpass123', 'password2': 'testpass123'}
+        data = {
+            'username': 'testuser',
+            'password1': 'testpass123',
+            'password2': 'testpass123',
+        }
 
         response = self.client.post(
             self.signup_url, data=json.dumps(data), content_type='application/json'
@@ -36,7 +44,11 @@ class AuthViewsTestCase(TestCase):
 
     def test_signup_password_mismatch(self):
         """Test signup with mismatched passwords."""
-        data = {'username': 'testuser', 'password1': 'testpass123', 'password2': 'differentpass'}
+        data = {
+            'username': 'testuser',
+            'password1': 'testpass123',
+            'password2': 'differentpass',
+        }
 
         response = self.client.post(
             self.signup_url, data=json.dumps(data), content_type='application/json'
@@ -51,7 +63,11 @@ class AuthViewsTestCase(TestCase):
         # Create a user first
         User.objects.create_user(username='existinguser', password='testpass123')
 
-        data = {'username': 'existinguser', 'password1': 'testpass123', 'password2': 'testpass123'}
+        data = {
+            'username': 'existinguser',
+            'password1': 'testpass123',
+            'password2': 'testpass123',
+        }
 
         response = self.client.post(
             self.signup_url, data=json.dumps(data), content_type='application/json'
@@ -86,7 +102,11 @@ class AuthViewsTestCase(TestCase):
 
     def test_signup_auto_login(self):
         """Test that user is automatically logged in after signup."""
-        data = {'username': 'testuser', 'password1': 'testpass123', 'password2': 'testpass123'}
+        data = {
+            'username': 'testuser',
+            'password1': 'testpass123',
+            'password2': 'testpass123',
+        }
 
         # Sign up
         response = self.client.post(
@@ -101,3 +121,37 @@ class AuthViewsTestCase(TestCase):
         status_data = status_response.json()
         self.assertTrue(status_data['is_authenticated'])
         self.assertEqual(status_data['username'], 'testuser')
+
+    def test_logout_rejects_get(self):
+        """Logging out via GET would allow logout-by-link CSRF; only POST/DELETE."""
+        response = self.client.get('/auth/logout/')
+        self.assertEqual(response.status_code, 405)
+
+
+class RateLimitTests(TestCase):
+    """Tests for per-IP rate limiting of the auth endpoints."""
+
+    def setUp(self):
+        """Reset rate-limit counters between tests."""
+        self.client = Client()
+        cache.clear()
+
+    def test_login_is_rate_limited(self):
+        """Repeated failed login attempts from one client get a 429."""
+        data = json.dumps({'username': 'nobody', 'password': 'wrong-password'})
+
+        for _ in range(10):
+            response = self.client.post('/auth/login/', data, content_type='application/json')
+            self.assertEqual(response.status_code, 400, "Attempts within the limit pass through")
+
+        response = self.client.post('/auth/login/', data, content_type='application/json')
+        self.assertEqual(response.status_code, 429, "The 11th attempt should be throttled")
+
+    def test_signup_is_rate_limited(self):
+        """Repeated signup attempts from one client get a 429."""
+        for _ in range(10):
+            response = self.client.post('/auth/signup/', '{}', content_type='application/json')
+            self.assertEqual(response.status_code, 400, "Attempts within the limit pass through")
+
+        response = self.client.post('/auth/signup/', '{}', content_type='application/json')
+        self.assertEqual(response.status_code, 429, "The 11th attempt should be throttled")
