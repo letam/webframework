@@ -20,6 +20,7 @@ TEST_MEDIA_ROOT = os.path.join(tempfile.gettempdir(), 'uploads')
 
 
 def cleanup_test_media_root():
+    """Remove files written under the shared test media root."""
     for root, dirs, files in os.walk(TEST_MEDIA_ROOT, topdown=False):
         for name in files:
             os.remove(os.path.join(root, name))
@@ -32,6 +33,7 @@ class MediaModelTests(BaseTestCase):
     """Tests for the Media model."""
 
     def setUp(self):
+        """Create reusable users and uploaded files for media model tests."""
         super().setUp()
         # Create a test user
         self.user = User.objects.create_user(username='testuser', password='testpass123')
@@ -159,8 +161,8 @@ class MediaModelTests(BaseTestCase):
             self.assertIsNotNone(media.id)
             self.assertTrue(os.path.exists(media.file.path))
 
-            # The duration might still be None for this minimal file, but the process should complete
-            # without errors
+            # The duration might still be None for this minimal file, but the
+            # process should complete without errors.
             self.assertIsInstance(media.duration, (type(None), timedelta))
 
         finally:
@@ -294,6 +296,7 @@ class MediaModelTests(BaseTestCase):
                 os.unlink(temp_file_path)
 
     def tearDown(self):
+        """Remove test media files after each media model test."""
         cleanup_test_media_root()
 
         super().tearDown()
@@ -304,6 +307,7 @@ class PostModelTests(BaseTestCase):
     """Tests for the Post model."""
 
     def setUp(self):
+        """Create reusable users and uploaded files for post model tests."""
         super().setUp()
         # Create a test user
         self.user = User.objects.create_user(username='testuser', password='testpass123')
@@ -392,6 +396,7 @@ class PostModelTests(BaseTestCase):
         self.assertFalse(Post.objects.filter(id=post.id).exists())
 
     def tearDown(self):
+        """Remove test media files after each post model test."""
         cleanup_test_media_root()
 
         super().tearDown()

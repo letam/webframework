@@ -1,3 +1,5 @@
+"""Management command for creating initial application users."""
+
 import os
 from getpass import getpass
 
@@ -7,9 +9,12 @@ from ...models import User
 
 
 class Command(BaseCommand):
+    """Create the required superuser and anonymous account."""
+
     help = 'Create initial users for app: superuser and anonymous'
 
     def add_arguments(self, parser):
+        """Add command-line options for initial user creation."""
         # Optional argument
         parser.add_argument('--superuser-only', action='store_true', help='Create only superuser')
 
@@ -27,6 +32,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f'Created superuser "{username}".'))
 
     def handle(self, *args, **options):
+        """Create missing initial users."""
         if options['superuser_only']:
             self.create_superuser()
             return

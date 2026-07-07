@@ -12,7 +12,10 @@ User = get_user_model()
 
 
 class AuthViewsTestCase(TestCase):
+    """Tests for signup, login status, and logout behavior."""
+
     def setUp(self):
+        """Create a client and reset shared rate-limit state."""
         self.client = Client()
         self.signup_url = '/auth/signup/'
         self.login_url = '/auth/login/'

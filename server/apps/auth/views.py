@@ -1,6 +1,7 @@
+"""JSON authentication endpoints for the frontend app."""
+
 import json
 
-from apps.ratelimit import rate_limit
 from django.contrib.auth import get_user_model
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
@@ -9,6 +10,8 @@ from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from django.views.decorators.http import require_http_methods, require_POST
 
+from apps.ratelimit import rate_limit
+
 UserModel = get_user_model()
 
 
@@ -16,10 +19,13 @@ class CustomUserCreationForm(UserCreationForm):
     """Custom user creation form that works with our custom User model."""
 
     class Meta(UserCreationForm.Meta):  # pyright: ignore [reportAttributeAccessIssue]
+        """Bind the form to the project's custom user model."""
+
         model = UserModel
 
 
 def csrf(request):
+    """Return a CSRF token for JavaScript clients."""
     return JsonResponse({'token': get_token(request)})
 
 
@@ -84,6 +90,7 @@ def logout(request):
 
 
 def status(request):
+    """Return the current session authentication status."""
     return JsonResponse(
         {
             'is_authenticated': request.user.is_authenticated,

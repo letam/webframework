@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Helpers for converting media files to MP3."""
 
 import logging
 import os
@@ -9,6 +10,7 @@ logger = logging.getLogger('server.apps.blogs')
 
 
 def get_output_filename(input_file: str) -> str:
+    """Return the MP3 output path for an input file path."""
     base, _ = os.path.splitext(input_file)
     return base + ".mp3"
 

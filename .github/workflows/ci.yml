@@ -1,5 +1,5 @@
-# Test and build gates. Runs on every push/PR to main, and is reused by the
-# deploy workflow (workflow_call) so nothing ships without green tests.
+# Test, lint, and build gates. Runs on every push/PR to main, and is reused by
+# the deploy workflow (workflow_call) so deploy-blocking checks stay green.
 
 name: CI
 on:
@@ -12,6 +12,16 @@ on:
   workflow_call:
 
 jobs:
+  backend-lint:
+    name: Backend lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      # The repo config sets [tool.ruff] fix=true; CI must never mutate files.
+      - run: uvx ruff@0.15.20 check --no-fix server/
+      - run: uvx ruff@0.15.20 format --check server/
+
   backend:
     name: Backend tests
     runs-on: ubuntu-latest
@@ -34,6 +44,48 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+      - run: bunx biome ci .
       - run: bunx tsc --noEmit
       - run: bunx vitest run
       - run: bun run build
+
+  e2e:
+    name: Playwright e2e
+    # Reusable deploy runs skip e2e for flaky-browser-test protection; every
+    # push and PR still runs the browser suite.
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - run: uv run python server/manage.py migrate --noinput
+      - run: uv run python server/manage.py init_users
+        env:
+          DJANGO_SUPERUSER_USERNAME: e2e_admin
+          DJANGO_SUPERUSER_PASSWORD: e2e_admin_password
+      - name: Start backend
+        run: |
+          uv run python server/manage.py runserver 0.0.0.0:8000 > /tmp/django-runserver.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:8000/healthz/ > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/django-runserver.log
+          echo "Backend did not become ready" >&2
+          exit 1
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: app
+      - run: bunx playwright install --with-deps chromium
+        working-directory: app
+      - name: Configure frontend dev env
+        run: |
+          cat > app/.env.development.local <<'EOF'
+          VITE_SERVER_HOST=//localhost:8000
+          VITE_UPLOAD_FILES_TO_S3=false
+          EOF
+      - run: bun run test:e2e
+        working-directory: app

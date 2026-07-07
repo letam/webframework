@@ -1,20 +1,27 @@
+"""Reference production settings overrides."""
+
 # NOTE: This file is not used. Leave it here for reference.
 # We are using .env file for environment variable settings.
 
 from pathlib import Path
 
-from .settings import *
+from .settings import *  # noqa: F403 -- This legacy override layers on all base settings.
 
 DEBUG = False
 
 
 SECRET_KEY_FILE = "server/config/secret_key.txt"
 
+
 def generate_server_secret_key():
+    """Create the reference production secret key file when missing."""
     if not Path(SECRET_KEY_FILE).is_file():
         print("Generate secret key for production...")
         from django.core.management.utils import get_random_secret_key
+
         Path(SECRET_KEY_FILE).write_text(get_random_secret_key(), encoding="utf-8")
+
+
 generate_server_secret_key()
 
 with open(SECRET_KEY_FILE) as f:
@@ -28,7 +35,7 @@ ALLOWED_HOSTS = [
     "dev.webframework.app",
 ]
 
-CORS_ALLOWED_ORIGINS.extend(
+CORS_ALLOWED_ORIGINS.extend(  # noqa: F405 -- Imported from base settings by this override.
     [
         "http://127.0.0.1:8000",
         "https://dev.webframework.app",
@@ -45,7 +52,8 @@ CORS_ALLOWED_ORIGINS.extend(
 # import getpass
 
 # with open(
-#     f"/home/{os.environ.get('SUDO_USER') or getpass.getuser()}/.credentials/psql/webframework.app"
+#     "/home/"
+#     f"{os.environ.get('SUDO_USER') or getpass.getuser()}/.credentials/psql/webframework.app"
 # ) as fd:
 #     credentials = {
 #         var: val.rstrip("\n")

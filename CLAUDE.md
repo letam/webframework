@@ -178,6 +178,8 @@ npx @biomejs/biome check .
   - Component tests, hook tests, API client tests
   - Mock data in `__tests__/data/mockPosts.ts`
   - E2E tests with Playwright (`playwright.config.ts`)
+- **CI gates**: Ruff check/format, Biome, backend tests, frontend type/unit/build checks, and
+  Playwright e2e on pushes/PRs
 - Run tests before committing significant changes
 
 ## Project Structure

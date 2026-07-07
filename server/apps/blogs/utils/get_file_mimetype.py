@@ -1,3 +1,5 @@
+"""Helpers for detecting MIME types from local files."""
+
 import logging
 import subprocess
 
@@ -5,6 +7,7 @@ logger = logging.getLogger('server.apps.blogs')
 
 
 def get_file_mime_type(file_path):
+    """Return the MIME type reported by the system file command."""
     try:
         result = subprocess.run(
             [

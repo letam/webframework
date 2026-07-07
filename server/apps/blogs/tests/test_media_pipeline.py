@@ -3,6 +3,7 @@
 import os
 import tempfile
 from datetime import timedelta
+from io import BytesIO
 from unittest import mock
 
 from django.conf import settings
@@ -11,6 +12,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import override_settings
 from django.urls import reverse
+from PIL import Image
 from rest_framework.test import APIClient
 
 from ..models import Media, Post
@@ -37,6 +39,18 @@ class MediaPipelineTests(ViewTestCase):
 
     def _audio_file(self, name='clip.mp3', content_type='audio/mpeg', content=b'not real audio'):
         return SimpleUploadedFile(name, content, content_type=content_type)
+
+    def _png_bytes(self):
+        """Return a tiny valid PNG image."""
+        buffer = BytesIO()
+        Image.new('RGB', (1, 1)).save(buffer, format='PNG')
+        return buffer.getvalue()
+
+    def _image_file(self, content=None, name='pixel.png', content_type='image/png'):
+        """Return a simple uploaded image file."""
+        return SimpleUploadedFile(
+            name, self._png_bytes() if content is None else content, content_type=content_type
+        )
 
     def _post_with_s3_key(self, key=None, media_type='audio'):
         return self.client.post(
@@ -196,6 +210,84 @@ class MediaPipelineTests(ViewTestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Post.objects.count(), 0)
+
+    def test_direct_image_upload_rejects_invalid_image_bytes(self):
+        """Direct image uploads should reject undecodable image content."""
+        response = self.client.post(
+            reverse('post-list'),
+            {
+                'head': 'Bad image',
+                'media': self._image_file(content=b'not an image'),
+                'media_type': 'image',
+            },
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(Post.objects.count(), 0)
+
+    def test_direct_image_upload_accepts_valid_image_bytes(self):
+        """Direct image uploads should save valid image bytes after validation."""
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                response = self.client.post(
+                    reverse('post-list'),
+                    {
+                        'head': 'Valid image',
+                        'media': self._image_file(),
+                        'media_type': 'image',
+                    },
+                    format='multipart',
+                )
+
+                self.assertEqual(response.status_code, 201)
+                post = Post.objects.get(id=response.data['id'])
+                self.assertIsNotNone(post.media)
+                self.assertGreater(post.media.file.size, 0)
+
+    def test_s3_image_upload_rejects_invalid_image_bytes_and_deletes_object(self):
+        """S3 image uploads should reject undecodable bytes and delete the object."""
+        key = f'post/audio/{self.user.id}/pixel.png'
+        head = {'ContentLength': 512, 'ContentType': 'image/png'}
+
+        def fake_download(_key, fileobj):
+            fileobj.write(b'not an image')
+
+        with (
+            mock.patch('apps.blogs.views.head_object', return_value=head),
+            mock.patch('apps.blogs.views.download_to_file', side_effect=fake_download),
+            mock.patch('apps.blogs.views.delete_object') as mock_delete,
+        ):
+            response = self._post_with_s3_key(key=key, media_type='image')
+
+        self.assertEqual(response.status_code, 400)
+        mock_delete.assert_called_once_with(key)
+        self.assertEqual(Post.objects.count(), 0)
+
+    def test_s3_image_upload_accepts_valid_image_bytes(self):
+        """S3 image uploads should save valid images without setting duration."""
+        key = f'post/audio/{self.user.id}/pixel.png'
+        head = {'ContentLength': 512, 'ContentType': 'image/png'}
+        png_bytes = self._png_bytes()
+
+        def fake_download(_key, fileobj):
+            fileobj.write(png_bytes)
+
+        with (
+            mock.patch('apps.blogs.views.head_object', return_value=head),
+            mock.patch('apps.blogs.views.download_to_file', side_effect=fake_download),
+            mock.patch(
+                'apps.blogs.serializers.generate_presigned_get_url',
+                return_value='https://example.com/signed-image',
+            ),
+        ):
+            response = self._post_with_s3_key(key=key, media_type='image')
+
+        self.assertEqual(response.status_code, 201)
+        post = Post.objects.get(id=response.data['id'])
+        self.assertIsNotNone(post.media)
+        self.assertEqual(post.media.s3_file_key, key)
+        self.assertIsNone(post.media.duration)
 
     def test_deleting_post_with_s3_media_deletes_s3_object(self):
         """Deleting an S3-backed media post should delete the object key."""

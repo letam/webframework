@@ -1,8 +1,11 @@
+"""Views for serving the React frontend through Django."""
+
 from django.conf import settings
 from django.shortcuts import render
 
 
 def index(request):
+    """Render the frontend entry point or a dev public asset."""
     if settings.DEBUG:
         if response := local_dev_response_from_file_in_app_public_dir(request):
             return response
@@ -12,6 +15,7 @@ def index(request):
 
 
 def local_dev_response_from_file_in_app_public_dir(request):
+    """Serve files from app/public during local Django development."""
     path_includes_file_ext = request.path.count('.') > 0
     if not path_includes_file_ext:
         return

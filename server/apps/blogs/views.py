@@ -41,7 +41,7 @@ from .models import MEDIA_TYPE_CHOICES, Comment, Like, Media, Post
 from .pagination import PostCursorPagination
 from .serializers import CommentSerializer, PostCreateSerializer, PostSerializer
 from .tasks import transcribe_post_media
-from .utils import MediaProbeError, probe_media_duration
+from .utils import MediaProbeError, is_valid_image, probe_media_duration
 from .utils.get_file_mimetype import get_file_mime_type
 
 logger = logging.getLogger(__name__)
@@ -211,6 +211,12 @@ class PostViewSet(viewsets.ModelViewSet):
                 )
             if getattr(media, 'size', 0) > settings.MAX_MEDIA_UPLOAD_BYTES:
                 raise MediaValidationError('media file is too large')
+            if media_type == 'image':
+                try:
+                    if not is_valid_image(media):
+                        raise MediaValidationError('file is not a valid image')
+                finally:
+                    media.seek(0)
             return {
                 'source': 'direct',
                 'file': media,
@@ -243,9 +249,7 @@ class PostViewSet(viewsets.ModelViewSet):
         if media_type in {'audio', 'video'}:
             duration = self._validate_s3_audio_video_duration(s3_file_key)
         else:
-            # HEAD validation confirms an image-like content type, but we do not
-            # download and decode image bytes during post creation.
-            duration = None
+            self._validate_s3_image(s3_file_key)
 
         return {
             'source': 's3',
@@ -280,6 +284,27 @@ class PostViewSet(viewsets.ModelViewSet):
             raise MediaValidationError('file is not valid audio/video')
 
         return duration
+
+    def _validate_s3_image(self, s3_file_key):
+        """Validate that an S3 object contains decodable image bytes."""
+        temp_path = None
+        suffix = os.path.splitext(s3_file_key)[1]
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+                temp_path = temp_file.name
+                download_to_file(s3_file_key, temp_file)
+
+            is_valid = is_valid_image(temp_path)
+        finally:
+            if temp_path:
+                try:
+                    os.unlink(temp_path)
+                except FileNotFoundError:
+                    pass
+
+        if not is_valid:
+            delete_object(s3_file_key)
+            raise MediaValidationError('file is not a valid image')
 
     def update(self, request, *args, **kwargs):
         """Update a post and supported media metadata fields."""
