@@ -8,22 +8,19 @@ import { LoginModal } from './LoginModal'
 import { useAuth } from '@/hooks/useAuth'
 import { usePostHandlers } from '@/hooks/usePostHandlers'
 import type { Post as PostType } from '@/types/post'
+import { InfiniteScrollSentinel } from './feed/InfiniteScrollSentinel'
 
 const Profile: React.FC = () => {
 	const { isAuthenticated, userId, username } = useAuth()
-	const {
-		posts,
-		isLoading,
-		error,
-		handleLike,
-		handleDeletePost,
-		handleEditPost,
-		handlePostTranscribed,
-	} = usePostHandlers()
+	const profileQueriesEnabled = isAuthenticated && userId != null
+	const mine = usePostHandlers(
+		{ author: userId ?? undefined },
+		{ enabled: profileQueriesEnabled }
+	)
+	const liked = usePostHandlers({ liked: true }, { enabled: profileQueriesEnabled })
 
-	const myPosts = useMemo(() => posts.filter((post) => post.author.id === userId), [posts, userId])
+	const myPosts = mine.posts
 	const mediaPosts = useMemo(() => myPosts.filter((post) => post.media), [myPosts])
-	const likedPosts = useMemo(() => posts.filter((post) => post.liked), [posts])
 	const likesReceived = useMemo(
 		() => myPosts.reduce((total, post) => total + post.like_count, 0),
 		[myPosts]
@@ -34,6 +31,7 @@ const Profile: React.FC = () => {
 		const name = author ? `${author.first_name ?? ''} ${author.last_name ?? ''}`.trim() : ''
 		return name || username || ''
 	}, [myPosts, username])
+	const error = mine.error ?? liked.error
 
 	if (!isAuthenticated) {
 		return (
@@ -51,8 +49,8 @@ const Profile: React.FC = () => {
 		)
 	}
 
-	const renderPosts = (list: PostType[], emptyMessage: string) => {
-		if (isLoading) {
+	const renderPosts = (list: PostType[], emptyMessage: string, source: typeof mine) => {
+		if (source.isLoading) {
 			return (
 				<div className="space-y-4">
 					<Skeleton className="h-32 w-full max-w-lg mx-auto" />
@@ -60,19 +58,30 @@ const Profile: React.FC = () => {
 				</div>
 			)
 		}
-		if (list.length === 0) {
-			return <div className="p-8 text-center text-muted-foreground">{emptyMessage}</div>
-		}
-		return list.map((post) => (
-			<Post
-				key={post.id}
-				post={post}
-				onLike={handleLike}
-				onDelete={handleDeletePost}
-				onEdit={handleEditPost}
-				onTranscribed={handlePostTranscribed}
-			/>
-		))
+
+		return (
+			<>
+				{list.length === 0 ? (
+					<div className="p-8 text-center text-muted-foreground">{emptyMessage}</div>
+				) : (
+					list.map((post) => (
+						<Post
+							key={post.id}
+							post={post}
+							onLike={source.handleLike}
+							onDelete={source.handleDeletePost}
+							onEdit={source.handleEditPost}
+							onTranscribed={source.handlePostTranscribed}
+						/>
+					))
+				)}
+				<InfiniteScrollSentinel
+					onLoadMore={() => source.fetchNextPage()}
+					hasMore={source.hasNextPage}
+					loading={source.isFetchingNextPage}
+				/>
+			</>
+		)
 	}
 
 	return (
@@ -125,15 +134,15 @@ const Profile: React.FC = () => {
 				</TabsList>
 
 				<TabsContent value="posts" className="space-y-4 mt-4">
-					{renderPosts(myPosts, "You haven't posted anything yet.")}
+					{renderPosts(myPosts, "You haven't posted anything yet.", mine)}
 				</TabsContent>
 
 				<TabsContent value="media" className="space-y-4 mt-4">
-					{renderPosts(mediaPosts, "You haven't posted any media yet.")}
+					{renderPosts(mediaPosts, "You haven't posted any media yet.", mine)}
 				</TabsContent>
 
 				<TabsContent value="likes" className="space-y-4 mt-4">
-					{renderPosts(likedPosts, 'Posts you like will show up here.')}
+					{renderPosts(liked.posts, 'Posts you like will show up here.', liked)}
 				</TabsContent>
 			</Tabs>
 

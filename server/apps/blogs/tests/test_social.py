@@ -58,7 +58,7 @@ class LikeTests(ViewTestCase):
 
         response = self.client.get(reverse('post-list'))
         self.assertEqual(response.status_code, 200)
-        post_data = next(p for p in response.data if p['id'] == self.post.id)
+        post_data = next(p for p in response.data['results'] if p['id'] == self.post.id)
         self.assertEqual(post_data['like_count'], 1, "like_count should reflect existing likes")
         self.assertTrue(post_data['liked'], "liked should be True for the liking user")
         self.assertEqual(post_data['comment_count'], 0, "comment_count should default to 0")
@@ -68,7 +68,7 @@ class LikeTests(ViewTestCase):
         Like.objects.create(user=self.user, post=self.post)
 
         response = self.client.get(reverse('post-list'))  # anonymous
-        post_data = next(p for p in response.data if p['id'] == self.post.id)
+        post_data = next(p for p in response.data['results'] if p['id'] == self.post.id)
         self.assertEqual(post_data['like_count'], 1)
         self.assertFalse(post_data['liked'], "liked should be False for anonymous users")
 
@@ -99,9 +99,7 @@ class CommentTests(ViewTestCase):
 
     def test_create_comment_requires_authentication(self):
         """Unauthenticated comment creation should return 401."""
-        response = self.client.post(
-            reverse('post-comments', args=[self.post.id]), {'body': 'Hi'}
-        )
+        response = self.client.post(reverse('post-comments', args=[self.post.id]), {'body': 'Hi'})
         self.assertEqual(response.status_code, 401, "Anonymous comment should be rejected")
         self.assertEqual(Comment.objects.count(), 0)
 
@@ -162,5 +160,5 @@ class CommentTests(ViewTestCase):
         Comment.objects.create(author=self.other_user, post=self.post, body='Two')
 
         response = self.client.get(reverse('post-list'))
-        post_data = next(p for p in response.data if p['id'] == self.post.id)
+        post_data = next(p for p in response.data['results'] if p['id'] == self.post.id)
         self.assertEqual(post_data['comment_count'], 2)

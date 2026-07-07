@@ -1,35 +1,20 @@
+"""Views for presigned media upload URLs."""
+
 import json
 import re
 from datetime import datetime
 
-import boto3
 from apps.blogs.models import Post
 from apps.ratelimit import rate_limit
-from botocore.config import Config
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_POST
+
+from .s3 import ALLOWED_CONTENT_TYPE_RE, generate_presigned_put_url
 
 User = get_user_model()
 
-# Only media uploads are expected; this rejects types like text/html that
-# could be used to serve malicious content from the bucket. The optional
-# codecs parameter is what browsers report for recorded media, e.g.
-# 'audio/webm;codecs=opus'.
-ALLOWED_CONTENT_TYPE_RE = re.compile(r'^(audio|video|image)/[\w.+-]+(;\s*codecs=[\w.,+" -]+)?$')
 MAX_FILE_NAME_LENGTH = 100
-
-
-def get_s3_client():
-    return boto3.client(
-        's3',
-        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        endpoint_url=settings.AWS_S3_ENDPOINT_URL,
-        config=Config(signature_version='s3v4'),
-    )
 
 
 def _clean_file_name(file_name):
@@ -48,6 +33,7 @@ def _clean_file_name(file_name):
 @require_POST
 @rate_limit('presign-upload', limit=30, window_seconds=3600)
 def get_presigned_url(request):
+    """Validate a client upload request and return a presigned PUT URL."""
     try:
         data = json.loads(request.body)
     except (json.JSONDecodeError, UnicodeDecodeError):
@@ -79,42 +65,6 @@ def get_presigned_url(request):
         file_name = f'{stem}-{timestamp}.{extension}' if dot else f'{file_name}-{timestamp}'
         file_path = f'post/audio/{user_id}/{file_name}'
 
-    # idea: extract function to get presigned url as a portable function, to use
-    # it as a CLI command or django admin action.
-    # Or! Is there a simpler way to make the request via CLI?
-    s3 = get_s3_client()
-    presigned_url = s3.generate_presigned_url(
-        'put_object',
-        Params={
-            'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
-            'Key': file_path,
-            'ContentType': content_type,
-        },
-        ExpiresIn=300,  # URL valid for 5 minutes
-    )
+    presigned_url = generate_presigned_put_url(file_path, content_type)
 
     return JsonResponse({'url': presigned_url, 'file_path': file_path})
-
-
-def _get_presigned_url_for_file_path(file_path):
-    s3 = get_s3_client()
-    # TODO: Check if the signed url is already cached and is still valid for
-    # 5+ minutes, and use that cached value
-    presigned_url = s3.generate_presigned_url(
-        'get_object',
-        Params={
-            'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
-            'Key': file_path,
-        },
-        ExpiresIn=3600,  # URL valid for 1 hour
-    )
-    # TODO: Cache the signed url
-    return presigned_url
-
-
-def get_presigned_url_for_post(request, post_id):
-    post = get_object_or_404(Post.objects.select_related('media'), id=post_id)
-    if not post.media or not post.media.s3_file_key:
-        return JsonResponse({'error': 'Post has no media in object storage'}, status=404)
-    signed_url = _get_presigned_url_for_file_path(post.media.s3_file_key)
-    return JsonResponse({'url': signed_url})

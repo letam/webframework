@@ -7,6 +7,7 @@ import type { CreatePostRequest } from '@/types/post'
 import { usePostFilters } from '@/hooks/usePostFilters'
 import { FilterControls } from './feed/FilterControls'
 import { ActiveFiltersList } from './feed/ActiveFiltersList'
+import { InfiniteScrollSentinel } from './feed/InfiniteScrollSentinel'
 
 const Feed: React.FC = () => {
 	const {
@@ -14,6 +15,9 @@ const Feed: React.FC = () => {
 		isLoading,
 		error,
 		addPost,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
 		handleLike,
 		handleDeletePost,
 		handleEditPost,
@@ -106,6 +110,13 @@ const Feed: React.FC = () => {
 					<div className="max-w-2xl mx-auto text-center py-8 text-muted-foreground">
 						No posts match the current filter.
 					</div>
+				)}
+				{!isLoading && (
+					<InfiniteScrollSentinel
+						onLoadMore={() => fetchNextPage()}
+						hasMore={hasNextPage}
+						loading={isFetchingNextPage}
+					/>
 				)}
 			</div>
 			{/* Bottom padding */}

@@ -8,82 +8,65 @@ import type {
 import { SERVER_API_URL, UPLOAD_FILES_TO_S3 } from '../constants'
 import { getFetchOptions } from '../utils/fetch'
 
-const SIGNED_URL_CACHE_DURATION_MS = 60_000 // 1 minute
-
-type SignedUrlCacheEntry = {
-	url: string
-	fetchedAt: number
-	s3FileKey?: string
+export interface PostsPage {
+	posts: Post[]
+	next: string | null
 }
 
-const signedUrlCache = new Map<number, SignedUrlCacheEntry>()
-
-const getCachedSignedUrl = (postId: number, s3FileKey?: string) => {
-	const cached = signedUrlCache.get(postId)
-
-	if (!cached) {
-		return null
-	}
-
-	// If the media key changed, invalidate the cached value immediately.
-	if (cached.s3FileKey !== s3FileKey) {
-		signedUrlCache.delete(postId)
-		return null
-	}
-
-	if (Date.now() - cached.fetchedAt < SIGNED_URL_CACHE_DURATION_MS) {
-		return cached.url
-	}
-
-	signedUrlCache.delete(postId)
-	return null
+export interface PostsQueryScope {
+	author?: number
+	liked?: boolean
 }
 
-const setCachedSignedUrl = (postId: number, url: string, s3FileKey?: string) => {
-	signedUrlCache.set(postId, {
-		url,
-		fetchedAt: Date.now(),
-		s3FileKey,
-	})
+interface PaginatedPostsResponse {
+	next: string | null
+	previous?: string | null
+	results: Post[]
 }
 
-export const getPosts = async (): Promise<Post[]> => {
+const revivePost = (post: Post): Post => ({
+	...post,
+	created: new Date(post.created),
+	modified: new Date(post.modified),
+	media: post.media
+		? {
+				...post.media,
+				created: new Date(post.media.created),
+				modified: new Date(post.media.modified),
+			}
+		: undefined,
+	url: `${window.location.origin}/p/${post.id}/`,
+})
+
+const buildPostsUrl = (scope: PostsQueryScope) => {
+	const params = new URLSearchParams()
+
+	if (scope.author != null) {
+		params.set('author', String(scope.author))
+	}
+
+	if (scope.liked) {
+		params.set('liked', 'true')
+	}
+
+	const query = params.toString()
+	return `${SERVER_API_URL}/posts/${query ? `?${query}` : ''}`
+}
+
+export const getPosts = async (
+	scope: PostsQueryScope = {},
+	cursor?: string | null
+): Promise<PostsPage> => {
 	try {
-		const response = await fetch(`${SERVER_API_URL}/posts/`)
+		const response = await fetch(cursor ?? buildPostsUrl(scope))
 		if (!response.ok) {
 			throw new Error('Failed to fetch posts')
 		}
-		let data: Post[] = await response.json()
-		data = data.map((post) => ({
-			...post,
-			created: new Date(post.created),
-			url: `${window.location.origin}/p/${post.id}/`,
-		}))
-
-		// Get signed url for each post
-		const getPostSignedUrl = async (postId: number) => {
-			const response = await fetch(`${SERVER_API_URL}/uploads/presign/${postId}/`)
-			return response.json()
+		const data: PaginatedPostsResponse = await response.json()
+		return {
+			posts: data.results.map(revivePost),
+			next: data.next,
 		}
-		// TODO: Have single endpoint request for all signed urls
-		const dataWithSignedUrl = await Promise.all(
-			data.map(async (post) => {
-				if (post.media?.s3_file_key) {
-					const s3FileKey = post.media.s3_file_key
-					const cachedUrl = getCachedSignedUrl(post.id, s3FileKey)
-
-					if (cachedUrl) {
-						return { ...post, signedMediaUrl: cachedUrl }
-					}
-
-					const response = (await getPostSignedUrl(post.id)) as { url: string }
-					setCachedSignedUrl(post.id, response.url, s3FileKey)
-					return { ...post, signedMediaUrl: response.url }
-				}
-				return post
-			})
-		)
-		return dataWithSignedUrl
 	} catch (error) {
 		console.error('Error fetching posts:', error)
 		throw error
@@ -150,6 +133,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 		return {
 			...record,
 			created: new Date(record.created),
+			modified: new Date(record.modified),
 		}
 	} catch (error) {
 		console.error('Error creating post:', error)
@@ -158,8 +142,8 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 }
 
 export const getMediaUrl = (post: Post): string => {
-	if (post.signedMediaUrl) {
-		return post.signedMediaUrl
+	if (post.media?.signed_url) {
+		return post.media.signed_url
 	}
 	return `${SERVER_API_URL}/posts/${post.id}/media/`
 
@@ -181,6 +165,7 @@ export const transcribePost = async (id: number): Promise<Post> => {
 		return {
 			...post,
 			created: new Date(post.created),
+			modified: new Date(post.modified),
 		}
 	} catch (error) {
 		console.error('Error transcribing post:', error)

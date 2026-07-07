@@ -81,19 +81,19 @@ class PresignUploadTests(ViewTestCase):
         response = self._presign({'content_type': 'text/html', 'file_name': 'evil.html'})
         self.assertEqual(response.status_code, 400)
 
-    @mock.patch('apps.uploads.views.get_s3_client')
-    def test_recorded_media_content_type_is_accepted(self, mock_s3):
+    @mock.patch('apps.uploads.views.generate_presigned_put_url')
+    def test_recorded_media_content_type_is_accepted(self, mock_presign):
         """Browser-recorded types like 'audio/webm;codecs=opus' are valid."""
-        mock_s3.return_value.generate_presigned_url.return_value = 'https://example.com/signed'
+        mock_presign.return_value = 'https://example.com/signed'
         response = self._presign(
             {'content_type': 'audio/webm;codecs=opus', 'file_name': 'recording.webm'}
         )
         self.assertEqual(response.status_code, 200)
 
-    @mock.patch('apps.uploads.views.get_s3_client')
-    def test_path_traversal_in_file_name_is_stripped(self, mock_s3):
+    @mock.patch('apps.uploads.views.generate_presigned_put_url')
+    def test_path_traversal_in_file_name_is_stripped(self, mock_presign):
         """Client-supplied directories must not leak into the S3 key."""
-        mock_s3.return_value.generate_presigned_url.return_value = 'https://example.com/signed'
+        mock_presign.return_value = 'https://example.com/signed'
         response = self._presign(
             {'content_type': 'audio/mpeg', 'file_name': '../../../etc/passwd.mp3'}
         )
@@ -108,20 +108,20 @@ class PresignUploadTests(ViewTestCase):
         response = self._presign({'content_type': 'audio/mpeg', 'file_name': '../..'})
         self.assertEqual(response.status_code, 400)
 
-    @mock.patch('apps.uploads.views.get_s3_client')
-    def test_anonymous_upload_is_keyed_to_anonymous_user(self, mock_s3):
+    @mock.patch('apps.uploads.views.generate_presigned_put_url')
+    def test_anonymous_upload_is_keyed_to_anonymous_user(self, mock_presign):
         """Unauthenticated uploads go under the dedicated anonymous user's prefix."""
-        mock_s3.return_value.generate_presigned_url.return_value = 'https://example.com/signed'
+        mock_presign.return_value = 'https://example.com/signed'
         response = self._presign({'content_type': 'audio/mpeg', 'file_name': 'clip.mp3'})
         self.assertEqual(response.status_code, 200)
 
         anonymous = User.objects.get(username='anonymous')
         self.assertEqual(response.json()['file_path'], f'post/audio/{anonymous.id}/clip.mp3')
 
-    @mock.patch('apps.uploads.views.get_s3_client')
-    def test_presign_is_rate_limited(self, mock_s3):
+    @mock.patch('apps.uploads.views.generate_presigned_put_url')
+    def test_presign_is_rate_limited(self, mock_presign):
         """Presign requests beyond the per-IP limit get a 429."""
-        mock_s3.return_value.generate_presigned_url.return_value = 'https://example.com/signed'
+        mock_presign.return_value = 'https://example.com/signed'
         payload = {'content_type': 'audio/mpeg', 'file_name': 'clip.mp3'}
         for _ in range(30):
             self._presign(payload)

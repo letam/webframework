@@ -25,9 +25,10 @@ createsuperuser:
 shell:
     uv run python server/manage.py shell_plus
 
-# Run Django tests
+# Run Django tests (the 'apps' label is required: bare 'test' from the repo
+# root discovers 0 tests)
 test:
-    uv run python server/manage.py test
+    uv run python server/manage.py test apps
 
 # Collect static files
 collectstatic:

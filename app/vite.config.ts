@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react-swc'
 import path from 'path'
 import { componentTagger } from 'lovable-tagger'
+import { configDefaults } from 'vitest/config'
 
 const NODE_ENV = process.env.NODE_ENV ?? ''
 
@@ -33,5 +34,6 @@ export default defineConfig(({ mode }) => ({
 		environment: 'jsdom',
 		setupFiles: ['./vitest.setup.ts'],
 		globals: true,
+		exclude: [...configDefaults.exclude, 'e2e/**'],
 	},
 }))

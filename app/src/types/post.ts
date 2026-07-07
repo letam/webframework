@@ -11,6 +11,7 @@ export interface Media {
 	media_type: 'audio' | 'video' | 'image'
 	file: string
 	s3_file_key?: string
+	signed_url?: string | null
 	mp3_file?: string
 	duration?: string
 	thumbnail?: string
@@ -32,9 +33,6 @@ export interface Post {
 	like_count: number
 	comment_count: number
 	liked: boolean
-
-	// Dynamically added by the client
-	signedMediaUrl?: string
 }
 
 export interface Comment {

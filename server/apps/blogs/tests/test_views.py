@@ -19,6 +19,7 @@ class PostViewSetTests(ViewTestCase):
     """Tests for the PostViewSet."""
 
     def setUp(self):
+        """Create shared test users, client, and upload fixtures."""
         super().setUp()
         # Create a test user
         self.user = User.objects.create_user(username='testuser', password='testpass123')
@@ -34,7 +35,7 @@ class PostViewSetTests(ViewTestCase):
 
         # Create test file object
         self.test_file = SimpleUploadedFile(
-            'test.txt', self.test_file_content, content_type='text/plain'
+            'test.mp3', self.test_file_content, content_type='audio/mpeg'
         )
 
     def test_create_post_with_media(self):
@@ -271,6 +272,7 @@ class PostViewSetTests(ViewTestCase):
         self.assertEqual(post.body, 'Original content')
 
     def tearDown(self):
+        """Remove the temporary test directory."""
         # Clean up the temporary directory
         for root, dirs, files in os.walk(self.temp_dir, topdown=False):
             for name in files:

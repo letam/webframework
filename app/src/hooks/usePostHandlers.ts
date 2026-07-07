@@ -1,25 +1,34 @@
 import { useCallback } from 'react'
 import { toast } from '@/components/ui/sonner'
+import type { PostsQueryScope } from '@/lib/api/posts'
 import type { Post as PostType } from '@/types/post'
 import { useAuth } from './useAuth'
-import { usePosts } from './usePosts'
+import { usePosts, type UsePostsOptions } from './usePosts'
 
 /**
  * Shared post action handlers (like, delete, edit, transcribe) used by any
  * view that renders a list of posts (Feed, Profile).
  */
-export const usePostHandlers = () => {
+const DEFAULT_POSTS_SCOPE: PostsQueryScope = {}
+
+export const usePostHandlers = (
+	scope: PostsQueryScope = DEFAULT_POSTS_SCOPE,
+	options: UsePostsOptions = {}
+) => {
 	const {
 		posts,
 		isLoading,
 		isFetching,
 		error,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
 		addPost,
 		editPost,
 		removePost,
 		toggleLike,
 		setPosts,
-	} = usePosts()
+	} = usePosts(scope, options)
 	const { isAuthenticated } = useAuth()
 
 	const handleLike = useCallback(
@@ -73,6 +82,9 @@ export const usePostHandlers = () => {
 		isLoading,
 		isFetching,
 		error,
+		fetchNextPage,
+		hasNextPage,
+		isFetchingNextPage,
 		addPost,
 		handleLike,
 		handleDeletePost,

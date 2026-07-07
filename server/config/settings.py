@@ -12,11 +12,14 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+import copy
 import logging
 import logging.config
 import os
 from pathlib import Path
 
+from csp.constants import SELF
+from django.utils.log import DEFAULT_LOGGING
 from environs import Env
 
 # Configure logging
@@ -67,20 +70,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def check_and_create_env_file():
-    # NOTE: In production container (Docker) image as well as gunicorn process, then the working directory is the project's server (Django project root) directory. Only during development and running the server from project root then we see the server child directory.
-    IS_SERVER_CHILD_DIR_PRESENT = (Path.cwd() / 'server').exists()
-    if IS_SERVER_CHILD_DIR_PRESENT:
-        ENV_FILE = 'server/.env'
+    """Create a default .env file for local or production-like startup."""
+    # NOTE: In production containers and gunicorn, the working directory is
+    # the server project root. During local development from the repo root,
+    # the server child directory is present.
+    is_server_child_dir_present = (Path.cwd() / 'server').exists()
+    if is_server_child_dir_present:
+        env_file = 'server/.env'
     else:
-        ENV_FILE = '.env'
+        env_file = '.env'
 
-    if not Path(ENV_FILE).is_file():
+    if not Path(env_file).is_file():
         logger.debug('Required .env file not found.')
         from django.core.management.utils import get_random_secret_key
 
-        with open(ENV_FILE, 'a') as f:
+        with open(env_file, 'a') as f:
             f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
-            if IS_SERVER_CHILD_DIR_PRESENT:
+            if is_server_child_dir_present:
                 f.write('DEBUG=True\n')
                 f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
                 f.write('USE_LOCAL_FILE_STORAGE=True\n')
@@ -267,14 +273,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Logging
 # https://docs.djangoproject.com/en/5.1/topics/logging/
-import copy
-
-from django.utils.log import DEFAULT_LOGGING
 
 LOGGING = copy.deepcopy(DEFAULT_LOGGING)
 
 
 def setup_save_errorlog_to_file(logging: dict):
+    """Configure server error logging to a rotating file."""
     import os
 
     log_dir: Path = BASE_DIR / '..' / 'log'
@@ -290,7 +294,8 @@ def setup_save_errorlog_to_file(logging: dict):
     create_log_dir_for_server_errors()
 
     # if not DEBUG:
-    #     # In case of a single server managing multiple apps, symlink the project's server error log to the common /var/log/app-errors directory
+    #     # In case of a single server managing multiple apps, symlink the
+    #     # project's server error log to the common /var/log/app-errors directory.
     #     def symlink_error_log_in_system_logs():
     #         log_symlinkpath: str = f'/var/log/app-errors/{BASE_DIR.parent.name}.log'
     #         if not Path(log_symlinkpath).parent.exists():
@@ -418,6 +423,7 @@ AWS_S3_ENDPOINT_FOR_CSP = os.getenv('R2_ENDPOINT_DOMAIN_FOR_CSP')
 # Media files configuration
 MEDIA_URL = env.str('MEDIA_URL', default='/media/')
 MEDIA_ROOT = env.str('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'uploads'))
+MAX_MEDIA_UPLOAD_BYTES = 100 * 1024 * 1024
 
 # Storage backend configuration
 STORAGES = {
@@ -441,7 +447,6 @@ if USE_LOCAL_FILE_STORAGE and not os.path.exists(MEDIA_ROOT):
 
 # CSP settings
 # Reference: https://django-csp.readthedocs.io/en/latest/configuration.html
-from csp.constants import SELF
 
 CONTENT_SECURITY_POLICY_DIRECTIVES = {
     'default-src': [SELF],
