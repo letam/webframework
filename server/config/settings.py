@@ -494,7 +494,6 @@ if DEBUG:
                 SELF,
                 UNSAFE_INLINE,
                 'localhost:5173',
-                'https://cdn.gpteng.co/gptengineer.js',
             ],
             'style-src': [SELF, UNSAFE_INLINE, 'http://localhost:5173/src/index.css'],
             'style-src-elem': [

@@ -1,4 +1,5 @@
-import fixWebmDuration from 'webm-duration-fix'
+// webm-duration-fix (and its Node polyfills) is only needed once a recording
+// stops, so it is imported dynamically to keep it out of the initial bundle.
 
 /**
  * Converts a WAV audio blob to WebM format with Opus codec
@@ -33,6 +34,7 @@ export const convertWavToWebM = async (wavBlob: Blob): Promise<Blob> => {
 
 			mediaRecorder.onstop = async () => {
 				try {
+					const { default: fixWebmDuration } = await import('webm-duration-fix')
 					const webmBlob = await fixWebmDuration(
 						new Blob(chunks, { type: 'audio/webm;codecs=opus' })
 					)

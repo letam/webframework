@@ -1,6 +1,7 @@
 import { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
 import { Video, Square, Play, Pause } from 'lucide-react'
-import fixWebmDuration from 'webm-duration-fix'
+// webm-duration-fix (and its Node polyfills) is only needed once a recording
+// stops, so it is imported dynamically to keep it out of the initial bundle.
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import { supportedVideoMimeType } from '@/lib/utils/media'
@@ -190,6 +191,7 @@ const VideoRecorder = forwardRef<
 			mediaRecorder.onstop = () => {
 				stopTimer()
 				;(async () => {
+					const { default: fixWebmDuration } = await import('webm-duration-fix')
 					const videoBlob = await fixWebmDuration(
 						new Blob(videoChunksRef.current, { type: videoChunksRef.current[0]?.type })
 					)

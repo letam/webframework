@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useImperativeHandle } from 'react'
 import { Square, Pause, Play, Loader2, Mic } from 'lucide-react'
-import fixWebmDuration from 'webm-duration-fix'
+// webm-duration-fix (and its Node polyfills) is only needed once a recording
+// stops, so it is imported dynamically to keep it out of the initial bundle.
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import { isIOS, isSafari } from '@/lib/utils/browser'
@@ -303,6 +304,7 @@ const AudioRecorder = ({
 							}
 							setShowNormalizingMessage(false)
 						} else {
+							const { default: fixWebmDuration } = await import('webm-duration-fix')
 							audioBlob = await fixWebmDuration(audioBlob)
 						}
 

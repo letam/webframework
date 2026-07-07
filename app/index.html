@@ -8,23 +8,31 @@
 
   <link rel="icon" type="image/svg+xml" href="/vite-logo.svg" />
   <link rel="apple-touch-icon" href="/vite-logo.png" />
+  <link rel="manifest" href="/site.webmanifest" />
 
   <title>Echo Sphere</title>
-  <meta name="description" content="Echo Sphere" />
+  <meta
+    name="description"
+    content="Echo Sphere — a micro-blogging space for short posts with audio, video, and images."
+  />
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5f8ff" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#020817" />
   <!-- <meta name="author" content="" /> -->
 
   <meta property="og:title" content="Echo Sphere" />
-  <!-- <meta property="og:description" content="" /> -->
+  <meta
+    property="og:description"
+    content="Echo Sphere — a micro-blogging space for short posts with audio, video, and images."
+  />
+  <meta property="og:site_name" content="Echo Sphere" />
   <meta property="og:type" content="website" />
-  <!-- <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" /> -->
 
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:site" content="@slowpowk" />
-  <!-- <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" /> -->
 
   <script>
     // Blocking script to set theme before any content renders
-    (function () {
+    (() => {
       // This script runs before the page renders to prevent flash of unstyled content
       try {
         const theme = (() => {
@@ -67,8 +75,6 @@
 
 <body>
   <div id="root"></div>
-  <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
-  <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

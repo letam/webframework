@@ -1,0 +1,20 @@
+{
+	"name": "Echo Sphere",
+	"short_name": "Echo Sphere",
+	"start_url": "/",
+	"display": "standalone",
+	"background_color": "#f5f8ff",
+	"theme_color": "#f5f8ff",
+	"icons": [
+		{
+			"src": "vite-logo.svg",
+			"sizes": "any",
+			"type": "image/svg+xml"
+		},
+		{
+			"src": "vite-logo.png",
+			"sizes": "32x32",
+			"type": "image/png"
+		}
+	]
+}
