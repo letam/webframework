@@ -1,6 +1,8 @@
-import { useState, useEffect, createContext, useContext, useCallback } from 'react'
+import { useState, useEffect, createContext, useContext, useCallback, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { SERVER_HOST } from '../lib/constants'
 import { clearCsrfTokenCache } from '../lib/utils/fetch'
+import { POSTS_QUERY_KEY } from './usePosts'
 
 interface AuthState {
 	isAuthenticated: boolean
@@ -17,6 +19,8 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | null>(null)
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+	const queryClient = useQueryClient()
+	const hasCheckedAuth = useRef(false)
 	const [authState, setAuthState] = useState<AuthState>({
 		isAuthenticated: false,
 		userId: null,
@@ -38,17 +42,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 					isSuperuser: data.is_superuser || false,
 				}
 
-				// Clear CSRF token cache if auth state changes
-				if (newAuthState.isAuthenticated !== authState.isAuthenticated) {
+				// If the signed-in user changed, clear the CSRF token cache and
+				// refetch posts so per-user fields (e.g. liked) are up to date.
+				// Skip on the initial check: the first posts fetch already ran
+				// with the session cookie, so its data is correct.
+				if (newAuthState.userId !== authState.userId) {
 					clearCsrfTokenCache()
+					if (hasCheckedAuth.current) {
+						queryClient.invalidateQueries({ queryKey: POSTS_QUERY_KEY })
+					}
 				}
+				hasCheckedAuth.current = true
 
 				setAuthState(newAuthState)
 			}
 		} catch (error) {
 			console.error('Error checking auth status:', error)
 		}
-	}, [authState.isAuthenticated])
+	}, [authState.userId, queryClient])
 
 	useEffect(() => {
 		checkAuthStatus()

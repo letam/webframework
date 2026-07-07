@@ -3,6 +3,7 @@ import os
 import traceback
 
 from django.conf import settings
+from django.db.models import BooleanField, Count, Exists, OuterRef, Value
 from django.http import FileResponse, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_GET
@@ -12,8 +13,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from werkzeug.http import parse_range_header
 
-from .models import Media, Post
-from .serializers import PostCreateSerializer, PostSerializer
+from .models import Comment, Like, Media, Post
+from .serializers import CommentSerializer, PostCreateSerializer, PostSerializer
 from .transcription import transcribe_audio
 from .utils.get_file_mimetype import get_file_mime_type
 
@@ -23,8 +24,27 @@ logger = logging.getLogger(__name__)
 class PostViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     queryset = Post.objects.all()
-    # TODO: Confirm that we should optimize with `.prefetch_related('post_set')`
     serializer_class = PostSerializer
+
+    def get_queryset(self):
+        queryset = (
+            Post.objects.select_related('author', 'media')
+            .prefetch_related('post_set')
+            .annotate(
+                like_count=Count('likes', distinct=True),
+                comment_count=Count('comments', distinct=True),
+            )
+        )
+
+        user = self.request.user
+        if user.is_authenticated:
+            queryset = queryset.annotate(
+                liked=Exists(Like.objects.filter(post=OuterRef('pk'), user=user))
+            )
+        else:
+            queryset = queryset.annotate(liked=Value(False, output_field=BooleanField()))
+
+        return queryset
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -74,7 +94,7 @@ class PostViewSet(viewsets.ModelViewSet):
 
         # Get the created instance and serialize it with PostSerializer
         instance = serializer.instance
-        response_serializer = PostSerializer(instance)
+        response_serializer = PostSerializer(instance, context=self.get_serializer_context())
 
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -128,10 +148,70 @@ class PostViewSet(viewsets.ModelViewSet):
 
         return Response(serializer.data)
 
+    @action(detail=True, methods=['post', 'delete'])
+    def like(self, request, pk=None):
+        """Like (POST) or unlike (DELETE) a post as the authenticated user."""
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        post = self.get_object()
+
+        if request.method == 'POST':
+            Like.objects.get_or_create(user=request.user, post=post)
+            liked = True
+        else:
+            Like.objects.filter(user=request.user, post=post).delete()
+            liked = False
+
+        return Response({'liked': liked, 'like_count': post.likes.count()})
+
+    @action(detail=True, methods=['get', 'post'])
+    def comments(self, request, pk=None):
+        """List (GET) or add (POST) comments for a post."""
+        post = self.get_object()
+
+        if request.method == 'GET':
+            comments = post.comments.select_related('author').all()
+            serializer = CommentSerializer(comments, many=True)
+            return Response(serializer.data)
+
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        serializer = CommentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(author=request.user, post=post)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['delete'], url_path=r'comments/(?P<comment_id>\d+)')
+    def delete_comment(self, request, pk=None, comment_id=None):
+        """Delete a comment. Only the comment author or an admin may delete it."""
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        comment = get_object_or_404(Comment, id=comment_id, post_id=pk)
+
+        is_author = request.user.id == comment.author_id
+        is_admin = request.user.is_superuser
+
+        if not (is_author or is_admin):
+            return Response(
+                {'error': 'Permission denied. Only the author or admin can delete this comment.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        comment.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=True, methods=['post'])
     def transcribe(self, request, pk=None):
-        """
-        Transcribe the audio of a media file of an existing post.
+        """Transcribe the audio of a media file of an existing post.
         """
         post = self.get_object()
 
@@ -169,8 +249,7 @@ class PostViewSet(viewsets.ModelViewSet):
             )
 
     def destroy(self, request, *args, **kwargs):
-        """
-        Override destroy method to check permissions.
+        """Override destroy method to check permissions.
         Allow deletion if user is the author or an admin (superuser).
         """
         instance = self.get_object()
@@ -260,8 +339,7 @@ def stream_post_media(request, post_id):
 
 
 def post_detail(request, post_id):
-    """
-    View for individual post detail pages.
+    """View for individual post detail pages.
     Returns JSON if Accept header contains application/json, otherwise renders HTML.
     """
     post = get_object_or_404(Post.objects.select_related('author', 'media'), id=post_id)

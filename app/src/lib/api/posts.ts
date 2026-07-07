@@ -1,4 +1,10 @@
-import type { Post, CreatePostRequest, UpdatePostRequest } from '../../types/post'
+import type {
+	Post,
+	Comment,
+	CreatePostRequest,
+	UpdatePostRequest,
+	LikeResponse,
+} from '../../types/post'
 import { SERVER_API_URL, UPLOAD_FILES_TO_S3 } from '../constants'
 import { getFetchOptions } from '../utils/fetch'
 
@@ -193,6 +199,50 @@ export const deletePost = async (id: number): Promise<void> => {
 	} catch (error) {
 		console.error('Error deleting post:', error)
 		throw error
+	}
+}
+
+const setPostLike = async (id: number, liked: boolean): Promise<LikeResponse> => {
+	const options = await getFetchOptions(liked ? 'POST' : 'DELETE')
+	const response = await fetch(`${SERVER_API_URL}/posts/${id}/like/`, options)
+
+	if (!response.ok) {
+		throw new Error(liked ? 'Failed to like post' : 'Failed to unlike post')
+	}
+	return response.json()
+}
+
+export const likePost = (id: number): Promise<LikeResponse> => setPostLike(id, true)
+
+export const unlikePost = (id: number): Promise<LikeResponse> => setPostLike(id, false)
+
+export const getComments = async (postId: number): Promise<Comment[]> => {
+	const response = await fetch(`${SERVER_API_URL}/posts/${postId}/comments/`)
+
+	if (!response.ok) {
+		throw new Error('Failed to fetch comments')
+	}
+	const comments: Comment[] = await response.json()
+	return comments.map((comment) => ({ ...comment, created: new Date(comment.created) }))
+}
+
+export const createComment = async (postId: number, body: string): Promise<Comment> => {
+	const options = await getFetchOptions('POST', { body })
+	const response = await fetch(`${SERVER_API_URL}/posts/${postId}/comments/`, options)
+
+	if (!response.ok) {
+		throw new Error('Failed to add comment')
+	}
+	const comment: Comment = await response.json()
+	return { ...comment, created: new Date(comment.created) }
+}
+
+export const deleteComment = async (postId: number, commentId: number): Promise<void> => {
+	const options = await getFetchOptions('DELETE')
+	const response = await fetch(`${SERVER_API_URL}/posts/${postId}/comments/${commentId}/`, options)
+
+	if (!response.ok) {
+		throw new Error('Failed to delete comment')
 	}
 }
 

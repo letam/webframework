@@ -139,3 +139,31 @@ class Post(models.Model):
 
         # Delete the record
         return super().delete(*args, **kwargs)
+
+
+class Like(models.Model):
+    created = models.DateTimeField(auto_now_add=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='likes')
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='likes')
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'post'], name='unique_user_post_like'),
+        ]
+
+    def __str__(self):
+        return f'{self.user} likes post {self.post_id}'
+
+
+class Comment(models.Model):
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
+    body = models.TextField()
+
+    class Meta:
+        ordering = ['created']
+
+    def __str__(self):
+        return f'Comment by {self.author} on post {self.post_id}'

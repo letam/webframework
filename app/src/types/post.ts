@@ -29,10 +29,24 @@ export interface Post {
 	head: string
 	body: string
 	media?: Media
-	likes: number // TODO: Implement
+	like_count: number
+	comment_count: number
+	liked: boolean
 
 	// Dynamically added by the client
 	signedMediaUrl?: string
+}
+
+export interface Comment {
+	id: number
+	author: Author
+	body: string
+	created: Date
+}
+
+export interface LikeResponse {
+	liked: boolean
+	like_count: number
 }
 
 export interface CreatePostRequest {

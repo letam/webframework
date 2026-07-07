@@ -1,7 +1,14 @@
 import { useCallback, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { Post, CreatePostRequest, UpdatePostRequest } from '../types/post'
-import { getPosts, createPost, deletePost, updatePost } from '../lib/api/posts'
+import {
+	getPosts,
+	createPost,
+	deletePost,
+	updatePost,
+	likePost,
+	unlikePost,
+} from '../lib/api/posts'
 import type { TagInfo } from '../types/tag'
 import { buildTagIndex } from '../utils/tags'
 
@@ -72,6 +79,37 @@ export const usePosts = () => {
 		},
 	})
 
+	const likeMutation = useMutation({
+		mutationFn: ({ id, liked }: { id: number; liked: boolean }) =>
+			liked ? likePost(id) : unlikePost(id),
+		onMutate: async ({ id, liked }) => {
+			// Optimistically flip the heart; roll back from the snapshot on error
+			await queryClient.cancelQueries({ queryKey: POSTS_QUERY_KEY })
+			const previousPosts = queryClient.getQueryData<Post[]>(POSTS_QUERY_KEY)
+			updatePostsCache((prev = []) =>
+				prev.map((post) =>
+					post.id === id
+						? { ...post, liked, like_count: Math.max(0, post.like_count + (liked ? 1 : -1)) }
+						: post
+				)
+			)
+			return { previousPosts }
+		},
+		onError: (_error, _variables, context) => {
+			if (context?.previousPosts) {
+				queryClient.setQueryData(POSTS_QUERY_KEY, context.previousPosts)
+			}
+		},
+		onSuccess: (result, { id }) => {
+			// Reconcile with the server's authoritative count
+			updatePostsCache((prev = []) =>
+				prev.map((post) =>
+					post.id === id ? { ...post, liked: result.liked, like_count: result.like_count } : post
+				)
+			)
+		},
+	})
+
 	const setPosts = useCallback(
 		(updater: (prevPosts: Post[]) => Post[]) => {
 			updatePostsCache(updater)
@@ -92,6 +130,15 @@ export const usePosts = () => {
 		await removePostMutation.mutateAsync(id)
 	}
 
+	const toggleLike = useCallback(
+		(id: number) => {
+			const post = queryClient.getQueryData<Post[]>(POSTS_QUERY_KEY)?.find((p) => p.id === id)
+			if (!post) return
+			likeMutation.mutate({ id, liked: !post.liked })
+		},
+		[queryClient, likeMutation]
+	)
+
 	return {
 		posts: queryPosts,
 		isLoading,
@@ -100,6 +147,7 @@ export const usePosts = () => {
 		addPost,
 		editPost,
 		removePost,
+		toggleLike,
 		setPosts,
 		isFetching,
 		isMutating:

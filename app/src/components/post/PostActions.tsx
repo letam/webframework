@@ -6,8 +6,14 @@ import { toast } from 'sonner'
 
 interface PostActionsProps {
 	id: number
-	likes: number
+	likeCount: number
+	liked: boolean
 	onLike: (id: number) => void
+	commentCount: number
+	commentsOpen: boolean
+	onToggleComments: () => void
+	postUrl: string
+	shareTitle?: string
 	mediaType?: 'audio' | 'video' | 'image'
 	body?: string
 	transcript?: string
@@ -16,8 +22,14 @@ interface PostActionsProps {
 
 const PostActions: React.FC<PostActionsProps> = ({
 	id,
-	likes,
+	likeCount,
+	liked,
 	onLike,
+	commentCount,
+	commentsOpen,
+	onToggleComments,
+	postUrl,
+	shareTitle,
 	mediaType,
 	body,
 	transcript,
@@ -27,6 +39,27 @@ const PostActions: React.FC<PostActionsProps> = ({
 
 	const handleLike = () => {
 		onLike(id)
+	}
+
+	const handleShare = async () => {
+		if (navigator.share) {
+			try {
+				await navigator.share({ title: shareTitle, url: postUrl })
+			} catch (error) {
+				// User dismissed the share sheet; not an error worth surfacing
+				if ((error as DOMException)?.name !== 'AbortError') {
+					console.error('Failed to share post:', error)
+				}
+			}
+			return
+		}
+		try {
+			await navigator.clipboard.writeText(postUrl)
+			toast.success('Link copied to clipboard')
+		} catch (error) {
+			console.error('Failed to copy link:', error)
+			toast.error('Failed to copy link')
+		}
 	}
 
 	const handleTranscribe = async () => {
@@ -54,19 +87,32 @@ const PostActions: React.FC<PostActionsProps> = ({
 				size="sm"
 				className="text-muted-foreground hover:text-primary px-2 sm:px-3"
 				onClick={handleLike}
+				aria-label={liked ? 'Unlike post' : 'Like post'}
+				aria-pressed={liked}
 			>
-				<Heart className={`h-4 w-4 sm:mr-1 ${likes > 0 ? 'fill-primary text-primary' : ''}`} />
-				<span className="hidden sm:inline">{likes}</span>
-				<span className="sm:hidden">{likes}</span>
+				<Heart className={`h-4 w-4 sm:mr-1 ${liked ? 'fill-primary text-primary' : ''}`} />
+				<span>{likeCount}</span>
 			</Button>
 
-			<Button variant="ghost" size="sm" className="text-muted-foreground px-2 sm:px-3">
-				<MessageCircle className="h-4 w-4 sm:mr-1" />
-				<span className="hidden sm:inline">0</span>
-				<span className="sm:hidden">0</span>
+			<Button
+				variant="ghost"
+				size="sm"
+				className="text-muted-foreground hover:text-primary px-2 sm:px-3"
+				onClick={onToggleComments}
+				aria-label={commentsOpen ? 'Hide comments' : 'Show comments'}
+				aria-expanded={commentsOpen}
+			>
+				<MessageCircle className={`h-4 w-4 sm:mr-1 ${commentsOpen ? 'text-primary' : ''}`} />
+				<span>{commentCount}</span>
 			</Button>
 
-			<Button variant="ghost" size="sm" className="text-muted-foreground px-2 sm:px-3">
+			<Button
+				variant="ghost"
+				size="sm"
+				className="text-muted-foreground hover:text-primary px-2 sm:px-3"
+				onClick={handleShare}
+				aria-label="Share post"
+			>
 				<Share2 className="h-4 w-4 sm:mr-1" />
 			</Button>
 

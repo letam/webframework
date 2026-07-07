@@ -1,9 +1,11 @@
 import type React from 'react'
+import { useState } from 'react'
 import DOMPurify from 'dompurify'
 import { cn } from '@/lib/utils'
 import PostHeader from './PostHeader'
 import PostActions from './PostActions'
 import PostMenu from './PostMenu'
+import CommentSection from './CommentSection'
 import type { Post as PostType } from '../../types/post'
 import { AudioPlayer, VideoPlayer } from './MediaPlayer'
 import { toast } from '@/components/ui/sonner'
@@ -45,6 +47,7 @@ const FormatText: React.FC<{ children: string; className?: string }> = ({
 }
 
 export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTranscribed }) => {
+	const [commentsOpen, setCommentsOpen] = useState(false)
 	const mediaUrl = post.media ? getMediaUrl(post) : undefined
 	const mediaAltText = post.media ? post.media.alt_text : undefined
 	const mimeType = post.media
@@ -112,13 +115,21 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 
 				<PostActions
 					id={post.id}
-					likes={post.likes}
+					likeCount={post.like_count}
+					liked={post.liked}
 					onLike={onLike}
+					commentCount={post.comment_count}
+					commentsOpen={commentsOpen}
+					onToggleComments={() => setCommentsOpen((open) => !open)}
+					postUrl={post.url}
+					shareTitle={post.head || undefined}
 					mediaType={post.media?.media_type}
 					body={post.body}
 					transcript={post.media?.transcript}
 					onTranscribe={handleTranscribe}
 				/>
+
+				{commentsOpen && <CommentSection postId={post.id} />}
 			</div>
 		</div>
 	)
