@@ -19,3 +19,5 @@ secret_key.txt
 server/uploads/
 
 node_modules/
+
+docs/private/
