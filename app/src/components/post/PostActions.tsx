@@ -2,7 +2,12 @@ import type React from 'react'
 import { useState } from 'react'
 import { Heart, MessageCircle, Share2, Mic, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+
+const actionButtonClass =
+	'text-muted-foreground rounded-full transition-colors hover:text-primary hover:bg-primary/10 px-2 sm:px-3'
 
 interface PostActionsProps {
 	id: number
@@ -38,9 +43,14 @@ const PostActions: React.FC<PostActionsProps> = ({
 	onTranscribe,
 }) => {
 	const [isTranscribing, setIsTranscribing] = useState(false)
+	const [likePop, setLikePop] = useState(false)
 	const transcribing = isTranscribing || transcriptStatus === 'pending'
 
 	const handleLike = () => {
+		// Only pop on the like action, never on load or when un-liking
+		if (!liked) {
+			setLikePop(true)
+		}
 		onLike(id)
 	}
 
@@ -84,68 +94,104 @@ const PostActions: React.FC<PostActionsProps> = ({
 	}
 
 	return (
-		<div className="flex items-center mt-4 gap-2 sm:gap-6 flex-wrap">
-			<Button
-				variant="ghost"
-				size="sm"
-				className="text-muted-foreground hover:text-primary px-2 sm:px-3"
-				onClick={handleLike}
-				aria-label={liked ? 'Unlike post' : 'Like post'}
-				aria-pressed={liked}
-			>
-				<Heart className={`h-4 w-4 sm:mr-1 ${liked ? 'fill-primary text-primary' : ''}`} />
-				<span>{likeCount}</span>
-			</Button>
+		<TooltipProvider delayDuration={300}>
+			<div className="flex items-center mt-4 gap-2 sm:gap-6 flex-wrap">
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							variant="ghost"
+							size="sm"
+							className={actionButtonClass}
+							onClick={handleLike}
+							aria-label={liked ? 'Unlike post' : 'Like post'}
+							aria-pressed={liked}
+						>
+							<Heart
+								className={cn(
+									'h-4 w-4 sm:mr-1 transition-transform',
+									liked && 'fill-primary text-primary',
+									likePop && 'animate-heart-pop'
+								)}
+								onAnimationEnd={() => setLikePop(false)}
+							/>
+							<span>{likeCount}</span>
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent>{liked ? 'Unlike' : 'Like'}</TooltipContent>
+				</Tooltip>
 
-			<Button
-				variant="ghost"
-				size="sm"
-				className="text-muted-foreground hover:text-primary px-2 sm:px-3"
-				onClick={onToggleComments}
-				aria-label={commentsOpen ? 'Hide comments' : 'Show comments'}
-				aria-expanded={commentsOpen}
-			>
-				<MessageCircle className={`h-4 w-4 sm:mr-1 ${commentsOpen ? 'text-primary' : ''}`} />
-				<span>{commentCount}</span>
-			</Button>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							variant="ghost"
+							size="sm"
+							className={actionButtonClass}
+							onClick={onToggleComments}
+							aria-label={commentsOpen ? 'Hide comments' : 'Show comments'}
+							aria-expanded={commentsOpen}
+						>
+							<MessageCircle className={cn('h-4 w-4 sm:mr-1', commentsOpen && 'text-primary')} />
+							<span>{commentCount}</span>
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent>{commentsOpen ? 'Hide comments' : 'Comments'}</TooltipContent>
+				</Tooltip>
 
-			<Button
-				variant="ghost"
-				size="sm"
-				className="text-muted-foreground hover:text-primary px-2 sm:px-3"
-				onClick={handleShare}
-				aria-label="Share post"
-			>
-				<Share2 className="h-4 w-4 sm:mr-1" />
-			</Button>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							variant="ghost"
+							size="sm"
+							className={actionButtonClass}
+							onClick={handleShare}
+							aria-label="Share post"
+						>
+							<Share2 className="h-4 w-4 sm:mr-1" />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent>Share</TooltipContent>
+				</Tooltip>
 
-			{body && (
-				<Button
-					variant="ghost"
-					size="sm"
-					className="text-muted-foreground hover:text-primary px-2 sm:px-3"
-					onClick={handleCopy}
-				>
-					<Copy className="h-4 w-4 sm:mr-1" />
-					<span className="hidden sm:inline">Copy</span>
-				</Button>
-			)}
+				{body && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								variant="ghost"
+								size="sm"
+								className={actionButtonClass}
+								onClick={handleCopy}
+								aria-label="Copy text"
+							>
+								<Copy className="h-4 w-4 sm:mr-1" />
+								<span className="hidden sm:inline">Copy</span>
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent>Copy text</TooltipContent>
+					</Tooltip>
+				)}
 
-			{mediaType && !transcript && onTranscribe && (
-				<Button
-					variant="ghost"
-					size="sm"
-					className="text-muted-foreground hover:text-primary px-2 sm:px-3"
-					onClick={handleTranscribe}
-					disabled={transcribing}
-				>
-					<Mic className="h-4 w-4 sm:mr-1" />
-					<span className="hidden sm:inline">
-						{transcribing ? 'Transcribing...' : 'Transcribe'}
-					</span>
-				</Button>
-			)}
-		</div>
+				{mediaType && !transcript && onTranscribe && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<Button
+								variant="ghost"
+								size="sm"
+								className={actionButtonClass}
+								onClick={handleTranscribe}
+								disabled={transcribing}
+								aria-label="Transcribe media"
+							>
+								<Mic className={cn('h-4 w-4 sm:mr-1', transcribing && 'animate-pulse')} />
+								<span className="hidden sm:inline">
+									{transcribing ? 'Transcribing...' : 'Transcribe'}
+								</span>
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent>{transcribing ? 'Transcribing…' : 'Transcribe media'}</TooltipContent>
+					</Tooltip>
+				)}
+			</div>
+		</TooltipProvider>
 	)
 }
 

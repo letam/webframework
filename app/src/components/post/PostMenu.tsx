@@ -7,6 +7,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { downloadFile, getFileExtension } from '@/lib/utils/file'
 import { getMediaUrl } from '@/lib/api/posts'
@@ -67,11 +68,23 @@ const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete, onEdit }) => {
 	return (
 		<>
 			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button variant="ghost" size="icon" className="ml-auto h-8 w-8">
-						<MoreHorizontal className="h-4 w-4" />
-					</Button>
-				</DropdownMenuTrigger>
+				<TooltipProvider>
+					<Tooltip>
+						<DropdownMenuTrigger asChild>
+							<TooltipTrigger asChild>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="ml-auto h-8 w-8 text-muted-foreground transition-opacity focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100 md:opacity-0"
+									aria-label="Post options"
+								>
+									<MoreHorizontal className="h-4 w-4" />
+								</Button>
+							</TooltipTrigger>
+						</DropdownMenuTrigger>
+						<TooltipContent>More</TooltipContent>
+					</Tooltip>
+				</TooltipProvider>
 				<DropdownMenuContent align="end">
 					{post.media && (
 						<DropdownMenuItem onClick={handleDownload}>

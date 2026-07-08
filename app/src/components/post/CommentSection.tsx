@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAuth } from '@/hooks/useAuth'
 import { useComments } from '@/hooks/useComments'
 import type { Author } from '@/types/post'
@@ -71,37 +72,44 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
 			) : comments.length === 0 ? (
 				<div className="text-sm text-muted-foreground">No comments yet. Be the first!</div>
 			) : (
-				<ul className="space-y-3">
-					{comments.map((comment) => (
-						<li key={comment.id} className="flex items-start gap-2">
-							<Avatar className="h-7 w-7 mt-0.5">
-								<AvatarFallback className="text-xs">
-									{authorInitials(comment.author)}
-								</AvatarFallback>
-							</Avatar>
-							<div className="flex-1 min-w-0">
-								<div className="flex items-center gap-1 text-sm">
-									<span className="font-semibold">{authorDisplayName(comment.author)}</span>
-									<span className="text-muted-foreground">
-										· {formatDistanceToNow(comment.created, { addSuffix: true })}
-									</span>
+				<TooltipProvider delayDuration={300}>
+					<ul className="space-y-3">
+						{comments.map((comment) => (
+							<li key={comment.id} className="group flex items-start gap-2">
+								<Avatar className="h-7 w-7 mt-0.5">
+									<AvatarFallback className="text-xs">
+										{authorInitials(comment.author)}
+									</AvatarFallback>
+								</Avatar>
+								<div className="flex-1 min-w-0">
+									<div className="flex items-center gap-1 text-sm">
+										<span className="font-semibold">{authorDisplayName(comment.author)}</span>
+										<span className="text-muted-foreground">
+											· {formatDistanceToNow(comment.created, { addSuffix: true })}
+										</span>
+									</div>
+									<p className="text-sm break-words whitespace-pre-wrap">{comment.body}</p>
 								</div>
-								<p className="text-sm break-words whitespace-pre-wrap">{comment.body}</p>
-							</div>
-							{(comment.author.id === userId || isSuperuser) && (
-								<Button
-									variant="ghost"
-									size="sm"
-									className="text-muted-foreground hover:text-destructive px-2"
-									onClick={() => handleDelete(comment.id)}
-									aria-label="Delete comment"
-								>
-									<Trash2 className="h-3.5 w-3.5" />
-								</Button>
-							)}
-						</li>
-					))}
-				</ul>
+								{(comment.author.id === userId || isSuperuser) && (
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												variant="ghost"
+												size="sm"
+												className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 md:opacity-0"
+												onClick={() => handleDelete(comment.id)}
+												aria-label="Delete comment"
+											>
+												<Trash2 className="h-3.5 w-3.5" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>Delete comment</TooltipContent>
+									</Tooltip>
+								)}
+							</li>
+						))}
+					</ul>
+				</TooltipProvider>
 			)}
 
 			{isAuthenticated ? (

@@ -103,9 +103,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 			}
 			if (Date.now() - startedAt >= TRANSCRIPTION_TIMEOUT_MS) {
 				timedOutTranscriptionsRef.current.add(post.id)
-				toast.info(
-					'Transcription is taking longer than expected — it will appear when ready'
-				)
+				toast.info('Transcription is taking longer than expected — it will appear when ready')
 				stopPolling()
 				return
 			}
@@ -142,7 +140,7 @@ export const Post: React.FC<PostProps> = ({ post, onLike, onDelete, onEdit, onTr
 
 	return (
 		<div
-			className="bg-card rounded-lg shadow-xs border hover:border-primary/20 transition-colors max-w-lg mx-auto px-4 py-2"
+			className="group bg-card rounded-lg shadow-xs border transition-[border-color,box-shadow] duration-200 hover:border-primary/20 hover:shadow-sm max-w-lg mx-auto px-4 py-2"
 			data-testid={`post-${post.id}`}
 		>
 			<div className="flex items-center gap-2">
