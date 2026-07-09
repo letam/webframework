@@ -1,8 +1,9 @@
 import { useCallback } from 'react'
 import { toast } from '@/components/ui/sonner'
-import { getShareUrl } from '@/lib/api/posts'
+import { getShareUrl, transcribePost } from '@/lib/api/posts'
 import type { PostsQueryScope } from '@/lib/api/posts'
-import type { Post as PostType, PostVisibility } from '@/types/post'
+import { getSettings } from '@/lib/utils/settings'
+import type { CreatePostRequest, Post as PostType, PostVisibility } from '@/types/post'
 import { useAuth } from './useAuth'
 import { usePosts, type UsePostsOptions } from './usePosts'
 
@@ -130,6 +131,31 @@ export const usePostHandlers = (
 		[setPosts]
 	)
 
+	const handleAddPost = useCallback(
+		async (postData: CreatePostRequest) => {
+			const newPost = await addPost(postData)
+			const media = newPost.media
+			const shouldAutoTranscribe =
+				getSettings().autoTranscribe &&
+				isAuthenticated &&
+				media != null &&
+				(media.media_type === 'audio' || media.media_type === 'video') &&
+				!media.transcript_status
+
+			if (shouldAutoTranscribe) {
+				try {
+					const updatedPost = await transcribePost(newPost.id)
+					handlePostTranscribed(updatedPost)
+				} catch (error) {
+					console.error('Auto-transcription failed to start:', error)
+					toast.error('Auto-transcription failed to start')
+				}
+			}
+			return newPost
+		},
+		[addPost, handlePostTranscribed, isAuthenticated]
+	)
+
 	return {
 		posts,
 		isLoading,
@@ -138,7 +164,7 @@ export const usePostHandlers = (
 		fetchNextPage,
 		hasNextPage,
 		isFetchingNextPage,
-		addPost,
+		addPost: handleAddPost,
 		handleLike,
 		handleDeletePost,
 		handleEditPost,

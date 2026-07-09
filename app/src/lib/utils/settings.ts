@@ -2,9 +2,10 @@ import { isDesktop, isFirefox, isSafari } from '@/lib/utils/browser'
 
 const SETTINGS_KEY = 'app-settings'
 
-interface AppSettings {
+export interface AppSettings {
 	normalizeAudio: boolean
 	videoQuality: 'low' | 'high'
+	autoTranscribe: boolean
 }
 
 // Determine if audio normalization should be enabled by default
@@ -16,12 +17,13 @@ const shouldNormalizeAudioByDefault = (): boolean => {
 const defaultSettings: AppSettings = {
 	normalizeAudio: shouldNormalizeAudioByDefault(),
 	videoQuality: 'low',
+	autoTranscribe: false,
 }
 
 export const getSettings = (): AppSettings => {
 	try {
 		const stored = localStorage.getItem(SETTINGS_KEY)
-		return stored ? JSON.parse(stored) : defaultSettings
+		return stored ? { ...defaultSettings, ...JSON.parse(stored) } : defaultSettings
 	} catch (error) {
 		console.error('Error reading settings:', error)
 		return defaultSettings

@@ -7,12 +7,14 @@ import Navbar from '@/components/Navbar'
 import { getSettings, updateSettings } from '@/lib/utils/settings'
 
 const SettingsPage = () => {
-	const [normalizeAudio, setNormalizeAudio] = useState(getSettings().normalizeAudio)
-	const [videoQuality, setVideoQuality] = useState(getSettings().videoQuality)
+	const initialSettings = getSettings()
+	const [normalizeAudio, setNormalizeAudio] = useState(initialSettings.normalizeAudio)
+	const [autoTranscribe, setAutoTranscribe] = useState(initialSettings.autoTranscribe)
+	const [videoQuality, setVideoQuality] = useState(initialSettings.videoQuality)
 
 	useEffect(() => {
-		updateSettings({ normalizeAudio, videoQuality })
-	}, [normalizeAudio, videoQuality])
+		updateSettings({ normalizeAudio, autoTranscribe, videoQuality })
+	}, [normalizeAudio, autoTranscribe, videoQuality])
 
 	return (
 		<div className="min-h-screen bg-background">
@@ -27,18 +29,35 @@ const SettingsPage = () => {
 							<CardDescription>Configure your audio recording preferences</CardDescription>
 						</CardHeader>
 						<CardContent>
-							<div className="flex items-center justify-between">
-								<div className="space-y-0.5">
-									<Label htmlFor="normalize-audio">Normalize Audio</Label>
-									<p className="text-sm text-muted-foreground">
-										Automatically normalize audio levels when recording
-									</p>
+							<div className="space-y-4">
+								<div className="flex items-center justify-between">
+									<div className="space-y-0.5">
+										<Label htmlFor="normalize-audio">Normalize Audio</Label>
+										<p className="text-sm text-muted-foreground">
+											Automatically normalize audio levels when recording
+										</p>
+									</div>
+									<Switch
+										id="normalize-audio"
+										checked={normalizeAudio}
+										onCheckedChange={setNormalizeAudio}
+									/>
 								</div>
-								<Switch
-									id="normalize-audio"
-									checked={normalizeAudio}
-									onCheckedChange={setNormalizeAudio}
-								/>
+
+								<div className="flex items-center justify-between">
+									<div className="space-y-0.5">
+										<Label htmlFor="auto-transcribe">Auto-transcribe recordings</Label>
+										<p className="text-sm text-muted-foreground">
+											Start transcription automatically when you post audio or video. Requires being
+											signed in.
+										</p>
+									</div>
+									<Switch
+										id="auto-transcribe"
+										checked={autoTranscribe}
+										onCheckedChange={setAutoTranscribe}
+									/>
+								</div>
 							</div>
 						</CardContent>
 					</Card>

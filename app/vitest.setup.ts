@@ -10,6 +10,37 @@ type MockObserverRecord = {
 
 const intersectionObservers = new Set<MockObserverRecord>()
 
+const createMemoryStorage = (): Storage => {
+	const store = new Map<string, string>()
+
+	return {
+		get length() {
+			return store.size
+		},
+		clear: () => store.clear(),
+		getItem: (key: string) => store.get(key) ?? null,
+		key: (index: number) => Array.from(store.keys())[index] ?? null,
+		removeItem: (key: string) => {
+			store.delete(key)
+		},
+		setItem: (key: string, value: string) => {
+			store.set(key, String(value))
+		},
+	}
+}
+
+const memoryLocalStorage = createMemoryStorage()
+
+Object.defineProperty(globalThis, 'localStorage', {
+	configurable: true,
+	value: memoryLocalStorage,
+})
+
+Object.defineProperty(window, 'localStorage', {
+	configurable: true,
+	value: memoryLocalStorage,
+})
+
 class MockResizeObserver implements ResizeObserver {
 	observe = () => {}
 	unobserve = () => {}
@@ -125,6 +156,7 @@ Object.defineProperty(globalThis, '__triggerIntersect', {
 afterEach(() => {
 	cleanup()
 	intersectionObservers.clear()
+	localStorage.clear()
 })
 
 declare global {
