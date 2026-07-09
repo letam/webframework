@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from apps.uploads.s3 import generate_presigned_get_url
+from apps.users.utils import get_avatar_url
 
 from .models import Comment, Media, Post
 
@@ -17,11 +18,17 @@ User = get_user_model()
 class UserNameSerializer(serializers.ModelSerializer):
     """Compact user serializer for embedded author data."""
 
+    avatar = serializers.SerializerMethodField()
+
     class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
         """Serializer metadata."""
 
         model = User
-        fields = ['id', 'username', 'first_name', 'last_name']
+        fields = ['id', 'username', 'first_name', 'last_name', 'avatar']
+
+    def get_avatar(self, obj):
+        """Return the user's avatar URL when one exists."""
+        return get_avatar_url(obj)
 
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -102,13 +109,14 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
             'post_set',
             'visibility',
             'is_draft',
+            'pinned_at',
             'share_token',
             'like_count',
             'comment_count',
             'view_count',
             'liked',
         ]
-        read_only_fields = ['is_draft']
+        read_only_fields = ['is_draft', 'pinned_at']
 
     def get_like_count(self, obj):
         """Return the annotated or computed like count."""

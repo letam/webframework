@@ -1,14 +1,23 @@
 """Tests for the users app: initial users and default-credential lockout."""
 
 import importlib
+import io
 import os
+import shutil
+import tempfile
 from unittest import mock
 
 from django.apps import apps as django_apps
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import check_password
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
+from django.urls import reverse
+from PIL import Image
+from rest_framework.test import APIClient
+
+from apps.blogs.models import Post
 
 User = get_user_model()
 
@@ -87,3 +96,115 @@ class InitUsersCommandTests(TestCase):
 
         self.assertEqual(User.objects.filter(username='boss').count(), 1)
         self.assertEqual(User.objects.filter(username='anonymous').count(), 1)
+
+
+class AvatarUploadTests(TestCase):
+    """Tests for authenticated avatar upload, processing, and removal."""
+
+    def setUp(self):
+        """Create a user, client, and isolated media storage."""
+        self.media_root = tempfile.mkdtemp()
+        self.settings_override = override_settings(
+            MEDIA_ROOT=self.media_root,
+            MEDIA_URL='/media/',
+            STORAGES={
+                'default': {
+                    'BACKEND': 'django.core.files.storage.FileSystemStorage',
+                },
+                'staticfiles': {
+                    'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage',
+                },
+            },
+        )
+        self.settings_override.enable()
+        self.user = User.objects.create_user(
+            username='avatar-user', password='testpass123', first_name='Ava', last_name='Tar'
+        )
+        self.client = APIClient()
+        self.url = reverse('user-avatar')
+
+    def tearDown(self):
+        """Remove temporary media storage and restore settings."""
+        self.settings_override.disable()
+        shutil.rmtree(self.media_root)
+        super().tearDown()
+
+    def _image_upload(self, name='avatar.png', size=(800, 400), color=(50, 80, 120, 255)):
+        output = io.BytesIO()
+        Image.new('RGBA', size, color).save(output, format='PNG')
+        return SimpleUploadedFile(name, output.getvalue(), content_type='image/png')
+
+    def test_avatar_upload_processes_to_square_jpeg_and_serializes_url(self):
+        """Uploading an image creates a 512px JPEG and exposes its URL."""
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url, {'avatar': self._image_upload()}, format='multipart')
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.avatar)
+        self.assertEqual(
+            response.data['avatar'], self.user.avatar.storage.url(self.user.avatar.name)
+        )
+
+        with Image.open(self.user.avatar.path) as image:
+            self.assertEqual(image.size, (512, 512))
+            self.assertEqual(image.format, 'JPEG')
+            self.assertEqual(image.mode, 'RGB')
+
+        post = Post.objects.create(author=self.user, head='Avatar post')
+        post_response = self.client.get(reverse('post-detail', args=[post.id]))
+        self.assertEqual(post_response.status_code, 200)
+        self.assertEqual(post_response.data['author']['avatar'], response.data['avatar'])
+
+        status_response = self.client.get('/auth/status/')
+        self.assertEqual(status_response.status_code, 200)
+        self.assertEqual(status_response.json()['avatar'], response.data['avatar'])
+
+    def test_avatar_upload_rejects_oversize_non_image_and_anonymous_requests(self):
+        """Avatar uploads require auth, fit within 5 MB, and contain image bytes."""
+        anonymous_response = self.client.post(
+            self.url, {'avatar': self._image_upload()}, format='multipart'
+        )
+        self.assertEqual(anonymous_response.status_code, 401)
+
+        self.client.force_login(self.user)
+        huge_file = SimpleUploadedFile(
+            'huge.png', b'0' * (5 * 1024 * 1024 + 1), content_type='image/png'
+        )
+        oversize_response = self.client.post(self.url, {'avatar': huge_file}, format='multipart')
+        self.assertEqual(oversize_response.status_code, 400)
+
+        text_file = SimpleUploadedFile('avatar.png', b'not an image', content_type='image/png')
+        non_image_response = self.client.post(self.url, {'avatar': text_file}, format='multipart')
+        self.assertEqual(non_image_response.status_code, 400)
+
+    def test_avatar_replacement_deletes_old_file_and_delete_clears_avatar(self):
+        """Replacing and deleting avatars removes obsolete storage objects."""
+        self.client.force_login(self.user)
+        first_response = self.client.post(
+            self.url, {'avatar': self._image_upload('first.png')}, format='multipart'
+        )
+        self.assertEqual(first_response.status_code, 200)
+        self.user.refresh_from_db()
+        first_name = self.user.avatar.name
+        storage = self.user.avatar.storage
+
+        with mock.patch.object(storage, 'delete', wraps=storage.delete) as delete_mock:
+            second_response = self.client.put(
+                self.url, {'avatar': self._image_upload('second.png')}, format='multipart'
+            )
+
+        self.assertEqual(second_response.status_code, 200)
+        delete_mock.assert_called_with(first_name)
+        self.assertFalse(storage.exists(first_name))
+
+        self.user.refresh_from_db()
+        second_name = self.user.avatar.name
+        delete_response = self.client.delete(self.url)
+        self.user.refresh_from_db()
+
+        self.assertEqual(delete_response.status_code, 200)
+        self.assertEqual(delete_response.data, {'avatar': None})
+        self.assertFalse(self.user.avatar)
+        self.assertFalse(storage.exists(second_name))

@@ -197,6 +197,9 @@ class PostViewSet(viewsets.ModelViewSet):
             else:
                 queryset = queryset.none()
 
+        if _is_truthy(self.request.query_params.get('pinned')):
+            queryset = queryset.filter(pinned_at__isnull=False).order_by('-pinned_at', '-id')
+
         return queryset
 
     def get_object(self):
@@ -475,6 +478,50 @@ class PostViewSet(viewsets.ModelViewSet):
             liked = False
 
         return Response({'liked': liked, 'like_count': post.likes.count()})
+
+    @action(detail=True, methods=['post', 'delete'])
+    def pin(self, request, pk=None):
+        """Pin (POST) or unpin (DELETE) a published post as its author or an admin."""
+        post = self.get_object()
+
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if not (request.user.id == post.author_id or request.user.is_superuser):
+            return Response(
+                {'error': 'Permission denied. Only the author or admin can pin this post.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if request.method == 'POST':
+            if post.is_draft:
+                return Response(
+                    {'error': 'Drafts cannot be pinned'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            pinned_count = (
+                Post.objects.filter(author=post.author, pinned_at__isnull=False)
+                .exclude(pk=post.pk)
+                .count()
+            )
+            if pinned_count >= 3:
+                return Response(
+                    {'error': 'You can pin up to 3 posts'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            post.pinned_at = timezone.now()
+            post.save(update_fields=['pinned_at'])
+        else:
+            post.pinned_at = None
+            post.save(update_fields=['pinned_at'])
+
+        serializer = self.get_serializer(post)
+        return Response(serializer.data)
 
     @action(
         detail=False,

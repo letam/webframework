@@ -24,6 +24,8 @@ vi.mock('@/lib/api/posts', () => ({
 	regenerateShareToken: vi.fn(),
 	likePost: vi.fn(),
 	unlikePost: vi.fn(),
+	pinPost: vi.fn(),
+	unpinPost: vi.fn(),
 	transcribePost: vi.fn(),
 	getShareUrl: vi.fn((post) => post.url),
 }))
@@ -143,6 +145,23 @@ describe('usePostHandlers auto-transcribe create flow', () => {
 
 		expect(toast.error).toHaveBeenCalledWith('Auto-transcription failed to start')
 		expect(getCachedPosts(queryClient)[0]).toEqual(createdPost)
+		consoleError.mockRestore()
+	})
+
+	it('surfaces server pin errors in the toast', async () => {
+		const queryClient = createQueryClient()
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+		vi.mocked(postsApi.pinPost).mockRejectedValueOnce(new Error('You can pin up to 3 posts'))
+
+		const { result } = renderHook(() => usePostHandlers({}, { enabled: false }), {
+			wrapper: createWrapper(queryClient),
+		})
+
+		await act(async () => {
+			await result.current.handlePinPost(1, true)
+		})
+
+		expect(toast.error).toHaveBeenCalledWith('You can pin up to 3 posts')
 		consoleError.mockRestore()
 	})
 })

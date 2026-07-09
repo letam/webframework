@@ -228,6 +228,7 @@ class Post(models.Model):
         max_length=16, choices=VISIBILITY_CHOICES, default=VISIBILITY_PUBLIC, db_index=True
     )
     is_draft = models.BooleanField(default=False, db_index=True)
+    pinned_at = models.DateTimeField(null=True, blank=True)
     share_token = models.CharField(max_length=32, default=generate_share_token)
 
     objects = PostQuerySet.as_manager()

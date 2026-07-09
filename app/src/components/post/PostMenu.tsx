@@ -11,6 +11,8 @@ import {
 	Copy,
 	RefreshCw,
 	Send,
+	Pin,
+	PinOff,
 } from 'lucide-react'
 import {
 	DropdownMenu,
@@ -46,6 +48,7 @@ interface PostMenuProps {
 	) => Promise<void>
 	onPublish?: (id: number) => void
 	onChangeVisibility?: (id: number, visibility: PostVisibility) => void
+	onPinChange?: (id: number, pinned: boolean) => void
 	onCopyShareLink?: (post: Post) => void
 	onResetShareLink?: (post: Post) => void
 }
@@ -56,6 +59,7 @@ const PostMenu: React.FC<PostMenuProps> = ({
 	onEdit,
 	onPublish,
 	onChangeVisibility,
+	onPinChange,
 	onCopyShareLink,
 	onResetShareLink,
 }) => {
@@ -89,6 +93,7 @@ const PostMenu: React.FC<PostMenuProps> = ({
 	}
 
 	const isOwnPost = userId === post.author.id
+	const canPin = isAuthenticated && isOwnPost && !post.is_draft
 	const deleteTitle = isOwnPost ? 'Delete Post' : 'Delete Post (Admin Action)'
 	const deleteDescription = isOwnPost
 		? 'This action cannot be undone. This will permanently delete your post.'
@@ -125,6 +130,16 @@ const PostMenu: React.FC<PostMenuProps> = ({
 						<DropdownMenuItem onClick={handleEdit}>
 							<Pencil className="mr-2 h-4 w-4" />
 							Edit
+						</DropdownMenuItem>
+					)}
+					{canPin && (
+						<DropdownMenuItem onClick={() => onPinChange?.(post.id, !post.pinned_at)}>
+							{post.pinned_at ? (
+								<PinOff className="mr-2 h-4 w-4" />
+							) : (
+								<Pin className="mr-2 h-4 w-4" />
+							)}
+							{post.pinned_at ? 'Unpin from profile' : 'Pin to profile'}
 						</DropdownMenuItem>
 					)}
 					{canEdit && (

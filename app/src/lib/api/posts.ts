@@ -17,6 +17,7 @@ export interface PostsQueryScope {
 	author?: number
 	liked?: boolean
 	drafts?: boolean
+	pinned?: boolean
 }
 
 interface PaginatedPostsResponse {
@@ -57,6 +58,10 @@ const buildPostsUrl = (scope: PostsQueryScope) => {
 
 	if (scope.drafts) {
 		params.set('drafts', 'true')
+	}
+
+	if (scope.pinned) {
+		params.set('pinned', 'true')
 	}
 
 	const query = params.toString()
@@ -288,6 +293,33 @@ const setPostLike = async (id: number, liked: boolean): Promise<LikeResponse> =>
 export const likePost = (id: number): Promise<LikeResponse> => setPostLike(id, true)
 
 export const unlikePost = (id: number): Promise<LikeResponse> => setPostLike(id, false)
+
+const parsePostActionError = async (response: Response, fallback: string) => {
+	try {
+		const data = (await response.json()) as { error?: string }
+		return data.error || fallback
+	} catch {
+		return fallback
+	}
+}
+
+const setPostPinned = async (id: number, pinned: boolean): Promise<Post> => {
+	const options = await getFetchOptions(pinned ? 'POST' : 'DELETE')
+	const response = await fetch(`${SERVER_API_URL}/posts/${id}/pin/`, options)
+
+	if (!response.ok) {
+		throw new Error(
+			await parsePostActionError(response, pinned ? 'Failed to pin post' : 'Failed to unpin post')
+		)
+	}
+
+	const post: Post = await response.json()
+	return revivePost(post)
+}
+
+export const pinPost = (id: number): Promise<Post> => setPostPinned(id, true)
+
+export const unpinPost = (id: number): Promise<Post> => setPostPinned(id, false)
 
 export const getComments = async (postId: number): Promise<Comment[]> => {
 	const response = await fetch(`${SERVER_API_URL}/posts/${postId}/comments/`)

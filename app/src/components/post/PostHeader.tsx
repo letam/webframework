@@ -2,7 +2,7 @@ import type React from 'react'
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
-import { Copy, ExternalLink, Link2, Lock } from 'lucide-react'
+import { Copy, ExternalLink, Link2, Lock, Pin } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
 	DropdownMenu,
@@ -41,7 +41,7 @@ const AuthorHoverCard: React.FC<{ author: Author; children: React.ReactNode }> =
 				<div className="h-14" style={{ background: identityGradient(author.username) }} />
 				<div className="p-3">
 					<Avatar className="-mt-9 h-12 w-12 border-2 border-popover">
-						<AvatarImage src={author.avatar} alt={author.username} />
+						<AvatarImage src={author.avatar ?? undefined} alt={author.username} />
 						<AvatarFallback
 							className="text-white"
 							style={{ background: identityGradient(author.username) }}
@@ -99,7 +99,7 @@ const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
 		<div className="flex items-center gap-2">
 			<AuthorHoverCard author={post.author}>
 				<Avatar className="h-10 w-10">
-					<AvatarImage src={post.author.avatar} alt={post.author.username} />
+					<AvatarImage src={post.author.avatar ?? undefined} alt={post.author.username} />
 					<AvatarFallback
 						className="text-white"
 						style={{ background: identityGradient(post.author.username) }}
@@ -148,6 +148,18 @@ const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
 							</TooltipContent>
 						</Tooltip>
 					</TooltipProvider>
+					{post.pinned_at && (
+						<TooltipProvider>
+							<Tooltip>
+								<TooltipTrigger asChild>
+									<span className="inline-flex text-muted-foreground">
+										<Pin className="h-3.5 w-3.5" />
+									</span>
+								</TooltipTrigger>
+								<TooltipContent>Pinned</TooltipContent>
+							</Tooltip>
+						</TooltipProvider>
+					)}
 					{showVisibilityState &&
 						(post.is_draft ? (
 							<span className="rounded-full border px-1.5 py-0.5 text-[11px] font-medium leading-none text-muted-foreground">

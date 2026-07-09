@@ -2,7 +2,7 @@ import type React from 'react'
 import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -78,6 +78,10 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
 						{comments.map((comment) => (
 							<li key={comment.id} className="group flex items-start gap-2">
 								<Avatar className="h-7 w-7 mt-0.5">
+									<AvatarImage
+										src={comment.author.avatar ?? undefined}
+										alt={comment.author.username}
+									/>
 									<AvatarFallback
 										className="text-xs text-white"
 										style={{ background: identityGradient(comment.author.username) }}

@@ -18,6 +18,7 @@ Including another URLconf
 from apps.auth import views as auth_views
 from apps.blogs.views import PostViewSet, get_post_media_mime_type, post_detail, stream_post_media
 from apps.uploads.views import get_presigned_url
+from apps.users.views import avatar
 from apps.website.views import index
 from django.conf import settings
 from django.conf.urls.static import static
@@ -42,6 +43,7 @@ urlpatterns = [
     path('api-auth/', include('rest_framework.urls')),
     #
     path('api/uploads/presign/', get_presigned_url, name='get_presigned_url'),
+    path('api/users/me/avatar/', avatar, name='user-avatar'),
     #
     path(
         'api/posts/<int:post_id>/media/mime-type/',

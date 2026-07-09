@@ -24,6 +24,7 @@ const Feed: React.FC = () => {
 		handleEditPost,
 		handleChangeVisibility,
 		handlePublishPost,
+		handlePinPost,
 		handleCopyShareLink,
 		handleResetShareLink,
 		handlePostTranscribed,
@@ -142,6 +143,7 @@ const Feed: React.FC = () => {
 							onEdit={handleEditPost}
 							onPublish={handlePublishPost}
 							onChangeVisibility={handleChangeVisibility}
+							onPinChange={handlePinPost}
 							onCopyShareLink={handleCopyShareLink}
 							onResetShareLink={handleResetShareLink}
 							onTranscribed={handlePostTranscribed}

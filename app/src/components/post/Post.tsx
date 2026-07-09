@@ -33,6 +33,7 @@ interface PostProps {
 	onTranscribed?: (post: PostType) => void
 	onPublish?: (id: number) => void
 	onChangeVisibility?: (id: number, visibility: PostVisibility) => void
+	onPinChange?: (id: number, pinned: boolean) => void
 	onCopyShareLink?: (post: PostType) => void
 	onResetShareLink?: (post: PostType) => void
 	onTagClick?: (tag: string) => void
@@ -83,6 +84,7 @@ export const Post: React.FC<PostProps> = ({
 	onTranscribed,
 	onPublish,
 	onChangeVisibility,
+	onPinChange,
 	onCopyShareLink,
 	onResetShareLink,
 	onTagClick,
@@ -236,6 +238,7 @@ export const Post: React.FC<PostProps> = ({
 					onEdit={onEdit}
 					onPublish={onPublish}
 					onChangeVisibility={onChangeVisibility}
+					onPinChange={onPinChange}
 					onCopyShareLink={onCopyShareLink}
 					onResetShareLink={onResetShareLink}
 				/>

@@ -1,7 +1,7 @@
 export interface Author {
 	id: number
 	username: string
-	avatar: string // TODO: Implement
+	avatar: string | null
 	first_name: string
 	last_name: string
 }
@@ -35,6 +35,7 @@ export interface Post {
 	media?: Media
 	visibility: PostVisibility
 	is_draft: boolean
+	pinned_at?: string | null
 	share_token?: string | null
 	like_count: number
 	comment_count: number

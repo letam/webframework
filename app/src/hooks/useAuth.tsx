@@ -8,6 +8,7 @@ interface AuthState {
 	isAuthenticated: boolean
 	userId: number | null
 	username: string | null
+	avatar: string | null
 	isStaff: boolean
 	isSuperuser: boolean
 }
@@ -25,6 +26,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 		isAuthenticated: false,
 		userId: null,
 		username: null,
+		avatar: null,
 		isStaff: false,
 		isSuperuser: false,
 	})
@@ -38,6 +40,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 					isAuthenticated: data.is_authenticated,
 					userId: data.user_id,
 					username: data.username,
+					avatar: data.avatar ?? null,
 					isStaff: data.is_staff || false,
 					isSuperuser: data.is_superuser || false,
 				}

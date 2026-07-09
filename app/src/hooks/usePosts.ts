@@ -16,6 +16,8 @@ import {
 	regenerateShareToken as regenerateShareTokenRequest,
 	likePost,
 	unlikePost,
+	pinPost as pinPostRequest,
+	unpinPost as unpinPostRequest,
 	type PostsPage,
 	type PostsQueryScope,
 } from '../lib/api/posts'
@@ -37,6 +39,7 @@ const normalizeScope = (scope: PostsQueryScope): PostsQueryScope => ({
 	...(scope.drafts ? { drafts: true } : {}),
 	...(scope.drafts ? {} : scope.author != null ? { author: scope.author } : {}),
 	...(scope.drafts ? {} : scope.liked ? { liked: true } : {}),
+	...(scope.drafts ? {} : scope.pinned ? { pinned: true } : {}),
 })
 
 const shouldPrependPostToScope = (scope: PostsQueryScope, post: Post) => {
@@ -48,11 +51,19 @@ const shouldPrependPostToScope = (scope: PostsQueryScope, post: Post) => {
 		return false
 	}
 
+	if (scope.pinned && !post.pinned_at) {
+		return false
+	}
+
 	return scope.author == null || scope.author === post.author.id
 }
 
 const shouldAddPublishedPostToScope = (scope: PostsQueryScope, post: Post) => {
 	if (scope.drafts || scope.liked) {
+		return false
+	}
+
+	if (scope.pinned && !post.pinned_at) {
 		return false
 	}
 
@@ -76,7 +87,7 @@ const getScopeFromQueryKey = (queryKey: QueryKey): PostsQueryScope =>
 	isPostsQueryKey(queryKey) ? (queryKey[1] as PostsQueryScope) : {}
 
 const isUnscopedScope = (scope: PostsQueryScope) =>
-	scope.author == null && !scope.liked && !scope.drafts
+	scope.author == null && !scope.liked && !scope.drafts && !scope.pinned
 
 const flattenPosts = (data?: InfiniteData<PostsPage>) =>
 	data?.pages.flatMap((page) => page.posts) ?? []
@@ -98,10 +109,10 @@ export const usePosts = (
 ) => {
 	const queryClient = useQueryClient()
 	const enabled = options.enabled ?? true
-	const { author, liked, drafts } = scope
+	const { author, liked, drafts, pinned } = scope
 	const normalizedScope = useMemo(
-		() => normalizeScope({ author, liked, drafts }),
-		[author, liked, drafts]
+		() => normalizeScope({ author, liked, drafts, pinned }),
+		[author, liked, drafts, pinned]
 	)
 	const queryKey = useMemo(() => getPostsQueryKey(normalizedScope), [normalizedScope])
 
@@ -130,6 +141,14 @@ export const usePosts = (
 		},
 		[queryClient, updateTagsCacheFromFeed]
 	)
+
+	const invalidatePinnedScopes = useCallback(() => {
+		queryClient.invalidateQueries({
+			queryKey: POSTS_QUERY_KEY,
+			predicate: (query) =>
+				isPostsQueryKey(query.queryKey) && Boolean(getScopeFromQueryKey(query.queryKey).pinned),
+		})
+	}, [queryClient])
 
 	const {
 		data,
@@ -304,6 +323,17 @@ export const usePosts = (
 		},
 	})
 
+	const pinPostMutation = useMutation({
+		mutationFn: ({ id, pinned }: { id: number; pinned: boolean }) =>
+			pinned ? pinPostRequest(id) : unpinPostRequest(id),
+		onSuccess: (updatedPost) => {
+			updatePostsCaches((prev = []) =>
+				prev.map((post) => (post.id === updatedPost.id ? updatedPost : post))
+			)
+			invalidatePinnedScopes()
+		},
+	})
+
 	const setPosts = useCallback(
 		(updater: (prevPosts: Post[]) => Post[]) => {
 			updatePostsCaches(updater)
@@ -331,6 +361,11 @@ export const usePosts = (
 
 	const regenerateShareToken = async (id: number) => {
 		const updatedPost = await regenerateShareTokenMutation.mutateAsync(id)
+		return updatedPost
+	}
+
+	const setPinned = async (id: number, pinned: boolean) => {
+		const updatedPost = await pinPostMutation.mutateAsync({ id, pinned })
 		return updatedPost
 	}
 
@@ -370,6 +405,7 @@ export const usePosts = (
 		removePost,
 		publishPost,
 		regenerateShareToken,
+		setPinned,
 		toggleLike,
 		setPosts,
 		isFetching,
@@ -378,6 +414,7 @@ export const usePosts = (
 			editPostMutation.isPending ||
 			removePostMutation.isPending ||
 			publishPostMutation.isPending ||
-			regenerateShareTokenMutation.isPending,
+			regenerateShareTokenMutation.isPending ||
+			pinPostMutation.isPending,
 	}
 }

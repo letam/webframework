@@ -30,6 +30,7 @@ export const usePostHandlers = (
 		removePost,
 		publishPost,
 		regenerateShareToken,
+		setPinned,
 		toggleLike,
 		setPosts,
 	} = usePosts(scope, options)
@@ -122,6 +123,19 @@ export const usePostHandlers = (
 		[regenerateShareToken]
 	)
 
+	const handlePinPost = useCallback(
+		async (id: number, pinned: boolean) => {
+			try {
+				await setPinned(id, pinned)
+				toast.success(pinned ? 'Post pinned.' : 'Post unpinned.')
+			} catch (error) {
+				console.error('Failed to update pin:', error)
+				toast.error(error instanceof Error ? error.message : 'Failed to update pin')
+			}
+		},
+		[setPinned]
+	)
+
 	const handlePostTranscribed = useCallback(
 		(updatedPost: PostType) => {
 			setPosts((prevPosts) =>
@@ -170,6 +184,7 @@ export const usePostHandlers = (
 		handleEditPost,
 		handleChangeVisibility,
 		handlePublishPost,
+		handlePinPost,
 		handleCopyShareLink,
 		handleResetShareLink,
 		handlePostTranscribed,

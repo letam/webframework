@@ -11,6 +11,7 @@ from django.middleware.csrf import get_token
 from django.views.decorators.http import require_http_methods, require_POST
 
 from apps.ratelimit import rate_limit
+from apps.users.utils import get_avatar_url
 
 UserModel = get_user_model()
 
@@ -98,5 +99,6 @@ def status(request):
             'username': request.user.username,
             'is_staff': request.user.is_staff,
             'is_superuser': request.user.is_superuser,
+            'avatar': get_avatar_url(request.user) if request.user.is_authenticated else None,
         }
     )

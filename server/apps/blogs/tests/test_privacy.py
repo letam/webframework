@@ -52,6 +52,11 @@ class PostPrivacyTests(ViewTestCase):
         self.assertEqual(response.status_code, 200)
         return {post['id'] for post in response.data['results']}
 
+    def _feed_id_list(self, client, params=None):
+        response = client.get(reverse('post-list'), params or {})
+        self.assertEqual(response.status_code, 200)
+        return [post['id'] for post in response.data['results']]
+
     def _detail(self, client, post, token=None):
         params = {'token': token} if token is not None else None
         return client.get(reverse('post-detail', args=[post.id]), params)
@@ -315,3 +320,62 @@ class PostPrivacyTests(ViewTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data['post_set'], [visible_child.id])
+
+    def test_pin_permissions_cap_draft_rejection_and_unpin(self):
+        """Pinning is author/admin only, capped at three, and drafts cannot be pinned."""
+        self.assertEqual(
+            self.anon_client.post(reverse('post-pin', args=[self.public.id])).status_code,
+            401,
+        )
+        self.assertEqual(
+            self.other_client.post(reverse('post-pin', args=[self.public.id])).status_code,
+            403,
+        )
+
+        draft_response = self.author_client.post(reverse('post-pin', args=[self.draft.id]))
+        self.assertEqual(draft_response.status_code, 400)
+
+        response = self.author_client.post(reverse('post-pin', args=[self.public.id]))
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNotNone(response.data['pinned_at'])
+        self.public.refresh_from_db()
+        first_pin_time = self.public.pinned_at
+
+        Post.objects.filter(id=self.public.id).update(pinned_at=timezone.now() - timedelta(days=1))
+        response = self.author_client.post(reverse('post-pin', args=[self.public.id]))
+        self.public.refresh_from_db()
+        self.assertEqual(response.status_code, 200)
+        self.assertGreater(self.public.pinned_at, first_pin_time - timedelta(seconds=1))
+
+        self.author_client.post(reverse('post-pin', args=[self.unlisted.id]))
+        self.author_client.post(reverse('post-pin', args=[self.private.id]))
+        extra = Post.objects.create(author=self.author, head='Fourth pin')
+        cap_response = self.author_client.post(reverse('post-pin', args=[extra.id]))
+        self.assertEqual(cap_response.status_code, 400)
+        self.assertEqual(cap_response.data, {'error': 'You can pin up to 3 posts'})
+
+        unpin_response = self.author_client.delete(reverse('post-pin', args=[self.public.id]))
+        self.public.refresh_from_db()
+        self.assertEqual(unpin_response.status_code, 200)
+        self.assertIsNone(unpin_response.data['pinned_at'])
+        self.assertIsNone(self.public.pinned_at)
+
+        super_response = self.super_client.post(reverse('post-pin', args=[self.private.id]))
+        self.assertEqual(super_response.status_code, 200)
+
+    def test_pinned_scope_orders_by_pin_time_and_preserves_visibility(self):
+        """Pinned list filtering composes with author scoping and visible_to."""
+        now = timezone.now()
+        Post.objects.filter(id=self.unlisted.id).update(pinned_at=now - timedelta(minutes=3))
+        Post.objects.filter(id=self.public.id).update(pinned_at=now - timedelta(minutes=2))
+        Post.objects.filter(id=self.private.id).update(pinned_at=now - timedelta(minutes=1))
+        Post.objects.filter(id=self.draft.id).update(pinned_at=now)
+
+        params = {'author': self.author.id, 'pinned': 'true'}
+
+        self.assertEqual(self._feed_id_list(self.anon_client, params), [self.public.id])
+        self.assertEqual(self._feed_id_list(self.other_client, params), [self.public.id])
+        self.assertEqual(
+            self._feed_id_list(self.author_client, params),
+            [self.private.id, self.public.id, self.unlisted.id],
+        )

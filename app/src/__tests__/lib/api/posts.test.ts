@@ -91,6 +91,15 @@ describe('posts API', () => {
 			expect(fetchMock).toHaveBeenCalledWith('/api/posts/?drafts=true')
 		})
 
+		it('adds pinned scope params', async () => {
+			const { getPosts } = await importPostsApi()
+			fetchMock.mockResolvedValueOnce(await response({ next: null, previous: null, results: [] }))
+
+			await getPosts({ author: 5, pinned: true })
+
+			expect(fetchMock).toHaveBeenCalledWith('/api/posts/?author=5&pinned=true')
+		})
+
 		it('throws on non-ok responses', async () => {
 			const { getPosts } = await importPostsApi()
 			const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -307,6 +316,33 @@ describe('posts API', () => {
 				'/api/posts/40/publish/',
 				'/api/posts/40/share-token/',
 			])
+		})
+
+		it('pins and unpins posts', async () => {
+			const { pinPost, unpinPost } = await importPostsApi()
+			const pinned = makePost({ id: 41, pinned_at: '2026-07-09T12:00:00Z' })
+			const unpinned = makePost({ id: 41, pinned_at: null })
+			fetchMock
+				.mockResolvedValueOnce(await response(toServerPost(pinned)))
+				.mockResolvedValueOnce(await response(toServerPost(unpinned)))
+
+			await expect(pinPost(41)).resolves.toMatchObject({
+				id: 41,
+				pinned_at: '2026-07-09T12:00:00Z',
+			})
+			await expect(unpinPost(41)).resolves.toMatchObject({ id: 41, pinned_at: null })
+
+			expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+				'/api/posts/41/pin/',
+				'/api/posts/41/pin/',
+			])
+		})
+
+		it('throws the server message when pinning fails', async () => {
+			const { pinPost } = await importPostsApi()
+			fetchMock.mockResolvedValueOnce(await response({ error: 'You can pin up to 3 posts' }, false))
+
+			await expect(pinPost(42)).rejects.toThrow('You can pin up to 3 posts')
 		})
 	})
 })

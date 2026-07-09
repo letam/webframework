@@ -18,6 +18,8 @@ vi.mock('@/lib/api/posts', () => ({
 	regenerateShareToken: vi.fn(),
 	likePost: vi.fn(),
 	unlikePost: vi.fn(),
+	pinPost: vi.fn(),
+	unpinPost: vi.fn(),
 }))
 
 vi.mock('@/components/ui/sonner', () => ({
@@ -269,5 +271,26 @@ describe('usePosts hook', () => {
 
 		expect(getCachedPosts(queryClient, ['posts', {}]).map((post) => post.id)).toEqual([8])
 		expect(getCachedPosts(queryClient, ['posts', { author: 42 }])).toEqual([])
+	})
+
+	it('updates posts across caches and invalidates pinned scopes after pinning', async () => {
+		const queryClient = createQueryClient()
+		const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+		const post = makePost({ id: 17, pinned_at: null })
+		const pinnedPost = makePost({ id: 17, pinned_at: '2026-07-09T12:00:00Z' })
+		queryClient.setQueryData(['posts', {}], infiniteData([post]))
+		queryClient.setQueryData(['posts', { author: post.author.id, pinned: true }], infiniteData([]))
+		vi.mocked(postsApi.pinPost).mockResolvedValueOnce(pinnedPost)
+
+		const { result } = renderHook(() => usePosts({}, { enabled: false }), {
+			wrapper: createWrapper(queryClient),
+		})
+
+		await act(async () => {
+			await result.current.setPinned(post.id, true)
+		})
+
+		expect(getCachedPosts(queryClient, ['posts', {}])[0].pinned_at).toBe('2026-07-09T12:00:00Z')
+		expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: ['posts'] }))
 	})
 })

@@ -37,6 +37,7 @@ const handlers = (overrides: Record<string, unknown> = {}) => ({
 	handleLike: vi.fn(),
 	handleDeletePost: vi.fn(),
 	handleEditPost: vi.fn(),
+	handlePinPost: vi.fn(),
 	handlePostTranscribed: vi.fn(),
 	...overrides,
 })
