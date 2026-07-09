@@ -19,7 +19,7 @@ import {
 	FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { UserPlus } from 'lucide-react'
+import { Loader2, UserPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -90,10 +90,7 @@ export const SignupModal = ({
 			<DialogTrigger asChild>
 				<Button
 					variant="ghost"
-					className={cn(
-						'transition-colors hover:text-foreground/80 text-foreground/60',
-						triggerClassName
-					)}
+					className={cn('hover:text-foreground/80 text-foreground/60', triggerClassName)}
 				>
 					<div className="flex items-center gap-2">
 						<UserPlus className="h-4 w-4" />
@@ -123,7 +120,7 @@ export const SignupModal = ({
 								<FormItem>
 									<FormLabel>Username</FormLabel>
 									<FormControl>
-										<Input placeholder="Choose a username" {...field} />
+										<Input placeholder="Choose a username" autoComplete="username" {...field} />
 									</FormControl>
 									<FormMessage />
 								</FormItem>
@@ -136,7 +133,12 @@ export const SignupModal = ({
 								<FormItem>
 									<FormLabel>Password</FormLabel>
 									<FormControl>
-										<Input type="password" placeholder="Create a password" {...field} />
+										<Input
+											type="password"
+											placeholder="Create a password"
+											autoComplete="new-password"
+											{...field}
+										/>
 									</FormControl>
 									<FormMessage />
 								</FormItem>
@@ -149,7 +151,12 @@ export const SignupModal = ({
 								<FormItem>
 									<FormLabel>Confirm Password</FormLabel>
 									<FormControl>
-										<Input type="password" placeholder="Confirm your password" {...field} />
+										<Input
+											type="password"
+											placeholder="Confirm your password"
+											autoComplete="new-password"
+											{...field}
+										/>
 									</FormControl>
 									<FormMessage />
 								</FormItem>
@@ -160,8 +167,15 @@ export const SignupModal = ({
 								{form.formState.errors.root.message}
 							</p>
 						)}
-						<Button type="submit" className="w-full bg-primary hover:bg-primary/90">
-							Create Account
+						<Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+							{form.formState.isSubmitting ? (
+								<>
+									<Loader2 className="animate-spin" />
+									Creating account...
+								</>
+							) : (
+								'Create Account'
+							)}
 						</Button>
 					</form>
 				</Form>

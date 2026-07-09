@@ -20,7 +20,7 @@ import {
 	FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { LogIn } from 'lucide-react'
+import { Loader2, LogIn } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/use-mobile'
 
@@ -77,10 +77,7 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess, onOpenChange }: L
 			<DialogTrigger asChild>
 				<Button
 					variant="ghost"
-					className={cn(
-						'transition-colors hover:text-foreground/80 text-foreground/60',
-						triggerClassName
-					)}
+					className={cn('hover:text-foreground/80 text-foreground/60', triggerClassName)}
 				>
 					<div className="flex items-center gap-2">
 						<LogIn className="h-4 w-4" />
@@ -110,7 +107,7 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess, onOpenChange }: L
 								<FormItem>
 									<FormLabel>Username</FormLabel>
 									<FormControl>
-										<Input placeholder="Enter your username" {...field} />
+										<Input placeholder="Enter your username" autoComplete="username" {...field} />
 									</FormControl>
 									<FormMessage />
 								</FormItem>
@@ -123,7 +120,12 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess, onOpenChange }: L
 								<FormItem>
 									<FormLabel>Password</FormLabel>
 									<FormControl>
-										<Input type="password" placeholder="Enter your password" {...field} />
+										<Input
+											type="password"
+											placeholder="Enter your password"
+											autoComplete="current-password"
+											{...field}
+										/>
 									</FormControl>
 									<FormMessage />
 								</FormItem>
@@ -134,8 +136,15 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess, onOpenChange }: L
 								{form.formState.errors.root.message}
 							</p>
 						)}
-						<Button type="submit" className="w-full bg-primary hover:bg-primary/90">
-							Sign In
+						<Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+							{form.formState.isSubmitting ? (
+								<>
+									<Loader2 className="animate-spin" />
+									Signing in...
+								</>
+							) : (
+								'Sign In'
+							)}
 						</Button>
 					</form>
 				</Form>

@@ -8,8 +8,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
 import { AlertTriangle, Shield, Heart, Users, Smile } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const GROUND_RULES_KEY = 'ground-rules-accepted'
 
@@ -100,7 +100,7 @@ export const GroundRulesModal = () => {
 							<label
 								key={rule.id}
 								htmlFor={rule.id}
-								className="w-full p-3 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer block focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2"
+								className="w-full p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer block ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
 							>
 								<div className="flex items-start space-x-3">
 									<Checkbox
@@ -122,7 +122,11 @@ export const GroundRulesModal = () => {
 					<div className="flex justify-end space-x-2">
 						<Button
 							onClick={handleAccept}
-							className={`${allRulesAccepted ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 hover:bg-gray-500 cursor-not-allowed'}`}
+							aria-disabled={!allRulesAccepted}
+							className={cn(
+								!allRulesAccepted &&
+									'bg-muted text-muted-foreground hover:bg-muted/80 cursor-not-allowed'
+							)}
 						>
 							I Accept All Rules
 						</Button>

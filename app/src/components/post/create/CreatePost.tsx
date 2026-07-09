@@ -198,7 +198,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			toast.success('Post created successfully!')
 			// Focus back on text area
 			textareaRef.current?.focus()
-		} catch (error) {
+		} catch (_error) {
 			toast.error('Failed to create post')
 		} finally {
 			setSubmitStatus('')
@@ -250,7 +250,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							onClick={() => setIsAudioModalOpen(true)}
 							disabled={!!submitStatus}
 						>
-							<Mic className="h-5 w-5" />
+							<Mic className="h-5 w-5 text-red-500 dark:text-red-400" />
 							<span className="text-base font-medium">Record Audio</span>
 						</Button>
 						<Button
@@ -260,7 +260,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							onClick={() => setIsVideoModalOpen(true)}
 							disabled={!!submitStatus}
 						>
-							<Video className="h-5 w-5" />
+							<Video className="h-5 w-5 text-blue-500 dark:text-blue-400" />
 							<span className="text-base font-medium">Record Video</span>
 						</Button>
 						<Button
@@ -270,7 +270,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							onClick={openImageFileSelector}
 							disabled={!!submitStatus}
 						>
-							<Image className="h-5 w-5" />
+							<Image className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />
 							<span className="text-base font-medium">Image</span>
 						</Button>
 						<Button
@@ -280,7 +280,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							onClick={openUploadFileSelector}
 							disabled={!!submitStatus}
 						>
-							<Upload className="h-5 w-5" />
+							<Upload className="h-5 w-5 text-violet-500 dark:text-violet-400" />
 							<span className="text-base font-medium">Upload</span>
 						</Button>
 						<input
