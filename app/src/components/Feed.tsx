@@ -44,6 +44,7 @@ const Feed: React.FC = () => {
 		clearFilters,
 		toggleFilter,
 		applyTagFilters,
+		applyFilterSet,
 	} = usePostFilters(posts)
 
 	const handleAddFilters = useCallback(
@@ -85,6 +86,7 @@ const Feed: React.FC = () => {
 					onSubmit={handleAddFilters}
 					matchMode={matchMode}
 					onMatchModeChange={(mode) => setMatchMode(mode)}
+					onApplyFilterSet={applyFilterSet}
 					selectedTags={tagFilters.map((filter) => filter.token)}
 					onTagsSubmit={applyTagFilters}
 					disabled={isLoading}

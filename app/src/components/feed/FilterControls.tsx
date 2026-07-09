@@ -3,8 +3,10 @@ import { Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TagFilterPopover } from './TagFilterPopover'
 import type { FilterToken, MatchMode } from '@/hooks/usePostFilters'
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { scrollToElement } from '@/lib/utils/ui'
+import { FilterSetsPopover } from './FilterSetsPopover'
+import type { FilterSetSnapshot } from '@/lib/utils/filterSets'
 
 type FilterControlsProps = {
 	filterText: string
@@ -12,6 +14,7 @@ type FilterControlsProps = {
 	onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
 	matchMode: MatchMode
 	onMatchModeChange: (mode: MatchMode) => void
+	onApplyFilterSet: (snapshot: FilterSetSnapshot) => void
 	selectedTags: string[]
 	onTagsSubmit: (tags: string[]) => void
 	disabled?: boolean
@@ -30,6 +33,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 	onSubmit,
 	matchMode,
 	onMatchModeChange,
+	onApplyFilterSet,
 	selectedTags,
 	onTagsSubmit,
 	disabled = false,
@@ -38,7 +42,9 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 }) => {
 	const labelRef = useRef<HTMLLabelElement | null>(null)
 	const previousFilteredPostCount = useRef<number | null>(null)
+	const filterHintTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const filterInputId = useId()
+	const [isFilterInputFocused, setIsFilterInputFocused] = useState(false)
 
 	useEffect(() => {
 		if (previousFilteredPostCount.current === null) {
@@ -57,19 +63,25 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 
 	useEffect(() => {
 		const inputElement = document.getElementById(filterInputId) as HTMLInputElement
-		inputElement?.addEventListener('keyup', (keyboardEvent) => {
+		const handleKeyUp = (keyboardEvent: KeyboardEvent) => {
 			if (keyboardEvent.key === 'Enter') {
 				inputElement.blur()
 			}
-		})
+		}
+
+		inputElement?.addEventListener('keyup', handleKeyUp)
 		return () => {
-			inputElement?.removeEventListener('keyup', (keyboardEvent) => {
-				if (keyboardEvent.key === 'Enter') {
-					inputElement.blur()
-				}
-			})
+			inputElement?.removeEventListener('keyup', handleKeyUp)
 		}
 	}, [filterInputId])
+
+	useEffect(() => {
+		return () => {
+			if (filterHintTimeout.current) {
+				clearTimeout(filterHintTimeout.current)
+			}
+		}
+	}, [])
 
 	const onTagFilterOpenChange = async (open: boolean) => {
 		if (!open) {
@@ -78,6 +90,24 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 		scrollToElement(labelRef.current)
 		// wait for the scroll to complete, as workound for sticky header to stay visible before we open keyboard for tag filter popover
 		await new Promise((resolve) => setTimeout(resolve, 300))
+	}
+
+	const handleFilterInputFocus = () => {
+		if (filterHintTimeout.current) {
+			clearTimeout(filterHintTimeout.current)
+		}
+
+		setIsFilterInputFocused(true)
+	}
+
+	const handleFilterInputBlur = () => {
+		if (filterHintTimeout.current) {
+			clearTimeout(filterHintTimeout.current)
+		}
+
+		filterHintTimeout.current = setTimeout(() => {
+			setIsFilterInputFocused(false)
+		}, 150)
 	}
 
 	return (
@@ -98,6 +128,8 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 						placeholder="Filter posts…"
 						value={filterText}
 						onChange={(event) => onFilterTextChange(event.target.value)}
+						onFocus={handleFilterInputFocus}
+						onBlur={handleFilterInputBlur}
 						aria-label="Add a filter term for posts"
 						disabled={disabled}
 					/>
@@ -111,6 +143,12 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 						Apply
 					</button>
 				)}
+				<FilterSetsPopover
+					filters={filters}
+					matchMode={matchMode}
+					onApply={onApplyFilterSet}
+					disabled={disabled}
+				/>
 				<TagFilterPopover
 					selectedTags={selectedTags}
 					onSubmit={onTagsSubmit}
@@ -118,44 +156,58 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 				/>
 			</div>
 
-			{filters.length >= 2 && (
-				<div className="mt-2 flex items-center gap-2 animate-rise-in">
-					<button
-						type="button"
-						onClick={() => onMatchModeChange(matchMode === 'and' ? 'or' : 'and')}
-						tabIndex={-1}
-						className="text-xs font-medium tracking-wide text-muted-foreground transition-colors hover:text-foreground active:text-foreground"
-						aria-label={`Toggle match mode (currently ${
-							matchMode === 'and' ? 'match all' : 'match any'
-						})`}
-						disabled={disabled}
-					>
-						Match on
-					</button>
-					<div className="flex items-center gap-1" role="radiogroup" aria-label="Filter match mode">
-						{(['and', 'or'] as const).map((mode) => (
-							<label
-								key={mode}
-								className={cn(
-									'inline-flex cursor-pointer items-center rounded-full px-3 py-0.5 text-xs font-medium ring-offset-background transition-colors focus-within:outline-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
-									matchMode === mode
-										? 'bg-primary text-primary-foreground hover:bg-primary/90'
-										: 'bg-muted text-muted-foreground hover:bg-muted/70',
-									disabled && 'pointer-events-none opacity-60'
-								)}
+			{(isFilterInputFocused || filters.length >= 2) && (
+				<div className="mt-2 space-y-2">
+					{isFilterInputFocused ? (
+						<div className="text-xs text-muted-foreground animate-rise-in">
+							Filter tricks: "exact phrase" · author:name · -exclude · #tag
+						</div>
+					) : null}
+
+					{filters.length >= 2 ? (
+						<div className="flex items-center gap-2 animate-rise-in">
+							<button
+								type="button"
+								onClick={() => onMatchModeChange(matchMode === 'and' ? 'or' : 'and')}
+								tabIndex={-1}
+								className="text-xs font-medium tracking-wide text-muted-foreground transition-colors hover:text-foreground active:text-foreground"
+								aria-label={`Toggle match mode (currently ${
+									matchMode === 'and' ? 'match all' : 'match any'
+								})`}
+								disabled={disabled}
 							>
-								<input
-									type="radio"
-									value={mode}
-									checked={matchMode === mode}
-									onChange={() => onMatchModeChange(mode)}
-									className="sr-only"
-									disabled={disabled}
-								/>
-								<span>{matchModeLabel[mode]}</span>
-							</label>
-						))}
-					</div>
+								Match on
+							</button>
+							<div
+								className="flex items-center gap-1"
+								role="radiogroup"
+								aria-label="Filter match mode"
+							>
+								{(['and', 'or'] as const).map((mode) => (
+									<label
+										key={mode}
+										className={cn(
+											'inline-flex cursor-pointer items-center rounded-full px-3 py-0.5 text-xs font-medium ring-offset-background transition-colors focus-within:outline-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+											matchMode === mode
+												? 'bg-primary text-primary-foreground hover:bg-primary/90'
+												: 'bg-muted text-muted-foreground hover:bg-muted/70',
+											disabled && 'pointer-events-none opacity-60'
+										)}
+									>
+										<input
+											type="radio"
+											value={mode}
+											checked={matchMode === mode}
+											onChange={() => onMatchModeChange(mode)}
+											className="sr-only"
+											disabled={disabled}
+										/>
+										<span>{matchModeLabel[mode]}</span>
+									</label>
+								))}
+							</div>
+						</div>
+					) : null}
 				</div>
 			)}
 		</form>

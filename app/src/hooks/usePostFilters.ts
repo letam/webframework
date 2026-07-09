@@ -1,5 +1,7 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { recordRecentFilterSet, type FilterSetSnapshot } from '@/lib/utils/filterSets'
 import type { Post } from '@/types/post'
+import { parseFilterToken, postMatchesFilterSet, splitFilterInput } from '@/utils/filterQuery'
 
 export type FilterToken = { token: string; enabled: boolean }
 
@@ -7,22 +9,19 @@ export type MatchMode = 'and' | 'or'
 
 export const normalizeFilterToken = (token: string) => token.trim().toLowerCase()
 
-export const sanitizeTokens = (rawInput: string) =>
+export const sanitizeTokens = (rawInput: string) => splitFilterInput(rawInput)
+
+const sanitizeTokenList = (tokens: string[]) =>
 	Array.from(
-		new Set(
-			rawInput
-				.trim()
-				.split(/\s+/)
+		new Map(
+			tokens
 				.map((token) => token.trim())
 				.filter(Boolean)
-		)
+				.map((token) => [normalizeFilterToken(token), token])
+		).values()
 	)
 
 export const formatTagToken = (tag: string) => (tag.startsWith('#') ? tag : `#${tag}`)
-
-const createMatcher =
-	(matchMode: MatchMode, filters: FilterToken[]) => (fn: (filter: FilterToken) => boolean) =>
-		matchMode === 'and' ? filters.every(fn) : filters.some(fn)
 
 const shouldEnableFilter = (filter: FilterToken, tokens: string[]) =>
 	tokens.some((token) => normalizeFilterToken(token) === normalizeFilterToken(filter.token))
@@ -34,32 +33,35 @@ export const usePostFilters = (posts: Post[]) => {
 
 	const activeFilters = useMemo(() => filters.filter((filter) => filter.enabled), [filters])
 
+	const activeFilterTokens = useMemo(
+		() => activeFilters.map((filter) => filter.token),
+		[activeFilters]
+	)
+
 	const filteredPosts = useMemo(() => {
 		if (activeFilters.length === 0) {
 			return posts
 		}
 
+		const parsedFilters = activeFilters.map((filter) => parseFilterToken(filter.token))
+
 		return posts.filter((post) => {
-			const fieldsToSearch: Array<string | undefined | null> = [
-				post.head,
-				post.body,
-				post.media?.transcript,
-				post.media?.alt_text,
-			]
-
-			const matcher = createMatcher(matchMode, activeFilters)
-
-			return matcher((filter) => {
-				const normalizedFilter = normalizeFilterToken(filter.token)
-				return fieldsToSearch.some((field) => field?.toLowerCase().includes(normalizedFilter))
-			})
+			return postMatchesFilterSet(post, parsedFilters, matchMode)
 		})
 	}, [activeFilters, matchMode, posts])
 
 	const tagFilters = useMemo(
-		() => filters.filter((filter) => filter.token.trim().startsWith('#')),
+		() =>
+			filters.filter((filter) => {
+				const parsed = parseFilterToken(filter.token)
+				return !parsed.negated && parsed.kind === 'tag'
+			}),
 		[filters]
 	)
+
+	useEffect(() => {
+		recordRecentFilterSet({ tokens: activeFilterTokens, matchMode })
+	}, [activeFilterTokens, matchMode])
 
 	const totalPostCount = posts.length
 	const filteredPostCount = filteredPosts.length
@@ -132,7 +134,10 @@ export const usePostFilters = (posts: Post[]) => {
 
 	const applyTagFilters = useCallback((tags: string[]) => {
 		setFilters((prev) => {
-			const nonTagFilters = prev.filter((filter) => !filter.token.trim().startsWith('#'))
+			const nonTagFilters = prev.filter((filter) => {
+				const parsed = parseFilterToken(filter.token)
+				return parsed.negated || parsed.kind !== 'tag'
+			})
 
 			const nextTagFilters = tags.map((tag) => ({
 				token: formatTagToken(tag),
@@ -141,6 +146,14 @@ export const usePostFilters = (posts: Post[]) => {
 
 			return [...nonTagFilters, ...nextTagFilters]
 		})
+	}, [])
+
+	const applyFilterSet = useCallback((snapshot: FilterSetSnapshot) => {
+		const tokens = sanitizeTokenList(snapshot.tokens)
+
+		setFilters(tokens.map((token) => ({ token, enabled: true })))
+		setMatchMode(snapshot.matchMode)
+		setFilterText('')
 	}, [])
 
 	return {
@@ -159,5 +172,6 @@ export const usePostFilters = (posts: Post[]) => {
 		clearFilters,
 		toggleFilter,
 		applyTagFilters,
+		applyFilterSet,
 	}
 }
