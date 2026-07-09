@@ -8,7 +8,22 @@ was asked for, how well it fits the product, and rough effort.
 Priority key: **P1** = asked for repeatedly, core to the product. **P2** = clear value,
 asked for once or twice. **P3** = exploratory / someday.
 
-## P1 — Post privacy
+---
+
+**Build-out status (updated 2026-07-09).** The whole P1 block and most of P2 were built
+out in a single push — six feature commits (`da97de9` → `fc919ab`), part of 18 unpushed
+commits on `main` awaiting a push. Shipped work is marked **✅** inline with its commit;
+sub-items that were deliberately deferred are called out under each section. Nothing is
+removed here — shipped rows are *annotated, not deleted*, so the original request text
+stays traceable. P3 and the UX / ops lists near the bottom are untouched.
+
+Still shipped-but-not-yet-done at a glance: sharing with *selected users*, auto-save
+draft composer, richer reactions, shorts / iPhone re-encode / volume normalization, and
+self-hosted Whisper — all called out below.
+
+---
+
+## P1 — Post privacy  ✅ Shipped 2026-07-09 (da97de9)
 
 The single most-repeated request (six-plus notes, May–Nov 2025). The fullest spec:
 
@@ -17,12 +32,19 @@ The single most-repeated request (six-plus notes, May–Nov 2025). The fullest s
 - Share tokens can be **regenerated** to revoke access for everyone holding the old link.
 - Later: share drafts/posts with selected users.
 
+> **✅ Shipped 2026-07-09 (da97de9).** Visibility levels public / unlisted (= link-visible)
+> / private, with a rotatable `share_token` (`POST /api/posts/<id>/share-token/`). The
+> feed, `/p/<id>` detail, media streaming, OG, and stats all gate on `is_visible_to`;
+> 404-never-403; the token is never serialized to non-authors. Composer gained a
+> visibility picker; the `/p/<id>` share page streams media through the gated endpoint +
+> token. **Still open:** sharing with *selected users* (the "Later" item).
+
 Design notes: visibility belongs on the composer (small, not in the way — default
 public) and on the post menu for existing posts. The feed, detail page (`/p/<id>`),
 media streaming, and OG endpoints all need to respect it; media served from R2 via
 presigned URLs already goes through the serializer, so gating is server-side only.
 
-## P1 — Drafts
+## P1 — Drafts  ✅ Shipped 2026-07-09 (da97de9)
 
 Recurring alongside privacy ("button for draft mode", "auto-submit as draft; select
 multiple to publish", "on iPhone automatically post as draft"). Minimum shape:
@@ -33,7 +55,13 @@ multiple to publish", "on iPhone automatically post as draft"). Minimum shape:
 - Optional toggle: auto-save composer content as a draft (the iPhone note was about not
   losing a recording when the page refreshes).
 
-## P2 — Views and richer reactions
+> **✅ Shipped 2026-07-09 (da97de9).** `is_draft` + a publish action (author-only;
+> publishing bumps `created` so cursor pagination is unchanged), a Draft button in the
+> composer, and a Profile **Drafts** tab with publish-all. Built together with privacy as
+> planned. **Still open:** the optional auto-save-composer-as-draft toggle (the iPhone
+> "don't lose a recording on refresh" note).
+
+## P2 — Views and richer reactions  ✅ View counts shipped 2026-07-09 (56f0380)
 
 "Reactions, views, comments" recur as a trio; likes and comments shipped in Phase 2.
 
@@ -42,7 +70,13 @@ multiple to publish", "on iPhone automatically post as draft"). Minimum shape:
 - Possibly extend like → small set of reactions. Only if it doesn't clutter the action
   row; the notes never specified emoji sets.
 
-## P2 — Profile upgrades
+> **✅ View counts shipped 2026-07-09 (56f0380).** `PostView`, unique per viewer (hashed
+> anonymous session keys), fed by a throttled beacon (`POST /api/posts/views/`, 120/min)
+> off an IntersectionObserver dwell timer with a batched keepalive flush; an Eye counter
+> in the action row; also recorded + shown on the `/p/<id>` share page. **Still open
+> (deliberately deferred):** richer reactions beyond like.
+
+## P2 — Profile upgrades  ✅ Shipped 2026-07-09 (dd29a53)
 
 From "webframework: mement.app: profile with pinned posts. weeklies. monthlies.":
 
@@ -50,7 +84,13 @@ From "webframework: mement.app: profile with pinned posts. weeklies. monthlies."
 - **Weeklies / monthlies**: automatic time-bucketed views of a user's posts.
 - **Avatar upload** (identity-gradient fallbacks already exist).
 
-## P2 — Search & filter power tools
+> **✅ Shipped 2026-07-09 (dd29a53).** Pin ≤3 published posts (`POST/DELETE
+> /api/posts/<id>/pin/`, `?pinned=true` scope); an All · Weeks · Months timeline grouping
+> on the profile; and avatar upload (`User.avatar` + a 512² JPEG pipeline, rendered
+> everywhere incl. Navbar, Profile, and author hover cards). Identity-gradient fallbacks
+> stay for users without an avatar.
+
+## P2 — Search & filter power tools  ✅ Shipped 2026-07-09 (bbe5dc6)
 
 From the Nov 2025 notes (multi-term filtering already shipped):
 
@@ -59,7 +99,13 @@ From the Nov 2025 notes (multi-term filtering already shipped):
 - An "advanced" toggle below the filter box for the above.
 - **Export data** button (dovetails with the offline/local-first work below).
 
-## P2 — Media polish
+> **✅ Shipped 2026-07-09 (bbe5dc6).** Operator grammar in `src/utils/filterQuery.ts`
+> (`"phrase"`, `author:`, `-exclusion`); saved + recently-used filter sets in localStorage
+> behind a Bookmark popover; an operator hint shown on input focus; and a Settings
+> "Export my posts" JSON download (the export-data button). Note the export ships here
+> rather than waiting on the offline / local-first work below.
+
+## P2 — Media polish  ✅ Mostly shipped 2026-07-09 (fc919ab)
 
 - **Video thumbnails**: capture on upload (ffmpeg already in prod image), display in
   feed, allow replacing with a custom image. Duration capture already ships.
@@ -73,12 +119,25 @@ From the Nov 2025 notes (multi-term filtering already shipped):
 - **Normalize recording volume** across browsers (an earlier pass existed; Safari was
   the pain point).
 
-## P2 — Transcription upgrades
+> **✅ Mostly shipped 2026-07-09 (fc919ab).** A `process_post_media` background task (via
+> `on_commit`) generates: video posters (ffmpeg → `Media.thumbnail`, `preload=none`) with
+> a custom-poster PATCH on the edit modal; a ≤120-peak audio waveform (JSONField) driving
+> a SoundCloud-style drag-seek bar with a brand-gradient played edge; and ≤1600px image
+> renditions (small originals skipped) with a lightbox "View original". **Still open
+> (deliberately deferred — they need device testing):** shorts / duration cap, iPhone
+> re-encode-before-upload, and cross-browser volume normalization.
+
+## P2 — Transcription upgrades  ✅ Auto-transcribe shipped 2026-07-09 (10fcf8d)
 
 - **Auto-transcribe toggle**: per-user (or per-post) option to transcribe media as soon
   as a post is created, instead of pressing the button.
 - **Self-hosted Whisper** (whisperX / faster-whisper) as an alternative backend to the
   OpenAI API.
+
+> **✅ Auto-transcribe toggle shipped 2026-07-09 (10fcf8d).** Per-user Settings toggle;
+> `usePostHandlers` kicks off transcription right after a media post is created
+> (`getSettings` now merges defaults). **Still open (deliberately deferred):** the
+> self-hosted Whisper backend.
 
 ## P3 — Offline / local-first
 
