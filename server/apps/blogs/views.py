@@ -1,5 +1,6 @@
 """Views and API endpoints for blog posts and media."""
 
+import hashlib
 import logging
 import mimetypes
 import os
@@ -28,7 +29,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.throttling import UserRateThrottle
+from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from werkzeug.http import parse_range_header
 
 from apps.uploads.s3 import (
@@ -47,6 +48,7 @@ from .models import (
     Like,
     Media,
     Post,
+    PostView,
     generate_share_token,
 )
 from .pagination import PostCursorPagination
@@ -102,6 +104,41 @@ def _is_truthy(value):
     return bool(value)
 
 
+def _viewer_key_for_request(request):
+    """Return the stable, non-credential viewer key for the request."""
+    if request.user.is_authenticated:
+        return f'u:{request.user.id}'
+
+    if not request.session.session_key:
+        request.session.save()
+
+    session_key = request.session.session_key
+    digest = hashlib.sha256(f'{settings.SECRET_KEY}:{session_key}'.encode()).hexdigest()[:40]
+    return f's:{digest}'
+
+
+def _record_post_views(request, posts):
+    """Create deduped view rows for visible, published posts by non-author viewers."""
+    posts_to_record = []
+    user = request.user
+
+    for post in posts:
+        if post.is_draft:
+            continue
+        if user.is_authenticated and post.author_id == user.id:
+            continue
+        posts_to_record.append(post)
+
+    if not posts_to_record:
+        return
+
+    viewer_key = _viewer_key_for_request(request)
+    PostView.objects.bulk_create(
+        [PostView(post=post, viewer_key=viewer_key) for post in posts_to_record],
+        ignore_conflicts=True,
+    )
+
+
 class PostViewSet(viewsets.ModelViewSet):
     """API viewset for creating, reading, updating, and deleting posts."""
 
@@ -109,6 +146,7 @@ class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
     serializer_class = PostSerializer
     pagination_class = PostCursorPagination
+    throttle_scope = None
 
     def get_annotated_queryset(self):
         """Return the annotated post queryset before visibility filtering."""
@@ -118,6 +156,7 @@ class PostViewSet(viewsets.ModelViewSet):
             .annotate(
                 like_count=_related_count(Like),
                 comment_count=_related_count(Comment),
+                view_count=_related_count(PostView),
             )
         )
 
@@ -437,6 +476,39 @@ class PostViewSet(viewsets.ModelViewSet):
 
         return Response({'liked': liked, 'like_count': post.likes.count()})
 
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='views',
+        throttle_classes=[ScopedRateThrottle],
+        throttle_scope='views',
+    )
+    def views(self, request):
+        """Record unique views for visible published posts."""
+        post_ids = request.data.get('post_ids')
+        if not isinstance(post_ids, list):
+            return Response(
+                {'error': 'post_ids must be a list of integers'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if len(post_ids) > 50:
+            return Response(
+                {'error': 'post_ids cannot contain more than 50 ids'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if any(not isinstance(post_id, int) or isinstance(post_id, bool) for post_id in post_ids):
+            return Response(
+                {'error': 'post_ids must be a list of integers'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        queryset = Post.objects.visible_to(request.user).filter(id__in=set(post_ids))
+        if request.user.is_authenticated:
+            queryset = queryset.exclude(author=request.user)
+
+        _record_post_views(request, queryset)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=True, methods=['post'])
     def publish(self, request, pk=None):
         """Publish a draft post, bumping its public timestamp."""
@@ -730,6 +802,8 @@ def post_detail(request, post_id):
         serializer = PostSerializer(post, context={'request': request})
         return JsonResponse(serializer.data)
 
+    _record_post_views(request, [post])
+
     # Media embeds via the gated streaming endpoint rather than raw storage
     # URLs: raw FieldFile URLs are empty for S3-backed media and bypass the
     # visibility checks for local media. Unlisted posts carry the share token
@@ -746,6 +820,7 @@ def post_detail(request, post_id):
         'media_url': media_url,
         'like_count': post.likes.count(),
         'comment_count': post.comments.count(),
+        'view_count': post.views.count(),
         'noindex': post.visibility != VISIBILITY_PUBLIC or post.is_draft,
         'debug': settings.DEBUG,
     }

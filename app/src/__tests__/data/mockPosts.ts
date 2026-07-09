@@ -39,6 +39,7 @@ export const makePost = (overrides: Partial<Post> = {}): Post => ({
 	share_token: 'share-token-1',
 	like_count: 2,
 	comment_count: 1,
+	view_count: 0,
 	liked: false,
 	...overrides,
 })

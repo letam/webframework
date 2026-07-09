@@ -393,6 +393,7 @@ REST_FRAMEWORK = {
         'anon': '300/hour',
         'user': '1000/hour',
         'transcribe': '10/hour',
+        'views': '120/min',
     },
 }
 

@@ -253,6 +253,25 @@ describe('posts API', () => {
 		})
 	})
 
+	describe('recordPostViews', () => {
+		it('posts view ids with CSRF options and keepalive', async () => {
+			const { recordPostViews } = await importPostsApi()
+			const { getFetchOptions } = await import('@/lib/utils/fetch')
+			fetchMock.mockResolvedValueOnce(await response(null))
+
+			await recordPostViews([1, 2])
+
+			expect(getFetchOptions).toHaveBeenCalledWith('POST', { post_ids: [1, 2] })
+			expect(fetchMock).toHaveBeenCalledWith(
+				'/api/posts/views/',
+				expect.objectContaining({
+					method: 'POST',
+					keepalive: true,
+				})
+			)
+		})
+	})
+
 	describe('getAuthorStats', () => {
 		it('fetches aggregate totals for an author', async () => {
 			const { getAuthorStats } = await importPostsApi()

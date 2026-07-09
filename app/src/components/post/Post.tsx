@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { getMediaUrl, getPost, transcribePost } from '@/lib/api/posts'
 import { getMimeTypeFromPath } from '@/lib/utils/file'
 import { parseDurationString } from '@/lib/utils/media'
+import { markPostViewed } from '@/lib/viewTracking'
 
 const TRANSCRIPTION_POLL_INTERVAL_MS = 3_000
 const TRANSCRIPTION_TIMEOUT_MS = 3 * 60 * 1000
@@ -88,6 +89,7 @@ export const Post: React.FC<PostProps> = ({
 }) => {
 	const { isAuthenticated, userId, isSuperuser } = useAuth()
 	const [commentsOpen, setCommentsOpen] = useState(false)
+	const postRef = useRef<HTMLDivElement>(null)
 	const timedOutTranscriptionsRef = useRef<Set<number>>(new Set())
 	// The transcribe endpoint only allows the post author or an admin
 	const canTranscribe = isAuthenticated && (userId === post.author.id || isSuperuser)
@@ -173,8 +175,56 @@ export const Post: React.FC<PostProps> = ({
 		return stopPolling
 	}, [canTranscribe, onTranscribed, post.id, post.media?.transcript_status])
 
+	useEffect(() => {
+		if (post.is_draft || post.author.id === userId) {
+			return
+		}
+
+		const element = postRef.current
+		if (!element || typeof IntersectionObserver === 'undefined') {
+			return
+		}
+
+		let dwellTimer: number | undefined
+		const clearDwellTimer = () => {
+			if (dwellTimer !== undefined) {
+				window.clearTimeout(dwellTimer)
+				dwellTimer = undefined
+			}
+		}
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				const visible = entries.some(
+					(entry) => entry.isIntersecting && entry.intersectionRatio >= 0.5
+				)
+
+				if (!visible) {
+					clearDwellTimer()
+					return
+				}
+
+				if (dwellTimer === undefined) {
+					dwellTimer = window.setTimeout(() => {
+						markPostViewed(post.id)
+						dwellTimer = undefined
+					}, 1_000)
+				}
+			},
+			{ threshold: [0, 0.5] }
+		)
+
+		observer.observe(element)
+
+		return () => {
+			clearDwellTimer()
+			observer.disconnect()
+		}
+	}, [post.author.id, post.id, post.is_draft, userId])
+
 	return (
 		<div
+			ref={postRef}
 			className="group bg-card rounded-lg shadow-xs border transition-[border-color,box-shadow] duration-200 hover:border-primary/20 hover:shadow-sm max-w-lg mx-auto px-4 py-3 animate-rise-in"
 			data-testid={`post-${post.id}`}
 		>

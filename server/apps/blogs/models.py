@@ -1,4 +1,4 @@
-"""Data models for blog posts, media, likes, and comments."""
+"""Data models for blog posts, media, views, likes, and comments."""
 
 import contextlib
 import logging
@@ -269,6 +269,25 @@ class Post(models.Model):
 
         # Delete the record
         return super().delete(*args, **kwargs)
+
+
+class PostView(models.Model):
+    """A unique viewer's counted view for a post."""
+
+    created = models.DateTimeField(auto_now_add=True)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='views')
+    viewer_key = models.CharField(max_length=64)
+
+    class Meta:
+        """Model options for post views."""
+
+        constraints = [
+            models.UniqueConstraint(fields=['post', 'viewer_key'], name='unique_post_viewer'),
+        ]
+
+    def __str__(self):
+        """Return a readable post view label."""
+        return f'{self.viewer_key} viewed post {self.post_id}'
 
 
 class Like(models.Model):

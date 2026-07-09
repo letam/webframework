@@ -38,6 +38,7 @@ export interface Post {
 	share_token?: string | null
 	like_count: number
 	comment_count: number
+	view_count: number
 	liked: boolean
 }
 

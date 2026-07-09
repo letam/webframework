@@ -241,6 +241,26 @@ export const transcribePost = async (id: number): Promise<Post> => {
 	}
 }
 
+export const recordPostViews = async (ids: number[]): Promise<void> => {
+	if (ids.length === 0) {
+		return
+	}
+
+	try {
+		const options = await getFetchOptions('POST', { post_ids: ids })
+		const response = await fetch(`${SERVER_API_URL}/posts/views/`, {
+			...options,
+			keepalive: true,
+		})
+
+		if (!response.ok) {
+			throw new Error('Failed to record post views')
+		}
+	} catch (error) {
+		console.error('Error recording post views:', error)
+	}
+}
+
 export const deletePost = async (id: number): Promise<void> => {
 	try {
 		const options = await getFetchOptions('DELETE')

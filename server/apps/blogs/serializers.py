@@ -83,6 +83,7 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
     post_set = serializers.SerializerMethodField()
     like_count = serializers.SerializerMethodField()
     comment_count = serializers.SerializerMethodField()
+    view_count = serializers.SerializerMethodField()
     liked = serializers.SerializerMethodField()
     share_token = serializers.SerializerMethodField()
 
@@ -104,6 +105,7 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
             'share_token',
             'like_count',
             'comment_count',
+            'view_count',
             'liked',
         ]
         read_only_fields = ['is_draft']
@@ -119,6 +121,11 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
         """Return the annotated or computed comment count."""
         count = getattr(obj, 'comment_count', None)
         return count if count is not None else obj.comments.count()
+
+    def get_view_count(self, obj):
+        """Return the annotated or computed view count."""
+        count = getattr(obj, 'view_count', None)
+        return count if count is not None else obj.views.count()
 
     def get_liked(self, obj):
         """Return whether the request user has liked the post."""
