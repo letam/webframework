@@ -80,9 +80,11 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
 
     author = UserNameSerializer(read_only=True)
     media = MediaSerializer(read_only=True)
+    post_set = serializers.SerializerMethodField()
     like_count = serializers.SerializerMethodField()
     comment_count = serializers.SerializerMethodField()
     liked = serializers.SerializerMethodField()
+    share_token = serializers.SerializerMethodField()
 
     class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
         """Serializer metadata."""
@@ -97,10 +99,14 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
             'body',
             'media',
             'post_set',
+            'visibility',
+            'is_draft',
+            'share_token',
             'like_count',
             'comment_count',
             'liked',
         ]
+        read_only_fields = ['is_draft']
 
     def get_like_count(self, obj):
         """Return the annotated or computed like count."""
@@ -124,6 +130,21 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
             return obj.likes.filter(user=request.user).exists()
         return False
 
+    def get_share_token(self, obj):
+        """Return the share token only to authors and superusers."""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        if obj.author_id == request.user.id or request.user.is_superuser:
+            return obj.share_token
+        return None
+
+    def get_post_set(self, obj):
+        """Return ids for child posts visible to the request user."""
+        request = self.context.get('request')
+        user = request.user if request else None
+        return [child.id for child in obj.post_set.all() if child.is_visible_to(user)]
+
 
 class PostCreateSerializer(serializers.ModelSerializer):
     """Serializer for post create payloads."""
@@ -136,4 +157,6 @@ class PostCreateSerializer(serializers.ModelSerializer):
             'head',
             'body',
             'media',
+            'visibility',
+            'is_draft',
         ]

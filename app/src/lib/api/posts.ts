@@ -16,6 +16,7 @@ export interface PostsPage {
 export interface PostsQueryScope {
 	author?: number
 	liked?: boolean
+	drafts?: boolean
 }
 
 interface PaginatedPostsResponse {
@@ -52,6 +53,10 @@ const buildPostsUrl = (scope: PostsQueryScope) => {
 
 	if (scope.liked) {
 		params.set('liked', 'true')
+	}
+
+	if (scope.drafts) {
+		params.set('drafts', 'true')
 	}
 
 	const query = params.toString()
@@ -98,7 +103,13 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 	try {
 		let response: Response
 		const formData = new FormData()
-		formData.append('body', data.text)
+		formData.append('body', data.text ?? '')
+		if (data.visibility && data.visibility !== 'public') {
+			formData.append('visibility', data.visibility)
+		}
+		if (data.is_draft) {
+			formData.append('is_draft', 'true')
+		}
 
 		// // Debug logging
 		// console.log('Creating post with data:', data)
@@ -163,15 +174,54 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 	}
 }
 
+export const getShareUrl = (post: Post): string => {
+	if (post.visibility !== 'unlisted' || !post.share_token) {
+		return post.url
+	}
+
+	const url = new URL(post.url, window.location.origin)
+	url.searchParams.set('token', post.share_token)
+	return url.toString()
+}
+
 export const getMediaUrl = (post: Post): string => {
 	if (post.media?.signed_url) {
 		return post.media.signed_url
 	}
-	return `${SERVER_API_URL}/posts/${post.id}/media/`
+	const streamUrl = `${SERVER_API_URL}/posts/${post.id}/media/`
+	if (post.visibility !== 'unlisted' || !post.share_token) {
+		return streamUrl
+	}
+
+	return `${streamUrl}?token=${encodeURIComponent(post.share_token)}`
 
 	// NOTE: Use this to serve media files directly from media server in non-Safari browsers
 	// const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
 	// return isSafari ? `${SERVER_API_URL}/posts/${post.id}/media/` : post.media
+}
+
+export const publishPost = async (id: number): Promise<Post> => {
+	const options = await getFetchOptions('POST')
+	const response = await fetch(`${SERVER_API_URL}/posts/${id}/publish/`, options)
+
+	if (!response.ok) {
+		throw new Error('Failed to publish post')
+	}
+
+	const post: Post = await response.json()
+	return revivePost(post)
+}
+
+export const regenerateShareToken = async (id: number): Promise<Post> => {
+	const options = await getFetchOptions('POST')
+	const response = await fetch(`${SERVER_API_URL}/posts/${id}/share-token/`, options)
+
+	if (!response.ok) {
+		throw new Error('Failed to reset share link')
+	}
+
+	const post: Post = await response.json()
+	return revivePost(post)
 }
 
 export const transcribePost = async (id: number): Promise<Post> => {

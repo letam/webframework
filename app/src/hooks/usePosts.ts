@@ -12,6 +12,8 @@ import {
 	createPost,
 	deletePost,
 	updatePost,
+	publishPost as publishPostRequest,
+	regenerateShareToken as regenerateShareTokenRequest,
 	likePost,
 	unlikePost,
 	type PostsPage,
@@ -32,9 +34,35 @@ export interface UsePostsOptions {
 }
 
 const normalizeScope = (scope: PostsQueryScope): PostsQueryScope => ({
-	...(scope.author != null ? { author: scope.author } : {}),
-	...(scope.liked ? { liked: true } : {}),
+	...(scope.drafts ? { drafts: true } : {}),
+	...(scope.drafts ? {} : scope.author != null ? { author: scope.author } : {}),
+	...(scope.drafts ? {} : scope.liked ? { liked: true } : {}),
 })
+
+const shouldPrependPostToScope = (scope: PostsQueryScope, post: Post) => {
+	if (scope.drafts) {
+		return post.is_draft
+	}
+
+	if (post.is_draft || scope.liked) {
+		return false
+	}
+
+	return scope.author == null || scope.author === post.author.id
+}
+
+const shouldAddPublishedPostToScope = (scope: PostsQueryScope, post: Post) => {
+	if (scope.drafts || scope.liked) {
+		return false
+	}
+
+	return scope.author == null || scope.author === post.author.id
+}
+
+const prependUniquePost = (posts: Post[], post: Post) => [
+	post,
+	...posts.filter((cachedPost) => cachedPost.id !== post.id),
+]
 
 const getPostsQueryKey = (scope: PostsQueryScope) => [...POSTS_QUERY_KEY, scope] as const
 
@@ -47,7 +75,8 @@ export const isPostsQueryKey = (queryKey: QueryKey) =>
 const getScopeFromQueryKey = (queryKey: QueryKey): PostsQueryScope =>
 	isPostsQueryKey(queryKey) ? (queryKey[1] as PostsQueryScope) : {}
 
-const isUnscopedScope = (scope: PostsQueryScope) => scope.author == null && !scope.liked
+const isUnscopedScope = (scope: PostsQueryScope) =>
+	scope.author == null && !scope.liked && !scope.drafts
 
 const flattenPosts = (data?: InfiniteData<PostsPage>) =>
 	data?.pages.flatMap((page) => page.posts) ?? []
@@ -63,21 +92,17 @@ const mapPages = (
 	})),
 })
 
-const shouldPrependPostToScope = (scope: PostsQueryScope, post: Post) => {
-	if (scope.liked) {
-		return false
-	}
-
-	return scope.author == null || scope.author === post.author.id
-}
-
 export const usePosts = (
 	scope: PostsQueryScope = DEFAULT_POSTS_SCOPE,
 	options: UsePostsOptions = {}
 ) => {
 	const queryClient = useQueryClient()
 	const enabled = options.enabled ?? true
-	const normalizedScope = useMemo(() => normalizeScope(scope), [scope.author, scope.liked])
+	const { author, liked, drafts } = scope
+	const normalizedScope = useMemo(
+		() => normalizeScope({ author, liked, drafts }),
+		[author, liked, drafts]
+	)
 	const queryKey = useMemo(() => getPostsQueryKey(normalizedScope), [normalizedScope])
 
 	const updateTagsCacheFromPosts = useCallback(
@@ -141,14 +166,17 @@ export const usePosts = (
 			})
 
 			for (const [cachedQueryKey, cachedData] of queries) {
-				if (!cachedData || !shouldPrependPostToScope(getScopeFromQueryKey(cachedQueryKey), newPost)) {
+				if (
+					!cachedData ||
+					!shouldPrependPostToScope(getScopeFromQueryKey(cachedQueryKey), newPost)
+				) {
 					continue
 				}
 
 				queryClient.setQueryData<InfiniteData<PostsPage>>(cachedQueryKey, {
 					...cachedData,
 					pages: cachedData.pages.map((page, index) =>
-						index === 0 ? { ...page, posts: [newPost, ...page.posts] } : page
+						index === 0 ? { ...page, posts: prependUniquePost(page.posts, newPost) } : page
 					),
 				})
 			}
@@ -170,6 +198,53 @@ export const usePosts = (
 		mutationFn: (id: number) => deletePost(id),
 		onSuccess: (_, id) => {
 			updatePostsCaches((prev = []) => prev.filter((post) => post.id !== id))
+		},
+	})
+
+	const publishPostMutation = useMutation({
+		mutationFn: (id: number) => publishPostRequest(id),
+		onSuccess: (publishedPost) => {
+			const queries = queryClient.getQueriesData<InfiniteData<PostsPage>>({
+				queryKey: POSTS_QUERY_KEY,
+				predicate: (query) => isPostsQueryKey(query.queryKey),
+			})
+
+			for (const [cachedQueryKey, cachedData] of queries) {
+				if (!cachedData) {
+					continue
+				}
+
+				const scope = getScopeFromQueryKey(cachedQueryKey)
+				if (scope.drafts) {
+					queryClient.setQueryData(
+						cachedQueryKey,
+						mapPages(cachedData, (posts) => posts.filter((post) => post.id !== publishedPost.id))
+					)
+					continue
+				}
+
+				if (!shouldAddPublishedPostToScope(scope, publishedPost)) {
+					continue
+				}
+
+				queryClient.setQueryData<InfiniteData<PostsPage>>(cachedQueryKey, {
+					...cachedData,
+					pages: cachedData.pages.map((page, index) =>
+						index === 0 ? { ...page, posts: prependUniquePost(page.posts, publishedPost) } : page
+					),
+				})
+			}
+
+			updateTagsCacheFromFeed()
+		},
+	})
+
+	const regenerateShareTokenMutation = useMutation({
+		mutationFn: (id: number) => regenerateShareTokenRequest(id),
+		onSuccess: (updatedPost) => {
+			updatePostsCaches((prev = []) =>
+				prev.map((post) => (post.id === updatedPost.id ? updatedPost : post))
+			)
 		},
 	})
 
@@ -214,8 +289,7 @@ export const usePosts = (
 			const likedScopeQueries = queryClient.getQueriesData<InfiniteData<PostsPage>>({
 				queryKey: POSTS_QUERY_KEY,
 				predicate: (query) =>
-					isPostsQueryKey(query.queryKey) &&
-					Boolean(getScopeFromQueryKey(query.queryKey).liked),
+					isPostsQueryKey(query.queryKey) && Boolean(getScopeFromQueryKey(query.queryKey).liked),
 			})
 			for (const [cachedQueryKey, cachedData] of likedScopeQueries) {
 				if (result.liked) {
@@ -248,6 +322,16 @@ export const usePosts = (
 
 	const removePost = async (id: number) => {
 		await removePostMutation.mutateAsync(id)
+	}
+
+	const publishPost = async (id: number) => {
+		const publishedPost = await publishPostMutation.mutateAsync(id)
+		return publishedPost
+	}
+
+	const regenerateShareToken = async (id: number) => {
+		const updatedPost = await regenerateShareTokenMutation.mutateAsync(id)
+		return updatedPost
 	}
 
 	const findCachedPost = useCallback(
@@ -284,10 +368,16 @@ export const usePosts = (
 		addPost,
 		editPost,
 		removePost,
+		publishPost,
+		regenerateShareToken,
 		toggleLike,
 		setPosts,
 		isFetching,
 		isMutating:
-			addPostMutation.isPending || editPostMutation.isPending || removePostMutation.isPending,
+			addPostMutation.isPending ||
+			editPostMutation.isPending ||
+			removePostMutation.isPending ||
+			publishPostMutation.isPending ||
+			regenerateShareTokenMutation.isPending,
 	}
 }

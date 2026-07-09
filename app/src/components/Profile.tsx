@@ -1,7 +1,18 @@
 import type React from 'react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Post } from './post/Post'
@@ -15,12 +26,12 @@ import { InfiniteScrollSentinel } from './feed/InfiniteScrollSentinel'
 
 const Profile: React.FC = () => {
 	const { isAuthenticated, userId, username } = useAuth()
+	const [publishAllOpen, setPublishAllOpen] = useState(false)
+	const [isPublishingAll, setIsPublishingAll] = useState(false)
 	const profileQueriesEnabled = isAuthenticated && userId != null
-	const mine = usePostHandlers(
-		{ author: userId ?? undefined },
-		{ enabled: profileQueriesEnabled }
-	)
+	const mine = usePostHandlers({ author: userId ?? undefined }, { enabled: profileQueriesEnabled })
 	const liked = usePostHandlers({ liked: true }, { enabled: profileQueriesEnabled })
+	const drafts = usePostHandlers({ drafts: true }, { enabled: profileQueriesEnabled })
 
 	const myPosts = mine.posts
 	const mediaPosts = useMemo(() => myPosts.filter((post) => post.media), [myPosts])
@@ -51,7 +62,7 @@ const Profile: React.FC = () => {
 			.join('')
 		return (letters || username?.[0] || '?').toUpperCase()
 	}, [displayName, username])
-	const error = mine.error ?? liked.error
+	const error = mine.error ?? liked.error ?? drafts.error
 
 	if (!isAuthenticated) {
 		return (
@@ -91,6 +102,10 @@ const Profile: React.FC = () => {
 							onLike={source.handleLike}
 							onDelete={source.handleDeletePost}
 							onEdit={source.handleEditPost}
+							onPublish={source.handlePublishPost}
+							onChangeVisibility={source.handleChangeVisibility}
+							onCopyShareLink={source.handleCopyShareLink}
+							onResetShareLink={source.handleResetShareLink}
 							onTranscribed={source.handlePostTranscribed}
 						/>
 					))
@@ -102,6 +117,18 @@ const Profile: React.FC = () => {
 				/>
 			</>
 		)
+	}
+
+	const handlePublishAll = async () => {
+		setIsPublishingAll(true)
+		try {
+			for (const draft of drafts.posts) {
+				await drafts.handlePublishPost(draft.id)
+			}
+			setPublishAllOpen(false)
+		} finally {
+			setIsPublishingAll(false)
+		}
 	}
 
 	return (
@@ -129,9 +156,7 @@ const Profile: React.FC = () => {
 					<div className="mt-4 flex gap-4 text-sm">
 						<div>
 							<span className="font-semibold">{postCount}</span>{' '}
-							<span className="text-muted-foreground">
-								{postCount === 1 ? 'Post' : 'Posts'}
-							</span>
+							<span className="text-muted-foreground">{postCount === 1 ? 'Post' : 'Posts'}</span>
 						</div>
 						<div>
 							<span className="font-semibold">{likesReceived}</span>{' '}
@@ -154,6 +179,9 @@ const Profile: React.FC = () => {
 					<TabsTrigger value="likes" className="flex-1">
 						Likes
 					</TabsTrigger>
+					<TabsTrigger value="drafts" className="flex-1">
+						Drafts
+					</TabsTrigger>
 				</TabsList>
 
 				<TabsContent value="posts" className="space-y-4 mt-4">
@@ -167,7 +195,44 @@ const Profile: React.FC = () => {
 				<TabsContent value="likes" className="space-y-4 mt-4">
 					{renderPosts(liked.posts, 'Posts you like will show up here.', liked)}
 				</TabsContent>
+
+				<TabsContent value="drafts" className="space-y-4 mt-4">
+					{drafts.posts.length > 1 && (
+						<div className="max-w-lg mx-auto flex justify-end">
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								onClick={() => setPublishAllOpen(true)}
+							>
+								Publish all
+							</Button>
+						</div>
+					)}
+					{renderPosts(
+						drafts.posts,
+						'No drafts yet. Drafts you save from the composer land here.',
+						drafts
+					)}
+				</TabsContent>
 			</Tabs>
+
+			<AlertDialog open={publishAllOpen} onOpenChange={setPublishAllOpen}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Publish {drafts.posts.length} drafts?</AlertDialogTitle>
+						<AlertDialogDescription>
+							This will publish each draft and move it into your public post list.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel disabled={isPublishingAll}>Cancel</AlertDialogCancel>
+						<AlertDialogAction onClick={() => void handlePublishAll()} disabled={isPublishingAll}>
+							Publish
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 
 			{/* Bottom padding */}
 			<div className="h-96"></div>

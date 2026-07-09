@@ -3,20 +3,54 @@ import { useState, useRef } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Mic, Video, Image, Loader2, Upload } from 'lucide-react'
+import { Mic, Video, Image, Loader2, Upload, Globe, Link2, Lock } from 'lucide-react'
 import { AudioRecorderModal } from './AudioRecorder'
 import { VideoRecorderModal } from './VideoRecorder'
 import MediaPreview from './MediaPreview'
-import type { CreatePostRequest } from '@/types/post'
+import type { CreatePostRequest, PostVisibility } from '@/types/post'
 import { convertWavToWebM, getAudioExtension } from '@/lib/utils/audio'
 import { getSettings } from '@/lib/utils/settings'
+import { useAuth } from '@/hooks/useAuth'
 
 interface CreatePostProps {
 	onPostCreated: (post: CreatePostRequest) => void
 }
 
 type SubmitStatus = '' | 'preparing' | 'compressing' | 'submitting'
+
+const VISIBILITY_OPTIONS = [
+	{
+		value: 'public',
+		label: 'Public',
+		description: 'Anyone can see this post',
+		icon: Globe,
+	},
+	{
+		value: 'unlisted',
+		label: 'Link only',
+		description: 'Hidden from the feed; anyone with the link can see it',
+		icon: Link2,
+	},
+	{
+		value: 'private',
+		label: 'Private',
+		description: 'Only you can see this post',
+		icon: Lock,
+	},
+] satisfies {
+	value: PostVisibility
+	label: string
+	description: string
+	icon: React.ComponentType<{ className?: string }>
+}[]
 
 const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): string => {
 	if (mediaType === 'audio') {
@@ -33,8 +67,10 @@ const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): stri
 }
 
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
+	const { isAuthenticated } = useAuth()
 	const [postText, setPostText] = useState('')
 	const [mediaType, setMediaType] = useState<'text' | 'audio' | 'video' | 'image'>('text')
+	const [visibility, setVisibility] = useState<PostVisibility>('public')
 	const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
 	const [videoBlob, setVideoBlob] = useState<Blob | null>(null)
 	const [audioFile, setAudioFile] = useState<File | null>(null)
@@ -53,12 +89,14 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const canPost = !!postText.trim() || !hasNoMedia
 	// The composer rests as a single quiet line and grows once it has attention or content
 	const expanded = isFocused || canPost || !!submitStatus
+	const VisibilityIcon =
+		VISIBILITY_OPTIONS.find((option) => option.value === visibility)?.icon ?? Globe
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		// Check for Cmd+Enter (macOS) or Ctrl+Enter (Windows/Linux)
 		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
 			e.preventDefault()
-			handleSubmit({ preventDefault: () => {} } as React.FormEvent)
+			void submitPost(false)
 		}
 	}
 
@@ -135,8 +173,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		setMediaType('text')
 	}
 
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault()
+	const submitPost = async (isDraft: boolean, e?: React.FormEvent) => {
+		e?.preventDefault()
 
 		if (submitStatus) {
 			return
@@ -194,13 +232,16 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				text: postText,
 				media_type: finalMediaType,
 				media: file,
+				visibility: isAuthenticated ? visibility : undefined,
+				is_draft: isDraft || undefined,
 			}
 
 			await onPostCreated(newPost)
 			// Reset form only on success
 			setPostText('')
+			setVisibility('public')
 			clearMedia()
-			toast.success('Post created successfully!')
+			toast.success(isDraft ? 'Saved to drafts.' : 'Post created successfully!')
 			// Focus back on text area
 			textareaRef.current?.focus()
 		} catch (_error) {
@@ -208,6 +249,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		} finally {
 			setSubmitStatus('')
 		}
+	}
+
+	const handleSubmit = (e: React.FormEvent) => {
+		void submitPost(false, e)
 	}
 
 	const openUploadFileSelector = () => {
@@ -334,6 +379,72 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 										? 'Preparing post...'
 										: 'Posting...'}
 							</span>
+						)}
+						{isAuthenticated && expanded && (
+							<TooltipProvider delayDuration={300}>
+								<Tooltip>
+									<DropdownMenu>
+										<DropdownMenuTrigger asChild>
+											<TooltipTrigger asChild>
+												<Button
+													type="button"
+													variant="ghost"
+													size="icon"
+													className="h-8 w-8 rounded-full text-muted-foreground"
+													disabled={!!submitStatus}
+													aria-label="Visibility"
+												>
+													<VisibilityIcon className="h-4 w-4" />
+												</Button>
+											</TooltipTrigger>
+										</DropdownMenuTrigger>
+										<DropdownMenuContent align="end" className="w-72">
+											<DropdownMenuRadioGroup
+												value={visibility}
+												onValueChange={(value) => setVisibility(value as PostVisibility)}
+											>
+												{VISIBILITY_OPTIONS.map((option) => {
+													const Icon = option.icon
+													return (
+														<DropdownMenuRadioItem
+															key={option.value}
+															value={option.value}
+															className="items-start gap-2"
+														>
+															<Icon className="mt-0.5 h-4 w-4" />
+															<span className="grid gap-0.5">
+																<span>{option.label}</span>
+																<span className="text-xs text-muted-foreground">
+																	{option.description}
+																</span>
+															</span>
+														</DropdownMenuRadioItem>
+													)
+												})}
+											</DropdownMenuRadioGroup>
+										</DropdownMenuContent>
+									</DropdownMenu>
+									<TooltipContent>Visibility</TooltipContent>
+								</Tooltip>
+							</TooltipProvider>
+						)}
+						{isAuthenticated && expanded && canPost && (
+							<TooltipProvider delayDuration={300}>
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											disabled={!!submitStatus}
+											onClick={() => void submitPost(true)}
+										>
+											Draft
+										</Button>
+									</TooltipTrigger>
+									<TooltipContent>Save as draft</TooltipContent>
+								</Tooltip>
+							</TooltipProvider>
 						)}
 						<Button
 							type="submit"

@@ -82,6 +82,15 @@ describe('posts API', () => {
 			expect(fetchMock).toHaveBeenNthCalledWith(2, cursor)
 		})
 
+		it('adds drafts scope params', async () => {
+			const { getPosts } = await importPostsApi()
+			fetchMock.mockResolvedValueOnce(await response({ next: null, previous: null, results: [] }))
+
+			await getPosts({ drafts: true })
+
+			expect(fetchMock).toHaveBeenCalledWith('/api/posts/?drafts=true')
+		})
+
 		it('throws on non-ok responses', async () => {
 			const { getPosts } = await importPostsApi()
 			const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -108,7 +117,13 @@ describe('posts API', () => {
 				.mockResolvedValueOnce(await response({}))
 				.mockResolvedValueOnce(await response(toServerPost(createdPost)))
 
-			const result = await createPost({ text: 'Uploaded through S3.', media: file, media_type: 'audio' })
+			const result = await createPost({
+				text: 'Uploaded through S3.',
+				media: file,
+				media_type: 'audio',
+				visibility: 'unlisted',
+				is_draft: true,
+			})
 
 			expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
 				'/api/uploads/presign/',
@@ -124,6 +139,8 @@ describe('posts API', () => {
 			expect(formData.get('body')).toBe('Uploaded through S3.')
 			expect(formData.get('media_type')).toBe('audio')
 			expect(formData.get('s3_file_key')).toBe('uploads/clip.webm')
+			expect(formData.get('visibility')).toBe('unlisted')
+			expect(formData.get('is_draft')).toBe('true')
 			expect(result.modified).toBeInstanceOf(Date)
 			expect(result.url).toBe(`${window.location.origin}/p/9/`)
 		})
@@ -167,7 +184,12 @@ describe('posts API', () => {
 			const file = new File(['image'], 'image.png', { type: 'image/png' })
 			fetchMock.mockResolvedValueOnce(await response(toServerPost(createdPost)))
 
-			await createPost({ text: 'Direct upload.', media: file, media_type: 'image' })
+			await createPost({
+				text: 'Direct upload.',
+				media: file,
+				media_type: 'image',
+				visibility: 'private',
+			})
 
 			expect(fetchMock).toHaveBeenCalledTimes(1)
 			expect(fetchMock).toHaveBeenCalledWith('/api/posts/', expect.any(Object))
@@ -175,15 +197,45 @@ describe('posts API', () => {
 			expect(formData.get('body')).toBe('Direct upload.')
 			expect(formData.get('media_type')).toBe('image')
 			expect(formData.get('media')).toBe(file)
+			expect(formData.get('visibility')).toBe('private')
+			expect(formData.get('is_draft')).toBeNull()
+		})
+	})
+
+	describe('getShareUrl', () => {
+		it('adds the share token only for unlisted posts', async () => {
+			const { getShareUrl } = await importPostsApi()
+			const unlisted = makePost({
+				id: 30,
+				url: 'http://localhost:3000/p/30/',
+				visibility: 'unlisted',
+				share_token: 'secret-token',
+			})
+			const privatePost = makePost({
+				id: 31,
+				url: 'http://localhost:3000/p/31/',
+				visibility: 'private',
+				share_token: 'secret-token',
+			})
+
+			expect(getShareUrl(unlisted)).toBe('http://localhost:3000/p/30/?token=secret-token')
+			expect(getShareUrl(privatePost)).toBe('http://localhost:3000/p/31/')
 		})
 	})
 
 	describe('getMediaUrl', () => {
 		it('prefers signed media URLs and falls back to the stream endpoint', async () => {
 			const { getMediaUrl } = await importPostsApi()
+			const unlistedLocal = makePost({
+				id: 11,
+				visibility: 'unlisted',
+				share_token: 'media-token',
+				media: localImagePost.media,
+			})
 
 			expect(getMediaUrl(s3AudioPost)).toBe('https://signed.example.com/s3-audio.webm')
 			expect(getMediaUrl(localImagePost)).toBe('/api/posts/3/media/')
+			expect(getMediaUrl(unlistedLocal)).toBe('/api/posts/11/media/?token=media-token')
 		})
 	})
 
@@ -210,6 +262,32 @@ describe('posts API', () => {
 
 			expect(fetchMock).toHaveBeenCalledWith('/api/posts/stats/?author=7')
 			expect(stats).toEqual({ post_count: 45, likes_received: 300 })
+		})
+	})
+
+	describe('post actions', () => {
+		it('publishes posts and regenerates share tokens', async () => {
+			const { publishPost, regenerateShareToken } = await importPostsApi()
+			const published = makePost({ id: 40, is_draft: false })
+			const rotated = makePost({
+				id: 40,
+				visibility: 'unlisted',
+				share_token: 'new-token',
+			})
+			fetchMock
+				.mockResolvedValueOnce(await response(toServerPost(published)))
+				.mockResolvedValueOnce(await response(toServerPost(rotated)))
+
+			await expect(publishPost(40)).resolves.toMatchObject({ id: 40, is_draft: false })
+			await expect(regenerateShareToken(40)).resolves.toMatchObject({
+				id: 40,
+				share_token: 'new-token',
+			})
+
+			expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+				'/api/posts/40/publish/',
+				'/api/posts/40/share-token/',
+			])
 		})
 	})
 })

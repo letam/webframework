@@ -4,6 +4,7 @@
 {% block title %}{{ og_data.title }} - Echo Sphere{% endblock %}
 {% block description %}{{ og_data.description }}{% endblock %}
 {% block author %}{{ post.author.first_name }} {{ post.author.last_name }}{% endblock %}
+{% block robots %}{% if noindex %}<meta name="robots" content="noindex">{% endif %}{% endblock %}
 
 {% block og_title %}{{ og_data.title }}{% endblock %}
 {% block og_description %}{{ og_data.description }}{% endblock %}
@@ -226,24 +227,16 @@
   <div class="post-body">{{ post.body|linebreaks }}</div>
   {% endif %}
 
-  {% if post.media %}
+  {% if post.media and media_url %}
   <div class="post-media">
     {% if post.media.media_type == 'image' %}
-    {% if post.media.thumbnail %}
-    <img src="{{ post.media.thumbnail.url }}" alt="{{ post.media.alt_text|default:post.head }}" />
-    {% elif post.media.file %}
-    <img src="{{ post.media.file.url }}" alt="{{ post.media.alt_text|default:post.head }}" />
-    {% endif %}
+    <img src="{{ media_url }}" alt="{{ post.media.alt_text|default:post.head }}" />
     {% elif post.media.media_type == 'video' %}
-    <video controls>
-      <source src="{{ post.media.file.url }}" type="video/mp4">
+    <video controls src="{{ media_url }}">
       Your browser does not support the video tag.
     </video>
     {% elif post.media.media_type == 'audio' %}
-    <audio controls>
-      <source
-        src="{% if post.media.mp3_file %}{{ post.media.mp3_file.url }}{% else %}{{ post.media.file.url }}{% endif %}"
-        type="audio/mpeg">
+    <audio controls src="{{ media_url }}">
       Your browser does not support the audio tag.
     </audio>
     {% endif %}

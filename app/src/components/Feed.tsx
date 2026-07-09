@@ -22,6 +22,10 @@ const Feed: React.FC = () => {
 		handleLike,
 		handleDeletePost,
 		handleEditPost,
+		handleChangeVisibility,
+		handlePublishPost,
+		handleCopyShareLink,
+		handleResetShareLink,
 		handlePostTranscribed,
 	} = usePostHandlers()
 
@@ -134,6 +138,10 @@ const Feed: React.FC = () => {
 							onLike={handleLike}
 							onDelete={handleDeletePost}
 							onEdit={handleEditPost}
+							onPublish={handlePublishPost}
+							onChangeVisibility={handleChangeVisibility}
+							onCopyShareLink={handleCopyShareLink}
+							onResetShareLink={handleResetShareLink}
 							onTranscribed={handlePostTranscribed}
 							onTagClick={handleTagClick}
 						/>

@@ -14,6 +14,8 @@ vi.mock('@/lib/api/posts', () => ({
 	createPost: vi.fn(),
 	deletePost: vi.fn(),
 	updatePost: vi.fn(),
+	publishPost: vi.fn(),
+	regenerateShareToken: vi.fn(),
 	likePost: vi.fn(),
 	unlikePost: vi.fn(),
 }))
@@ -36,7 +38,10 @@ const createWrapper =
 		<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 	)
 
-const infiniteData = (posts: PostsPage['posts'], next: string | null = null): InfiniteData<PostsPage> => ({
+const infiniteData = (
+	posts: PostsPage['posts'],
+	next: string | null = null
+): InfiniteData<PostsPage> => ({
 	pages: [makePostsPage(posts, next)],
 	pageParams: [null],
 })
@@ -92,6 +97,74 @@ describe('usePosts hook', () => {
 		await waitFor(() => {
 			expect(result.current.posts.map((post) => post.id)).toEqual([4, 1])
 		})
+	})
+
+	it('prepends drafts only to drafts-scoped caches', async () => {
+		const queryClient = createQueryClient()
+		const draft = makePost({ id: 14, head: 'Draft', is_draft: true })
+		queryClient.setQueryData(['posts', {}], infiniteData([textOnlyPost]))
+		queryClient.setQueryData(['posts', { drafts: true }], infiniteData([]))
+		vi.mocked(postsApi.createPost).mockResolvedValueOnce(draft)
+
+		const { result } = renderHook(() => usePosts({}, { enabled: false }), {
+			wrapper: createWrapper(queryClient),
+		})
+
+		await act(async () => {
+			await result.current.addPost({ text: 'Draft', is_draft: true })
+		})
+
+		expect(getCachedPosts(queryClient, ['posts', {}]).map((post) => post.id)).toEqual([1])
+		expect(getCachedPosts(queryClient, ['posts', { drafts: true }]).map((post) => post.id)).toEqual(
+			[14]
+		)
+	})
+
+	it('publishes a draft into feed and author caches and removes it from drafts', async () => {
+		const queryClient = createQueryClient()
+		const author = makeAuthor({ id: 42 })
+		const draft = makePost({ id: 15, author, is_draft: true })
+		const published = makePost({ id: 15, author, is_draft: false })
+		queryClient.setQueryData(['posts', {}], infiniteData([textOnlyPost]))
+		queryClient.setQueryData(['posts', { author: 42 }], infiniteData([]))
+		queryClient.setQueryData(['posts', { drafts: true }], infiniteData([draft]))
+		vi.mocked(postsApi.publishPost).mockResolvedValueOnce(published)
+
+		const { result } = renderHook(() => usePosts({}, { enabled: false }), {
+			wrapper: createWrapper(queryClient),
+		})
+
+		await act(async () => {
+			await result.current.publishPost(draft.id)
+		})
+
+		expect(getCachedPosts(queryClient, ['posts', {}]).map((post) => post.id)).toEqual([15, 1])
+		expect(getCachedPosts(queryClient, ['posts', { author: 42 }]).map((post) => post.id)).toEqual([
+			15,
+		])
+		expect(getCachedPosts(queryClient, ['posts', { drafts: true }])).toEqual([])
+	})
+
+	it('updates regenerated share tokens across caches', async () => {
+		const queryClient = createQueryClient()
+		const post = makePost({ id: 16, visibility: 'unlisted', share_token: 'old-token' })
+		const updated = makePost({ id: 16, visibility: 'unlisted', share_token: 'new-token' })
+		queryClient.setQueryData(['posts', {}], infiniteData([post]))
+		queryClient.setQueryData(['posts', { author: post.author.id }], infiniteData([post]))
+		vi.mocked(postsApi.regenerateShareToken).mockResolvedValueOnce(updated)
+
+		const { result } = renderHook(() => usePosts({}, { enabled: false }), {
+			wrapper: createWrapper(queryClient),
+		})
+
+		await act(async () => {
+			await result.current.regenerateShareToken(post.id)
+		})
+
+		expect(getCachedPosts(queryClient, ['posts', {}])[0].share_token).toBe('new-token')
+		expect(getCachedPosts(queryClient, ['posts', { author: post.author.id }])[0].share_token).toBe(
+			'new-token'
+		)
 	})
 
 	it('rolls back an optimistic like when the API rejects', async () => {

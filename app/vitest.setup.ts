@@ -85,6 +85,15 @@ Object.defineProperty(globalThis, 'IntersectionObserver', {
 	value: MockIntersectionObserver,
 })
 
+Object.defineProperty(window, 'MediaRecorder', {
+	writable: true,
+	value: { isTypeSupported: () => true },
+})
+Object.defineProperty(globalThis, 'MediaRecorder', {
+	writable: true,
+	value: { isTypeSupported: () => true },
+})
+
 Object.defineProperty(globalThis, '__triggerIntersect', {
 	writable: true,
 	value: (isIntersecting = true, target?: Element) => {

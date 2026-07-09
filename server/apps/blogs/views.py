@@ -18,12 +18,14 @@ from django.db.models import (
     Value,
 )
 from django.db.models.functions import Coalesce
-from django.http import FileResponse, HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_GET
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import UserRateThrottle
@@ -37,7 +39,16 @@ from apps.uploads.s3 import (
     head_object,
 )
 
-from .models import MEDIA_TYPE_CHOICES, Comment, Like, Media, Post
+from .models import (
+    MEDIA_TYPE_CHOICES,
+    VISIBILITY_PUBLIC,
+    VISIBILITY_UNLISTED,
+    Comment,
+    Like,
+    Media,
+    Post,
+    generate_share_token,
+)
 from .pagination import PostCursorPagination
 from .serializers import CommentSerializer, PostCreateSerializer, PostSerializer
 from .tasks import transcribe_post_media
@@ -80,6 +91,17 @@ class TranscribeRateThrottle(UserRateThrottle):
     scope = 'transcribe'
 
 
+def _is_truthy(value):
+    """Return whether a form/query value represents true."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.lower() in {'1', 'true', 'yes', 'on'}
+    return bool(value)
+
+
 class PostViewSet(viewsets.ModelViewSet):
     """API viewset for creating, reading, updating, and deleting posts."""
 
@@ -88,8 +110,8 @@ class PostViewSet(viewsets.ModelViewSet):
     serializer_class = PostSerializer
     pagination_class = PostCursorPagination
 
-    def get_queryset(self):
-        """Return the annotated post queryset with optional feed filters."""
+    def get_annotated_queryset(self):
+        """Return the annotated post queryset before visibility filtering."""
         queryset = (
             Post.objects.select_related('author', 'media')
             .prefetch_related('post_set')
@@ -107,6 +129,20 @@ class PostViewSet(viewsets.ModelViewSet):
         else:
             queryset = queryset.annotate(liked=Value(False, output_field=BooleanField()))
 
+        return queryset
+
+    def get_queryset(self):
+        """Return the annotated post queryset with optional feed filters."""
+        queryset = self.get_annotated_queryset()
+        user = self.request.user
+
+        if self.request.query_params.get('drafts', '').lower() == 'true':
+            if not user.is_authenticated:
+                return queryset.none()
+            return queryset.filter(author=user, is_draft=True)
+
+        queryset = queryset.visible_to(user)
+
         author_id = self.request.query_params.get('author')
         if author_id:
             try:
@@ -123,6 +159,20 @@ class PostViewSet(viewsets.ModelViewSet):
                 queryset = queryset.none()
 
         return queryset
+
+    def get_object(self):
+        """Return one annotated post after object-level visibility gating."""
+        queryset = self.get_annotated_queryset()
+        lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+        lookup_value = self.kwargs[lookup_url_kwarg]
+        obj = get_object_or_404(queryset, **{self.lookup_field: lookup_value})
+
+        token = self.request.query_params.get('token')
+        if not obj.is_visible_to(self.request.user, token=token):
+            raise NotFound()
+
+        self.check_object_permissions(self.request, obj)
+        return obj
 
     def get_serializer_class(self):
         """Use the write serializer for creates and the read serializer otherwise."""
@@ -143,6 +193,16 @@ class PostViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         """Create a post and attach validated media when provided."""
+        requested_visibility = request.data.get('visibility', VISIBILITY_PUBLIC)
+        requested_is_draft = _is_truthy(request.data.get('is_draft'))
+        if (
+            requested_visibility != VISIBILITY_PUBLIC or requested_is_draft
+        ) and not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
         try:
             media_payload = self._validate_media_payload(request)
         except MediaValidationError as error:
@@ -360,13 +420,13 @@ class PostViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post', 'delete'])
     def like(self, request, pk=None):
         """Like (POST) or unlike (DELETE) a post as the authenticated user."""
+        post = self.get_object()
+
         if not request.user.is_authenticated:
             return Response(
                 {'error': 'Authentication required'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
-
-        post = self.get_object()
 
         if request.method == 'POST':
             Like.objects.get_or_create(user=request.user, post=post)
@@ -376,6 +436,54 @@ class PostViewSet(viewsets.ModelViewSet):
             liked = False
 
         return Response({'liked': liked, 'like_count': post.likes.count()})
+
+    @action(detail=True, methods=['post'])
+    def publish(self, request, pk=None):
+        """Publish a draft post, bumping its public timestamp."""
+        post = self.get_object()
+
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if not (request.user.id == post.author_id or request.user.is_superuser):
+            return Response(
+                {'error': 'Permission denied. Only the author or admin can publish this post.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        if post.is_draft:
+            post.is_draft = False
+            post.created = timezone.now()
+            post.save(update_fields=['is_draft', 'created', 'modified'])
+
+        serializer = self.get_serializer(post)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='share-token')
+    def regenerate_share_token(self, request, pk=None):
+        """Rotate a post's share token."""
+        post = self.get_object()
+
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+
+        if not (request.user.id == post.author_id or request.user.is_superuser):
+            return Response(
+                {'error': 'Permission denied. Only the author or admin can reset this link.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        post.share_token = generate_share_token()
+        post.save(update_fields=['share_token', 'modified'])
+
+        serializer = self.get_serializer(post)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['get', 'post'])
     def comments(self, request, pk=None):
@@ -401,13 +509,15 @@ class PostViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['delete'], url_path=r'comments/(?P<comment_id>\d+)')
     def delete_comment(self, request, pk=None, comment_id=None):
         """Delete a comment. Only the comment author or an admin may delete it."""
+        post = self.get_object()
+
         if not request.user.is_authenticated:
             return Response(
                 {'error': 'Authentication required'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        comment = get_object_or_404(Comment, id=comment_id, post_id=pk)
+        comment = get_object_or_404(Comment, id=comment_id, post=post)
 
         is_author = request.user.id == comment.author_id
         is_admin = request.user.is_superuser
@@ -438,8 +548,12 @@ class PostViewSet(viewsets.ModelViewSet):
 
         return Response(
             {
-                'post_count': Post.objects.filter(author_id=author_id).count(),
-                'likes_received': Like.objects.filter(post__author_id=author_id).count(),
+                'post_count': Post.objects.visible_to(request.user)
+                .filter(author_id=author_id)
+                .count(),
+                'likes_received': Like.objects.filter(
+                    post__in=Post.objects.visible_to(request.user).filter(author_id=author_id)
+                ).count(),
             }
         )
 
@@ -450,13 +564,13 @@ class PostViewSet(viewsets.ModelViewSet):
         Restricted to the post author or an admin because transcription calls a
         paid external API.
         """
+        post = self.get_object()
+
         if not request.user.is_authenticated:
             return Response(
                 {'error': 'Authentication required'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
-
-        post = self.get_object()
 
         is_author = request.user.id == post.author_id
         is_admin = request.user.is_superuser
@@ -519,7 +633,8 @@ class PostViewSet(viewsets.ModelViewSet):
 def get_post_media_mime_type(request, post_id):
     """Get the mime type of media file of a post."""
     post = get_object_or_404(Post.objects.select_related('media'), id=post_id)
-    # TODO: Restrict access to share only to authorized users
+    if not post.is_visible_to(request.user, token=request.GET.get('token')):
+        raise Http404
 
     if not post.media:
         return HttpResponse(status=status.HTTP_404_NOT_FOUND)
@@ -540,7 +655,8 @@ def stream_post_media(request, post_id):
     Reference: https://stackoverflow.com/questions/79423628/django-streaming-video-audio-rangedfileresponse
     """
     post = get_object_or_404(Post.objects.select_related('media'), id=post_id)
-    # TODO: Restrict access to share only to authorized users
+    if not post.is_visible_to(request.user, token=request.GET.get('token')):
+        raise Http404
 
     if not post.media:
         return HttpResponse(status=status.HTTP_404_NOT_FOUND)
@@ -604,6 +720,8 @@ def post_detail(request, post_id):
     Returns JSON if Accept header contains application/json, otherwise renders HTML.
     """
     post = get_object_or_404(Post.objects.select_related('author', 'media'), id=post_id)
+    if not post.is_visible_to(request.user, token=request.GET.get('token')):
+        raise Http404
 
     # Check if client wants JSON response
     accept_header = request.META.get('HTTP_ACCEPT', '')
@@ -612,11 +730,23 @@ def post_detail(request, post_id):
         serializer = PostSerializer(post, context={'request': request})
         return JsonResponse(serializer.data)
 
+    # Media embeds via the gated streaming endpoint rather than raw storage
+    # URLs: raw FieldFile URLs are empty for S3-backed media and bypass the
+    # visibility checks for local media. Unlisted posts carry the share token
+    # so token-holders (who by definition already have it) can load the bytes.
+    media_url = None
+    if post.media:
+        media_url = reverse('stream_post_media', args=[post.id])
+        if post.visibility == VISIBILITY_UNLISTED:
+            media_url = f'{media_url}?token={post.share_token}'
+
     # Prepare context for HTML template
     context = {
         'post': post,
+        'media_url': media_url,
         'like_count': post.likes.count(),
         'comment_count': post.comments.count(),
+        'noindex': post.visibility != VISIBILITY_PUBLIC or post.is_draft,
         'debug': settings.DEBUG,
     }
 
@@ -631,11 +761,8 @@ def post_detail(request, post_id):
     }
 
     # Add image if post has media and it's an image type
-    if post.media and post.media.media_type == 'image':
-        if post.media.thumbnail:
-            og_data['image'] = request.build_absolute_uri(post.media.thumbnail.url)
-        elif post.media.file:
-            og_data['image'] = request.build_absolute_uri(post.media.file.url)
+    if post.media and post.media.media_type == 'image' and media_url:
+        og_data['image'] = request.build_absolute_uri(media_url)
 
     context['og_data'] = og_data
 

@@ -3,10 +3,12 @@
 import contextlib
 import logging
 import os
+import secrets
 import tempfile
 
 from django.conf import settings
 from django.db import models
+from django.utils.crypto import constant_time_compare
 
 from apps.uploads.s3 import delete_object, download_to_file
 
@@ -32,6 +34,20 @@ TRANSCRIPT_STATUS_CHOICES = [
     ('done', 'Done'),
     ('error', 'Error'),
 ]
+
+VISIBILITY_PUBLIC = 'public'
+VISIBILITY_UNLISTED = 'unlisted'
+VISIBILITY_PRIVATE = 'private'
+VISIBILITY_CHOICES = [
+    (VISIBILITY_PUBLIC, 'Public'),
+    (VISIBILITY_UNLISTED, 'Unlisted'),
+    (VISIBILITY_PRIVATE, 'Private'),
+]
+
+
+def generate_share_token():
+    """Generate a non-lookup post share token."""
+    return secrets.token_urlsafe(16)
 
 
 class Media(models.Model):
@@ -187,6 +203,17 @@ class Media(models.Model):
         raise FileNotFoundError("No media file found")
 
 
+class PostQuerySet(models.QuerySet):
+    """Query helpers for post visibility."""
+
+    def visible_to(self, user):
+        """Return published posts visible in feeds for the given user."""
+        queryset = self.filter(is_draft=False)
+        if user is not None and user.is_authenticated:
+            return queryset.filter(models.Q(visibility=VISIBILITY_PUBLIC) | models.Q(author=user))
+        return queryset.filter(visibility=VISIBILITY_PUBLIC)
+
+
 class Post(models.Model):
     """A micro-blog post."""
 
@@ -197,6 +224,13 @@ class Post(models.Model):
     body = models.TextField(blank=True)
     media = models.OneToOneField(Media, on_delete=models.SET_NULL, null=True, blank=True)
     parent = models.ForeignKey('Post', on_delete=models.SET_NULL, null=True, blank=True)
+    visibility = models.CharField(
+        max_length=16, choices=VISIBILITY_CHOICES, default=VISIBILITY_PUBLIC, db_index=True
+    )
+    is_draft = models.BooleanField(default=False, db_index=True)
+    share_token = models.CharField(max_length=32, default=generate_share_token)
+
+    objects = PostQuerySet.as_manager()
 
     class Meta:
         """Model options for posts."""
@@ -206,6 +240,23 @@ class Post(models.Model):
     def __str__(self):
         """Return the post headline."""
         return self.head
+
+    def is_visible_to(self, user, token=None):
+        """Return whether this post can be viewed by the given user and share token."""
+        if user is not None and user.is_authenticated:
+            if self.author_id == user.id or user.is_superuser:
+                return True
+
+        if self.is_draft:
+            return False
+
+        if self.visibility == VISIBILITY_PUBLIC:
+            return True
+
+        if self.visibility == VISIBILITY_UNLISTED and token:
+            return constant_time_compare(str(token), self.share_token)
+
+        return False
 
     def delete(self, *args, **kwargs):
         """Delete the post and its associated media row."""

@@ -7,6 +7,7 @@ import PostActions from './PostActions'
 import PostMenu from './PostMenu'
 import CommentSection from './CommentSection'
 import type { Post as PostType } from '../../types/post'
+import type { PostVisibility } from '../../types/post'
 import { AudioPlayer, VideoPlayer } from './MediaPlayer'
 import { toast } from '@/components/ui/sonner'
 import { useAuth } from '@/hooks/useAuth'
@@ -29,6 +30,10 @@ interface PostProps {
 		altText?: string
 	) => Promise<void>
 	onTranscribed?: (post: PostType) => void
+	onPublish?: (id: number) => void
+	onChangeVisibility?: (id: number, visibility: PostVisibility) => void
+	onCopyShareLink?: (post: PostType) => void
+	onResetShareLink?: (post: PostType) => void
 	onTagClick?: (tag: string) => void
 }
 
@@ -75,6 +80,10 @@ export const Post: React.FC<PostProps> = ({
 	onDelete,
 	onEdit,
 	onTranscribed,
+	onPublish,
+	onChangeVisibility,
+	onCopyShareLink,
+	onResetShareLink,
 	onTagClick,
 }) => {
 	const { isAuthenticated, userId, isSuperuser } = useAuth()
@@ -115,7 +124,7 @@ export const Post: React.FC<PostProps> = ({
 		}
 
 		let active = true
-		let intervalId: ReturnType<typeof window.setInterval> | undefined
+		let intervalId: number | undefined
 		const startedAt = Date.now()
 		const stopPolling = () => {
 			active = false
@@ -171,7 +180,15 @@ export const Post: React.FC<PostProps> = ({
 		>
 			<div className="flex items-center gap-2">
 				<PostHeader post={post} />
-				<PostMenu post={post} onDelete={onDelete} onEdit={onEdit} />
+				<PostMenu
+					post={post}
+					onDelete={onDelete}
+					onEdit={onEdit}
+					onPublish={onPublish}
+					onChangeVisibility={onChangeVisibility}
+					onCopyShareLink={onCopyShareLink}
+					onResetShareLink={onResetShareLink}
+				/>
 			</div>
 
 			<div className="">
@@ -210,20 +227,20 @@ export const Post: React.FC<PostProps> = ({
 				)}
 
 				<PostActions
-					id={post.id}
+					post={post}
 					likeCount={post.like_count}
 					liked={post.liked}
 					onLike={onLike}
 					commentCount={post.comment_count}
 					commentsOpen={commentsOpen}
 					onToggleComments={() => setCommentsOpen((open) => !open)}
-					postUrl={post.url}
 					shareTitle={post.head || undefined}
 					mediaType={post.media?.media_type}
 					body={post.body}
 					transcript={post.media?.transcript}
 					transcriptStatus={post.media?.transcript_status}
 					onTranscribe={canTranscribe ? handleTranscribe : undefined}
+					onPublish={onPublish}
 				/>
 
 				{commentsOpen && <CommentSection postId={post.id} />}

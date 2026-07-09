@@ -1,7 +1,8 @@
 import { useCallback } from 'react'
 import { toast } from '@/components/ui/sonner'
+import { getShareUrl } from '@/lib/api/posts'
 import type { PostsQueryScope } from '@/lib/api/posts'
-import type { Post as PostType } from '@/types/post'
+import type { Post as PostType, PostVisibility } from '@/types/post'
 import { useAuth } from './useAuth'
 import { usePosts, type UsePostsOptions } from './usePosts'
 
@@ -26,6 +27,8 @@ export const usePostHandlers = (
 		addPost,
 		editPost,
 		removePost,
+		publishPost,
+		regenerateShareToken,
 		toggleLike,
 		setPosts,
 	} = usePosts(scope, options)
@@ -68,6 +71,56 @@ export const usePostHandlers = (
 		[editPost]
 	)
 
+	const handleChangeVisibility = useCallback(
+		async (id: number, visibility: PostVisibility) => {
+			try {
+				await editPost(id, { visibility })
+				toast.success('Visibility updated.')
+			} catch (error) {
+				console.error('Failed to update visibility:', error)
+				toast.error('Failed to update visibility')
+			}
+		},
+		[editPost]
+	)
+
+	const handlePublishPost = useCallback(
+		async (id: number) => {
+			try {
+				await publishPost(id)
+				toast.success('Post published.')
+			} catch (error) {
+				console.error('Failed to publish post:', error)
+				toast.error('Failed to publish post')
+			}
+		},
+		[publishPost]
+	)
+
+	const handleCopyShareLink = useCallback(async (post: PostType) => {
+		try {
+			await navigator.clipboard.writeText(getShareUrl(post))
+			toast.success('Link copied to clipboard')
+		} catch (error) {
+			console.error('Failed to copy link:', error)
+			toast.error('Failed to copy link')
+		}
+	}, [])
+
+	const handleResetShareLink = useCallback(
+		async (post: PostType) => {
+			try {
+				const updatedPost = await regenerateShareToken(post.id)
+				await navigator.clipboard.writeText(getShareUrl(updatedPost))
+				toast.success('New share link copied. Old links no longer work.')
+			} catch (error) {
+				console.error('Failed to reset share link:', error)
+				toast.error('Failed to reset share link')
+			}
+		},
+		[regenerateShareToken]
+	)
+
 	const handlePostTranscribed = useCallback(
 		(updatedPost: PostType) => {
 			setPosts((prevPosts) =>
@@ -89,6 +142,10 @@ export const usePostHandlers = (
 		handleLike,
 		handleDeletePost,
 		handleEditPost,
+		handleChangeVisibility,
+		handlePublishPost,
+		handleCopyShareLink,
+		handleResetShareLink,
 		handlePostTranscribed,
 	}
 }

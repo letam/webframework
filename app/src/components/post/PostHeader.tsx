@@ -2,7 +2,7 @@ import type React from 'react'
 import { useState } from 'react'
 import { format } from 'date-fns'
 import { useQuery } from '@tanstack/react-query'
-import { Copy, ExternalLink } from 'lucide-react'
+import { Copy, ExternalLink, Link2, Lock } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
 	DropdownMenu,
@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { getAuthorStats } from '@/lib/api/posts'
+import { getAuthorStats, getShareUrl } from '@/lib/api/posts'
+import { useAuth } from '@/hooks/useAuth'
 import { identityGradient } from '@/lib/utils/identity'
 import { formatShortTime } from '@/lib/utils/time'
 import type { Author, Post } from '@/types/post'
@@ -76,9 +77,14 @@ const AuthorHoverCard: React.FC<{ author: Author; children: React.ReactNode }> =
 }
 
 const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
+	const { isAuthenticated, userId, isSuperuser } = useAuth()
+	const canSeeState = isAuthenticated && (userId === post.author.id || isSuperuser)
+	const showVisibilityState = canSeeState && (post.is_draft || post.visibility !== 'public')
+	const shareUrl = getShareUrl(post)
+
 	const handleCopyLink = async () => {
 		try {
-			await navigator.clipboard.writeText(post.url)
+			await navigator.clipboard.writeText(shareUrl)
 			// You could add a toast notification here if you have one
 		} catch (err) {
 			console.error('Failed to copy link:', err)
@@ -86,7 +92,7 @@ const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
 	}
 
 	const handleOpenInNewTab = () => {
-		window.open(post.url, '_blank', 'noopener,noreferrer')
+		window.open(shareUrl, '_blank', 'noopener,noreferrer')
 	}
 
 	return (
@@ -112,35 +118,60 @@ const PostHeader: React.FC<PostHeaderProps> = ({ post }) => {
 					</AuthorHoverCard>
 					<span className="text-[13px] text-muted-foreground">@{post.author.username}</span>
 				</div>
-				<TooltipProvider>
-					<Tooltip>
-						<DropdownMenu>
-							<DropdownMenuTrigger asChild>
-								<TooltipTrigger asChild>
-									<button
-										type="button"
-										className="rounded-sm text-[13px] text-muted-foreground cursor-pointer ring-offset-background transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-									>
-										{formatShortTime(post.created)}
-									</button>
-								</TooltipTrigger>
-							</DropdownMenuTrigger>
-							<DropdownMenuContent align="start">
-								<DropdownMenuItem onClick={handleCopyLink} className="cursor-pointer">
-									<Copy className="mr-2 h-4 w-4" />
-									Copy link to post
-								</DropdownMenuItem>
-								<DropdownMenuItem onClick={handleOpenInNewTab} className="cursor-pointer">
-									<ExternalLink className="mr-2 h-4 w-4" />
-									Open post in new tab
-								</DropdownMenuItem>
-							</DropdownMenuContent>
-						</DropdownMenu>
-						<TooltipContent>
-							<p>{format(post.created, 'PPpp')}</p>
-						</TooltipContent>
-					</Tooltip>
-				</TooltipProvider>
+				<div className="flex items-center gap-1.5">
+					<TooltipProvider>
+						<Tooltip>
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<TooltipTrigger asChild>
+										<button
+											type="button"
+											className="rounded-sm text-[13px] text-muted-foreground cursor-pointer ring-offset-background transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+										>
+											{formatShortTime(post.created)}
+										</button>
+									</TooltipTrigger>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align="start">
+									<DropdownMenuItem onClick={handleCopyLink} className="cursor-pointer">
+										<Copy className="mr-2 h-4 w-4" />
+										Copy link to post
+									</DropdownMenuItem>
+									<DropdownMenuItem onClick={handleOpenInNewTab} className="cursor-pointer">
+										<ExternalLink className="mr-2 h-4 w-4" />
+										Open post in new tab
+									</DropdownMenuItem>
+								</DropdownMenuContent>
+							</DropdownMenu>
+							<TooltipContent>
+								<p>{format(post.created, 'PPpp')}</p>
+							</TooltipContent>
+						</Tooltip>
+					</TooltipProvider>
+					{showVisibilityState &&
+						(post.is_draft ? (
+							<span className="rounded-full border px-1.5 py-0.5 text-[11px] font-medium leading-none text-muted-foreground">
+								Draft
+							</span>
+						) : (
+							<TooltipProvider>
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<span className="inline-flex text-muted-foreground">
+											{post.visibility === 'private' ? (
+												<Lock className="h-3.5 w-3.5" />
+											) : (
+												<Link2 className="h-3.5 w-3.5" />
+											)}
+										</span>
+									</TooltipTrigger>
+									<TooltipContent>
+										{post.visibility === 'private' ? 'Private' : 'Link only'}
+									</TooltipContent>
+								</Tooltip>
+							</TooltipProvider>
+						))}
+				</div>
 			</div>
 		</div>
 	)

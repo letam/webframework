@@ -6,6 +6,8 @@ export interface Author {
 	last_name: string
 }
 
+export type PostVisibility = 'public' | 'unlisted' | 'private'
+
 export interface Media {
 	id: number
 	media_type: 'audio' | 'video' | 'image'
@@ -31,6 +33,9 @@ export interface Post {
 	head: string
 	body: string
 	media?: Media
+	visibility: PostVisibility
+	is_draft: boolean
+	share_token?: string | null
 	like_count: number
 	comment_count: number
 	liked: boolean
@@ -52,6 +57,8 @@ export interface CreatePostRequest {
 	text?: string
 	media_type?: 'audio' | 'video' | 'image'
 	media?: File
+	visibility?: PostVisibility
+	is_draft?: boolean
 }
 
 export interface UpdatePostRequest {
@@ -59,4 +66,5 @@ export interface UpdatePostRequest {
 	body?: string
 	transcript?: string
 	alt_text?: string
+	visibility?: PostVisibility
 }

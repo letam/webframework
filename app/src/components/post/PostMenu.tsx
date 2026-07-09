@@ -1,10 +1,27 @@
 import type React from 'react'
 import { useState } from 'react'
-import { MoreHorizontal, Trash2, Download, Pencil } from 'lucide-react'
+import {
+	MoreHorizontal,
+	Trash2,
+	Download,
+	Pencil,
+	Globe,
+	Link2,
+	Lock,
+	Copy,
+	RefreshCw,
+	Send,
+} from 'lucide-react'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
@@ -12,7 +29,7 @@ import { Button } from '@/components/ui/button'
 import { downloadFile, getFileExtension } from '@/lib/utils/file'
 import { getMediaUrl } from '@/lib/api/posts'
 import { format } from 'date-fns'
-import type { Post } from '@/types/post'
+import type { Post, PostVisibility } from '@/types/post'
 import { useAuth } from '@/hooks/useAuth'
 import { EditPostModal } from './EditPostModal'
 import { DeleteConfirmationDialog } from './DeleteConfirmationDialog'
@@ -27,9 +44,21 @@ interface PostMenuProps {
 		transcript?: string,
 		altText?: string
 	) => Promise<void>
+	onPublish?: (id: number) => void
+	onChangeVisibility?: (id: number, visibility: PostVisibility) => void
+	onCopyShareLink?: (post: Post) => void
+	onResetShareLink?: (post: Post) => void
 }
 
-const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete, onEdit }) => {
+const PostMenu: React.FC<PostMenuProps> = ({
+	post,
+	onDelete,
+	onEdit,
+	onPublish,
+	onChangeVisibility,
+	onCopyShareLink,
+	onResetShareLink,
+}) => {
 	const { isAuthenticated, userId, isSuperuser } = useAuth()
 	const canDelete = isAuthenticated && (userId === post.author.id || isSuperuser)
 	const canEdit = isAuthenticated && (userId === post.author.id || isSuperuser)
@@ -98,6 +127,58 @@ const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete, onEdit }) => {
 							Edit
 						</DropdownMenuItem>
 					)}
+					{canEdit && (
+						<DropdownMenuSub>
+							<DropdownMenuSubTrigger>
+								{post.visibility === 'private' ? (
+									<Lock className="mr-2 h-4 w-4" />
+								) : post.visibility === 'unlisted' ? (
+									<Link2 className="mr-2 h-4 w-4" />
+								) : (
+									<Globe className="mr-2 h-4 w-4" />
+								)}
+								Visibility
+							</DropdownMenuSubTrigger>
+							<DropdownMenuSubContent>
+								<DropdownMenuRadioGroup
+									value={post.visibility}
+									onValueChange={(value) => onChangeVisibility?.(post.id, value as PostVisibility)}
+								>
+									<DropdownMenuRadioItem value="public">
+										<Globe className="mr-2 h-4 w-4" />
+										Public
+									</DropdownMenuRadioItem>
+									<DropdownMenuRadioItem value="unlisted">
+										<Link2 className="mr-2 h-4 w-4" />
+										Link only
+									</DropdownMenuRadioItem>
+									<DropdownMenuRadioItem value="private">
+										<Lock className="mr-2 h-4 w-4" />
+										Private
+									</DropdownMenuRadioItem>
+								</DropdownMenuRadioGroup>
+							</DropdownMenuSubContent>
+						</DropdownMenuSub>
+					)}
+					{canEdit && post.visibility === 'unlisted' && (
+						<>
+							<DropdownMenuItem onClick={() => onCopyShareLink?.(post)}>
+								<Copy className="mr-2 h-4 w-4" />
+								Copy share link
+							</DropdownMenuItem>
+							<DropdownMenuItem onClick={() => onResetShareLink?.(post)}>
+								<RefreshCw className="mr-2 h-4 w-4" />
+								Reset share link
+							</DropdownMenuItem>
+						</>
+					)}
+					{canEdit && post.is_draft && (
+						<DropdownMenuItem onClick={() => onPublish?.(post.id)}>
+							<Send className="mr-2 h-4 w-4" />
+							Publish
+						</DropdownMenuItem>
+					)}
+					{(canDelete || canEdit) && <DropdownMenuSeparator />}
 					{canDelete && (
 						<DropdownMenuItem
 							className="text-destructive focus:text-destructive"
