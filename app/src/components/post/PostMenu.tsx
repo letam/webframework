@@ -75,7 +75,7 @@ const PostMenu: React.FC<PostMenuProps> = ({ post, onDelete, onEdit }) => {
 								<Button
 									variant="ghost"
 									size="icon"
-									className="ml-auto h-8 w-8 text-muted-foreground transition-opacity focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100 md:opacity-0"
+									className="ml-auto h-8 w-8 text-muted-foreground transition-[color,background-color,opacity,transform] focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100 md:opacity-0"
 									aria-label="Post options"
 								>
 									<MoreHorizontal className="h-4 w-4" />

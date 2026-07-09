@@ -96,7 +96,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
 											<Button
 												variant="ghost"
 												size="sm"
-												className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 md:opacity-0"
+												className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 px-2 transition-[color,background-color,opacity,transform] focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 md:opacity-0"
 												onClick={() => handleDelete(comment.id)}
 												aria-label="Delete comment"
 											>

@@ -14,6 +14,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 
+const navLinkClass =
+	'rounded-md text-foreground/60 transition-colors hover:text-foreground/80 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+
 const Navbar = () => {
 	const { isAuthenticated, refreshAuthStatus } = useAuth()
 	const [dropdownOpen, setDropdownOpen] = useState(false)
@@ -31,7 +34,10 @@ const Navbar = () => {
 		<header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur-sm supports-backdrop-filter:bg-background/60">
 			<div className="mx-auto max-w-[1400px] px-4 sm:px-8 flex h-14 items-center justify-between">
 				<div className="flex items-center">
-					<Link to="/" className="mr-6 flex items-center space-x-2">
+					<Link
+						to="/"
+						className="mr-6 flex items-center space-x-2 rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+					>
 						<span className="text-xl font-bold gradient-text">EchoSphere</span>
 					</Link>
 				</div>
@@ -39,16 +45,13 @@ const Navbar = () => {
 				<div className="flex items-center gap-4">
 					{/* Desktop Navigation */}
 					<nav className="hidden md:flex items-center space-x-6 text-sm font-medium">
-						<Link to="/" className="transition-colors hover:text-foreground/80 text-foreground/60">
+						<Link to="/" className={navLinkClass}>
 							<div className="flex items-center gap-1">
 								<Home className="h-4 w-4" />
 								<span>Home</span>
 							</div>
 						</Link>
-						<Link
-							to="/settings"
-							className="transition-colors hover:text-foreground/80 text-foreground/60"
-						>
+						<Link to="/settings" className={navLinkClass}>
 							<div className="flex items-center gap-1">
 								<Settings className="h-4 w-4" />
 								<span>Settings</span>
@@ -60,17 +63,14 @@ const Navbar = () => {
 							rel="noopener noreferrer"
 							aria-label="GitHub repository"
 							title="GitHub repository"
-							className="transition-colors hover:text-foreground/80 text-foreground/60"
+							className={navLinkClass}
 						>
 							<div className="flex items-center">
 								<Github className="h-4 w-4" />
 							</div>
 						</a>
 						{isAuthenticated && (
-							<Link
-								to="/profile"
-								className="transition-colors hover:text-foreground/80 text-foreground/60"
-							>
+							<Link to="/profile" className={navLinkClass}>
 								<div className="flex items-center gap-1">
 									<User className="h-4 w-4" />
 									<span>Profile</span>
@@ -80,7 +80,7 @@ const Navbar = () => {
 						{isAuthenticated ? (
 							<Button
 								variant="ghost"
-								className="transition-colors hover:text-foreground/80 text-foreground/60"
+								className="hover:text-foreground/80 text-foreground/60"
 								onClick={handleLogout}
 							>
 								<div className="flex items-center gap-1">

@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 
 const actionButtonClass =
-	'text-muted-foreground rounded-full transition-colors hover:text-primary hover:bg-primary/10 px-2 sm:px-3'
+	'text-muted-foreground rounded-full hover:text-primary hover:bg-primary/10 px-2 sm:px-3'
 
 interface PostActionsProps {
 	id: number

@@ -91,7 +91,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 			<div className="flex flex-wrap items-center gap-2">
 				<input
 					id={filterInputId}
-					className="flex-1 min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base shadow-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+					className="flex-1 min-w-0 rounded-md border border-input bg-background px-3 py-2 text-base shadow-sm focus:border-ring focus:outline-hidden focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
 					type="text"
 					placeholder="Enter words to filter posts…"
 					value={filterText}
@@ -101,7 +101,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 				/>
 				<button
 					type="submit"
-					className="inline-flex min-w-[96px] items-center justify-center rounded-md bg-primary px-5 py-2 text-base font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 sm:px-3 sm:text-sm"
+					className="inline-flex min-w-[96px] items-center justify-center rounded-md bg-primary px-5 py-2 text-base font-medium text-primary-foreground shadow-sm ring-offset-background transition-[color,background-color,border-color,box-shadow,transform] hover:bg-primary/90 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 motion-safe:active:scale-[0.98] sm:px-3 sm:text-sm"
 					disabled={disabled}
 				>
 					Apply
@@ -130,7 +130,7 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 								<label
 									key={mode}
 									className={cn(
-										'inline-flex cursor-pointer items-center rounded-full px-3 py-1 text-xs sm:text-sm font-medium transition-colors focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+										'inline-flex cursor-pointer items-center rounded-full px-3 py-1 text-xs sm:text-sm font-medium ring-offset-background transition-colors focus-within:outline-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
 										matchMode === mode
 											? 'bg-primary text-primary-foreground hover:bg-primary/90'
 											: 'bg-muted text-muted-foreground hover:bg-muted/70',
