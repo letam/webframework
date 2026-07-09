@@ -64,15 +64,14 @@ export const usePostFilters = (posts: Post[]) => {
 	const totalPostCount = posts.length
 	const filteredPostCount = filteredPosts.length
 
+	// Only worth surfacing while filters are narrowing the feed
 	const postCountLabel = useMemo(() => {
-		const baseCountText = `${filteredPostCount} ${filteredPostCount === 1 ? 'post' : 'posts'}`
-
-		if (filteredPostCount === totalPostCount) {
-			return `Showing ${baseCountText}`
+		if (activeFilters.length === 0) {
+			return ''
 		}
 
-		return `Showing ${baseCountText} (filtered)`
-	}, [filteredPostCount, totalPostCount])
+		return `Showing ${filteredPostCount} of ${totalPostCount} ${totalPostCount === 1 ? 'post' : 'posts'}`
+	}, [activeFilters, filteredPostCount, totalPostCount])
 
 	const addFiltersFromText = useCallback((input: string) => {
 		const tokens = sanitizeTokens(input)

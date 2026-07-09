@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { Home, User, Menu, LogOut, Settings, Github } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
+import { EchoMark } from '@/components/EchoMark'
 import { useAuth } from '@/hooks/useAuth'
 import { logout } from '@/lib/api/auth'
 import { LoginModal } from '@/components/LoginModal'
@@ -38,7 +39,8 @@ const Navbar = () => {
 						to="/"
 						className="mr-6 flex items-center space-x-2 rounded-md focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 					>
-						<span className="text-xl font-bold gradient-text">EchoSphere</span>
+						<EchoMark className="h-6 w-6" />
+						<span className="text-xl font-bold tracking-tight gradient-text">EchoSphere</span>
 					</Link>
 				</div>
 

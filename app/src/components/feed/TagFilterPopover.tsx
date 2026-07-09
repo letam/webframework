@@ -14,7 +14,7 @@ import {
 import { useTags } from '@/hooks/useTags'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
-import { Check, Loader2, X } from 'lucide-react'
+import { Check, Hash, Loader2, X } from 'lucide-react'
 
 interface TagFilterPopoverProps {
 	selectedTags: string[]
@@ -161,7 +161,16 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 			}}
 		>
 			<PopoverTrigger asChild>
-				<Button type="button" variant="outline" size="sm" className="min-w-[140px]">
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					className={cn(
+						'h-9 rounded-full',
+						selectedTags.length > 0 && 'border-primary/40 text-primary'
+					)}
+					aria-label="Filter by Tags"
+				>
 					{error ? (
 						<>
 							<X className="size-4 text-destructive" />
@@ -170,13 +179,19 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 					) : isLoadingTags ? (
 						<>
 							<Loader2 className="size-4 animate-spin" />
-							Loading tags
+							Tags
 						</>
 					) : (
 						<>
-							<span>Filter by Tags</span>
+							<Hash className="size-4" />
+							<span>Tags</span>
 							{selectedTags.length > 0 ? (
-								<span className="text-xs text-muted-foreground">({selectedTags.length})</span>
+								<Badge
+									variant="secondary"
+									className="ml-0.5 h-5 min-w-5 justify-center rounded-full px-1.5 text-xs"
+								>
+									{selectedTags.length}
+								</Badge>
 							) : null}
 						</>
 					)}

@@ -132,6 +132,52 @@
     gap: 8px;
   }
 
+  .post-card {
+    background-color: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    padding: 24px;
+    box-shadow: 0 1px 2px hsl(var(--foreground) / 0.05);
+  }
+
+  .post-engagement {
+    display: flex;
+    gap: 16px;
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid hsl(var(--border));
+    color: hsl(var(--muted-foreground));
+    font-size: 14px;
+  }
+
+  .post-engagement strong {
+    color: hsl(var(--foreground));
+    font-variant-numeric: tabular-nums;
+  }
+
+  .open-app {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 20px;
+    padding: 10px 20px;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, hsl(var(--brand-1, 256 70% 58%)), hsl(var(--brand-2, 197 88% 44%)));
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+
+  .open-app:hover {
+    opacity: 0.92;
+  }
+
+  .open-app:active {
+    transform: scale(0.98);
+  }
+
   .author-name {
     font-weight: 600;
     color: hsl(var(--foreground));
@@ -164,6 +210,7 @@
 
 <!-- Server-rendered post content for SEO and social sharing -->
 <div class="post-detail">
+  <div class="post-card">
   <div class="post-header">
     <div class="author-info">
       <span class="author-name">{{ post.author.first_name }} {{ post.author.last_name }}</span>
@@ -209,6 +256,14 @@
     <div class="transcript-content">{{ post.media.transcript }}</div>
   </div>
   {% endif %}
+
+  <div class="post-engagement">
+    <span><strong>{{ like_count }}</strong> like{{ like_count|pluralize }}</span>
+    <span><strong>{{ comment_count }}</strong> comment{{ comment_count|pluralize }}</span>
+  </div>
+
+  <a class="open-app" href="/">Join the conversation on Echo Sphere</a>
+  </div>
 </div>
 {% endblock %}
 

@@ -12,6 +12,7 @@ import { AlertTriangle, Shield, Heart, Users, Smile } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const GROUND_RULES_KEY = 'ground-rules-accepted'
+const GROUND_RULES_DEFERRED_KEY = 'ground-rules-deferred'
 
 interface GroundRule {
 	id: string
@@ -55,10 +56,20 @@ export const GroundRulesModal = () => {
 
 	useEffect(() => {
 		const saved = localStorage.getItem(GROUND_RULES_KEY)
-		if (!saved) {
+		// Dismissing without accepting defers the modal for the rest of the session
+		// instead of nagging on every reload
+		const deferred = sessionStorage.getItem(GROUND_RULES_DEFERRED_KEY)
+		if (!saved && !deferred) {
 			setIsOpen(true)
 		}
 	}, [])
+
+	const handleOpenChange = (open: boolean) => {
+		setIsOpen(open)
+		if (!open && acceptedRules.size < groundRules.length) {
+			sessionStorage.setItem(GROUND_RULES_DEFERRED_KEY, '1')
+		}
+	}
 
 	const handleRuleToggle = (ruleId: string, checked: boolean) => {
 		const newAccepted = new Set(acceptedRules)
@@ -82,7 +93,7 @@ export const GroundRulesModal = () => {
 	const allRulesAccepted = acceptedRules.size === groundRules.length
 
 	return (
-		<Dialog open={isOpen} onOpenChange={setIsOpen}>
+		<Dialog open={isOpen} onOpenChange={handleOpenChange}>
 			<DialogContent className="sm:max-w-[500px]">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2 text-xl">

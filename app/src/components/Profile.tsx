@@ -9,6 +9,7 @@ import { LoginModal } from './LoginModal'
 import { useAuth } from '@/hooks/useAuth'
 import { usePostHandlers } from '@/hooks/usePostHandlers'
 import { getAuthorStats } from '@/lib/api/posts'
+import { identityGradient } from '@/lib/utils/identity'
 import type { Post as PostType } from '@/types/post'
 import { InfiniteScrollSentinel } from './feed/InfiniteScrollSentinel'
 
@@ -42,6 +43,14 @@ const Profile: React.FC = () => {
 		const name = author ? `${author.first_name ?? ''} ${author.last_name ?? ''}`.trim() : ''
 		return name || username || ''
 	}, [myPosts, username])
+	const initials = useMemo(() => {
+		const parts = displayName.split(/\s+/).filter(Boolean)
+		const letters = parts
+			.slice(0, 2)
+			.map((part) => part[0])
+			.join('')
+		return (letters || username?.[0] || '?').toUpperCase()
+	}, [displayName, username])
 	const error = mine.error ?? liked.error
 
 	if (!isAuthenticated) {
@@ -100,12 +109,15 @@ const Profile: React.FC = () => {
 			{error && <div className="text-center py-4 text-red-500 mb-4">Error: {error.message}</div>}
 
 			<div className="bg-card rounded-lg shadow-xs overflow-hidden mb-4 border">
-				<div className="h-32 bg-linear-to-r from-primary to-secondary" />
+				<div className="h-32" style={{ background: identityGradient(username ?? '') }} />
 
 				<div className="p-4 relative">
 					<Avatar className="absolute -top-16 border-4 border-background w-24 h-24">
-						<AvatarFallback className="text-2xl">
-							{(displayName[0] || username?.[0] || '?').toUpperCase()}
+						<AvatarFallback
+							className="text-2xl text-white"
+							style={{ background: identityGradient(username ?? '') }}
+						>
+							{initials}
 						</AvatarFallback>
 					</Avatar>
 

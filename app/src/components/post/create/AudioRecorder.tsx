@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useImperativeHandle } from 'react'
 import { Square, Pause, Play, Loader2, Mic } from 'lucide-react'
+import { cn } from '@/lib/utils'
 // webm-duration-fix (and its Node polyfills) is only needed once a recording
 // stops, so it is imported dynamically to keep it out of the initial bundle.
 import { Button } from '@/components/ui/button'
@@ -72,13 +73,10 @@ const StatusMessage = ({ status, showNormalizingMessage, recordingTime }: Status
 	}
 	if (status === 'recording') {
 		return (
-			<div className="flex flex-col items-center justify-center gap-2 text-base">
-				<div className="flex items-center gap-2">
-					<div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
-					<span className="text-primary font-medium">Recording...</span>
-				</div>
+			<div className="flex flex-col items-center justify-center gap-1 text-base">
+				<span className="text-primary font-medium">Recording...</span>
 				{recordingTime !== undefined && (
-					<div className="text-2xl font-mono font-bold text-primary">
+					<div className="text-2xl font-mono font-bold text-primary tabular-nums">
 						{formatTime(recordingTime)}
 					</div>
 				)}
@@ -215,6 +213,53 @@ const AudioRecorder = ({
 	const audioChunksRef = useRef<Blob[]>([])
 	const normalizingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 	const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+	// Live input-level meter (AnalyserNode drives the ring around the mic)
+	const audioContextRef = useRef<AudioContext | null>(null)
+	const analyserRef = useRef<AnalyserNode | null>(null)
+	const meterRafRef = useRef<number | undefined>(undefined)
+	const meterRef = useRef<HTMLSpanElement | null>(null)
+
+	const startMeter = () => {
+		const analyser = analyserRef.current
+		if (!analyser) return
+		const data = new Uint8Array(analyser.fftSize)
+		const tick = () => {
+			analyser.getByteTimeDomainData(data)
+			let sum = 0
+			for (let i = 0; i < data.length; i++) {
+				const value = (data[i] - 128) / 128
+				sum += value * value
+			}
+			const rms = Math.sqrt(sum / data.length)
+			const level = Math.min(1, rms * 4)
+			if (meterRef.current) {
+				meterRef.current.style.transform = `scale(${1 + level * 1.1})`
+				meterRef.current.style.opacity = `${0.25 + level * 0.55}`
+			}
+			meterRafRef.current = requestAnimationFrame(tick)
+		}
+		meterRafRef.current = requestAnimationFrame(tick)
+	}
+
+	const stopMeter = () => {
+		if (meterRafRef.current !== undefined) {
+			cancelAnimationFrame(meterRafRef.current)
+			meterRafRef.current = undefined
+		}
+		if (meterRef.current) {
+			meterRef.current.style.transform = 'scale(1)'
+			meterRef.current.style.opacity = '0.25'
+		}
+	}
+
+	const teardownMeter = () => {
+		stopMeter()
+		analyserRef.current = null
+		if (audioContextRef.current) {
+			audioContextRef.current.close().catch(() => {})
+			audioContextRef.current = null
+		}
+	}
 
 	useEffect(() => {
 		if (autoStart && status === 'idle') {
@@ -241,6 +286,7 @@ const AudioRecorder = ({
 			clearInterval(timerRef.current)
 			timerRef.current = undefined
 		}
+		teardownMeter()
 	}
 
 	const startTimer = (opts: { reset: boolean } = { reset: false }) => {
@@ -277,6 +323,20 @@ const AudioRecorder = ({
 			const mediaRecorder = new MediaRecorder(stream, { mimeType: supportedAudioMimeType })
 			mediaRecorderRef.current = mediaRecorder
 			audioChunksRef.current = []
+
+			// Feed the level meter from the same stream (best-effort; recording works without it)
+			try {
+				const audioContext = new AudioContext()
+				const source = audioContext.createMediaStreamSource(stream)
+				const analyser = audioContext.createAnalyser()
+				analyser.fftSize = 512
+				source.connect(analyser)
+				audioContextRef.current = audioContext
+				analyserRef.current = analyser
+				startMeter()
+			} catch (meterError) {
+				console.error('Could not start level meter:', meterError)
+			}
 
 			mediaRecorder.ondataavailable = (e) => {
 				if (e.data.size > 0) {
@@ -343,10 +403,12 @@ const AudioRecorder = ({
 		if (mediaRecorderRef.current && status === 'recording') {
 			mediaRecorderRef.current.pause()
 			stopTimer()
+			stopMeter()
 			setStatus('paused')
 		} else if (mediaRecorderRef.current && status === 'paused') {
 			mediaRecorderRef.current.resume()
 			startTimer()
+			startMeter()
 			setStatus('recording')
 		}
 	}
@@ -355,6 +417,7 @@ const AudioRecorder = ({
 		if (mediaRecorderRef.current && (status === 'recording' || status === 'paused')) {
 			mediaRecorderRef.current.stop()
 			stopTimer()
+			teardownMeter()
 			// Stop all audio tracks
 			for (const track of mediaRecorderRef.current.stream.getTracks()) {
 				track.stop()
@@ -378,7 +441,25 @@ const AudioRecorder = ({
 
 	return (
 		<div className="flex flex-col h-full">
-			<div className="flex-1 flex items-center justify-center">
+			<div className="flex-1 flex flex-col items-center justify-center gap-3">
+				{(status === 'recording' || status === 'paused') && (
+					<div className="relative flex h-20 w-20 items-center justify-center">
+						<span
+							ref={meterRef}
+							aria-hidden="true"
+							className="absolute inset-0 rounded-full bg-primary/25 transition-transform duration-100 ease-out"
+							style={{ opacity: 0.25 }}
+						/>
+						<span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-primary/15">
+							<Mic
+								className={cn(
+									'h-6 w-6',
+									status === 'recording' ? 'text-primary' : 'text-muted-foreground'
+								)}
+							/>
+						</span>
+					</div>
+				)}
 				<StatusMessage
 					status={status}
 					showNormalizingMessage={showNormalizingMessage}

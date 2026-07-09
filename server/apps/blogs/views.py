@@ -615,6 +615,8 @@ def post_detail(request, post_id):
     # Prepare context for HTML template
     context = {
         'post': post,
+        'like_count': post.likes.count(),
+        'comment_count': post.comments.count(),
         'debug': settings.DEBUG,
     }
 

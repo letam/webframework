@@ -16,15 +16,19 @@ test.describe('Ground Rules Modal', () => {
 		// Modal should be visible
 		await expect(page.getByRole('dialog')).toBeVisible()
 
-		// Accept button should be disabled (grayed out) initially
+		// Accept button should present as disabled (grayed out) initially
 		const acceptButton = page.getByRole('button', { name: /I Accept All Rules/i })
 		await expect(acceptButton).toBeVisible()
+		await expect(acceptButton).toHaveAttribute('aria-disabled', 'true')
 
-		// Click accept without checking boxes
-		await acceptButton.click()
+		// Click accept without checking boxes (force: Playwright treats
+		// aria-disabled as non-actionable, but the button stays clickable so
+		// users get the "check all boxes" hint)
+		await acceptButton.click({ force: true })
 
 		// Modal should still be visible (can't close without checking all boxes)
 		await expect(page.getByRole('dialog')).toBeVisible()
+		await expect(page.getByText(/please check all boxes/i)).toBeVisible()
 	})
 
 	test('should close modal after accepting all rules', async ({ page }) => {

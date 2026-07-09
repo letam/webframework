@@ -32,6 +32,9 @@
 	--color-card: hsl(var(--card));
 	--color-card-foreground: hsl(var(--card-foreground));
 
+	--color-brand-1: hsl(var(--brand-1));
+	--color-brand-2: hsl(var(--brand-2));
+
 	--color-sidebar: hsl(var(--sidebar-background));
 	--color-sidebar-foreground: hsl(var(--sidebar-foreground));
 	--color-sidebar-primary: hsl(var(--sidebar-primary));
@@ -97,65 +100,72 @@
 
 @layer base {
 	:root {
-		--background: 220 100% 98%;
-		--foreground: 222.2 84% 4.9%;
+		--background: 250 45% 98%;
+		--foreground: 245 30% 9%;
 
 		--card: 0 0% 100%;
-		--card-foreground: 222.2 84% 4.9%;
+		--card-foreground: 245 30% 9%;
 
 		--popover: 0 0% 100%;
-		--popover-foreground: 222.2 84% 4.9%;
+		--popover-foreground: 245 30% 9%;
 
-		--primary: 235 85% 65%;
-		--primary-foreground: 210 40% 98%;
+		--primary: 256 70% 58%;
+		--primary-foreground: 250 40% 98%;
 
-		--secondary: 260 50% 60%;
-		--secondary-foreground: 222.2 47.4% 11.2%;
+		--secondary: 252 25% 93%;
+		--secondary-foreground: 250 25% 25%;
 
-		--muted: 210 40% 96.1%;
-		--muted-foreground: 215.4 16.3% 46.9%;
+		--muted: 250 25% 95%;
+		--muted-foreground: 248 12% 45%;
 
-		--accent: 250 95% 76%;
-		--accent-foreground: 222.2 47.4% 11.2%;
+		--accent: 254 60% 94%;
+		--accent-foreground: 252 30% 28%;
 
 		--destructive: 0 84.2% 60.2%;
 		--destructive-foreground: 210 40% 98%;
 
-		--border: 214.3 31.8% 91.4%;
-		--input: 214.3 31.8% 91.4%;
-		--ring: 235 85% 65%;
+		--border: 248 25% 90%;
+		--input: 248 25% 90%;
+		--ring: 256 70% 58%;
+
+		/* Echo brand gradient stops (violet -> sky) */
+		--brand-1: 256 70% 58%;
+		--brand-2: 197 88% 44%;
 
 		--radius: 0.75rem;
 	}
 
 	.dark {
-		--background: 222.2 84% 4.9%;
-		--foreground: 210 40% 98%;
+		--background: 240 30% 6%;
+		--foreground: 250 25% 96%;
 
-		--card: 222.2 84% 4.9%;
-		--card-foreground: 210 40% 98%;
+		--card: 240 25% 9%;
+		--card-foreground: 250 25% 96%;
 
-		--popover: 222.2 84% 4.9%;
-		--popover-foreground: 210 40% 98%;
+		--popover: 240 25% 8%;
+		--popover-foreground: 250 25% 96%;
 
-		--primary: 235 85% 65%;
-		--primary-foreground: 222.2 47.4% 11.2%;
+		--primary: 256 90% 70%;
+		--primary-foreground: 250 35% 11%;
 
-		--secondary: 260 50% 60%;
-		--secondary-foreground: 210 40% 98%;
+		--secondary: 250 20% 16%;
+		--secondary-foreground: 252 30% 90%;
 
-		--muted: 217.2 32.6% 17.5%;
-		--muted-foreground: 215 20.2% 65.1%;
+		--muted: 245 18% 14%;
+		--muted-foreground: 248 12% 65%;
 
-		--accent: 250 95% 76%;
-		--accent-foreground: 210 40% 98%;
+		--accent: 254 30% 19%;
+		--accent-foreground: 252 45% 92%;
 
-		--destructive: 0 62.8% 30.6%;
+		--destructive: 0 65% 42%;
 		--destructive-foreground: 210 40% 98%;
 
-		--border: 217.2 32.6% 17.5%;
-		--input: 217.2 32.6% 17.5%;
-		--ring: 235 85% 65%;
+		--border: 244 18% 16%;
+		--input: 244 18% 16%;
+		--ring: 256 90% 70%;
+
+		--brand-1: 256 90% 72%;
+		--brand-2: 195 90% 62%;
 	}
 }
 
@@ -203,9 +213,47 @@
 	animation: heart-pop 0.35s ease-in-out;
 }
 
+/* Soft entrance for feed items, comments, and other content reveals */
+@keyframes rise-in {
+	from {
+		opacity: 0;
+		transform: translateY(6px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+.animate-rise-in {
+	animation: rise-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Expanding ripple ring — the "echo" brand moment (used on like) */
+@keyframes echo-ring {
+	from {
+		opacity: 0.5;
+		transform: scale(0.6);
+	}
+	to {
+		opacity: 0;
+		transform: scale(2.2);
+	}
+}
+
+.animate-echo-ring {
+	animation: echo-ring 0.5s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
-	.animate-heart-pop {
+	.animate-heart-pop,
+	.animate-rise-in {
 		animation: none;
+	}
+	/* The ripple only exists as motion; without it, show nothing */
+	.animate-echo-ring {
+		animation: none;
+		display: none;
 	}
 }
 
@@ -213,5 +261,25 @@
 	background-clip: text;
 	-webkit-background-clip: text;
 	color: transparent;
-	background-image: linear-gradient(to right, var(--color-primary), var(--color-secondary));
+	background-image: linear-gradient(
+		to right,
+		hsl(var(--brand-1)),
+		hsl(var(--brand-2))
+	);
+}
+
+/* Hashtags rendered inside sanitized post text (see FormatText in Post.tsx) */
+.hashtag {
+	color: hsl(var(--primary));
+	font-weight: 500;
+}
+
+button.hashtag {
+	cursor: pointer;
+}
+
+button.hashtag:hover,
+button.hashtag:focus-visible {
+	text-decoration: underline;
+	text-underline-offset: 2px;
 }

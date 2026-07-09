@@ -101,20 +101,32 @@ const PostActions: React.FC<PostActionsProps> = ({
 						<Button
 							variant="ghost"
 							size="sm"
-							className={actionButtonClass}
+							className={cn(
+								actionButtonClass,
+								'hover:text-rose-500 hover:bg-rose-500/10',
+								liked && 'text-rose-500'
+							)}
 							onClick={handleLike}
 							aria-label={liked ? 'Unlike post' : 'Like post'}
 							aria-pressed={liked}
 						>
-							<Heart
-								className={cn(
-									'h-4 w-4 sm:mr-1 transition-transform',
-									liked && 'fill-primary text-primary',
-									likePop && 'animate-heart-pop'
+							<span className="relative inline-flex">
+								{likePop && (
+									<span
+										aria-hidden="true"
+										className="absolute -inset-1 rounded-full border-2 border-rose-400 animate-echo-ring"
+										onAnimationEnd={() => setLikePop(false)}
+									/>
 								)}
-								onAnimationEnd={() => setLikePop(false)}
-							/>
-							<span>{likeCount}</span>
+								<Heart
+									className={cn(
+										'h-4 w-4 transition-transform',
+										liked && 'fill-rose-500 text-rose-500',
+										likePop && 'animate-heart-pop'
+									)}
+								/>
+							</span>
+							<span className="tabular-nums">{likeCount}</span>
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent>{liked ? 'Unlike' : 'Like'}</TooltipContent>
@@ -125,13 +137,17 @@ const PostActions: React.FC<PostActionsProps> = ({
 						<Button
 							variant="ghost"
 							size="sm"
-							className={actionButtonClass}
+							className={cn(
+								actionButtonClass,
+								'hover:text-sky-500 hover:bg-sky-500/10',
+								commentsOpen && 'text-sky-500'
+							)}
 							onClick={onToggleComments}
 							aria-label={commentsOpen ? 'Hide comments' : 'Show comments'}
 							aria-expanded={commentsOpen}
 						>
-							<MessageCircle className={cn('h-4 w-4 sm:mr-1', commentsOpen && 'text-primary')} />
-							<span>{commentCount}</span>
+							<MessageCircle className="h-4 w-4" />
+							<span className="tabular-nums">{commentCount}</span>
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent>{commentsOpen ? 'Hide comments' : 'Comments'}</TooltipContent>
@@ -146,7 +162,7 @@ const PostActions: React.FC<PostActionsProps> = ({
 							onClick={handleShare}
 							aria-label="Share post"
 						>
-							<Share2 className="h-4 w-4 sm:mr-1" />
+							<Share2 className="h-4 w-4" />
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent>Share</TooltipContent>
@@ -162,8 +178,7 @@ const PostActions: React.FC<PostActionsProps> = ({
 								onClick={handleCopy}
 								aria-label="Copy text"
 							>
-								<Copy className="h-4 w-4 sm:mr-1" />
-								<span className="hidden sm:inline">Copy</span>
+								<Copy className="h-4 w-4" />
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent>Copy text</TooltipContent>

@@ -47,10 +47,19 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess, onOpenChange }: L
 			const response = await fetch(`${SERVER_HOST}/auth/login/`, options)
 
 			if (!response.ok) {
-				const errors = await response.json()
-				if (errors.form) {
-					form.setError('root', { message: errors.form[0] })
+				let errors: { form?: string[] } | null = null
+				try {
+					errors = await response.json()
+				} catch {
+					// Non-JSON response (proxy error, CSRF rejection, rate limit page, ...)
+					form.setError('root', {
+						message: `Sign-in failed — the server responded with an error (${response.status}). Please try again.`,
+					})
+					return
 				}
+				form.setError('root', {
+					message: errors?.form?.[0] ?? 'Sign-in failed. Please check your details and try again.',
+				})
 				return
 			}
 

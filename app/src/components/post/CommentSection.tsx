@@ -1,6 +1,5 @@
 import type React from 'react'
 import { useState } from 'react'
-import { formatDistanceToNow } from 'date-fns'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -10,6 +9,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAuth } from '@/hooks/useAuth'
 import { useComments } from '@/hooks/useComments'
+import { identityGradient } from '@/lib/utils/identity'
+import { formatShortTime } from '@/lib/utils/time'
 import type { Author } from '@/types/post'
 
 const authorInitials = (author: Author) => {
@@ -61,7 +62,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
 	}
 
 	return (
-		<div className="mt-3 border-t pt-3" data-testid={`comments-${postId}`}>
+		<div className="mt-3 border-t pt-3 animate-rise-in" data-testid={`comments-${postId}`}>
 			{isLoading ? (
 				<div className="space-y-3">
 					<Skeleton className="h-10 w-full" />
@@ -77,15 +78,18 @@ const CommentSection: React.FC<CommentSectionProps> = ({ postId }) => {
 						{comments.map((comment) => (
 							<li key={comment.id} className="group flex items-start gap-2">
 								<Avatar className="h-7 w-7 mt-0.5">
-									<AvatarFallback className="text-xs">
+									<AvatarFallback
+										className="text-xs text-white"
+										style={{ background: identityGradient(comment.author.username) }}
+									>
 										{authorInitials(comment.author)}
 									</AvatarFallback>
 								</Avatar>
 								<div className="flex-1 min-w-0">
 									<div className="flex items-center gap-1 text-sm">
 										<span className="font-semibold">{authorDisplayName(comment.author)}</span>
-										<span className="text-muted-foreground">
-											· {formatDistanceToNow(comment.created, { addSuffix: true })}
+										<span className="text-[13px] text-muted-foreground">
+											· {formatShortTime(comment.created)}
 										</span>
 									</div>
 									<p className="text-sm break-words whitespace-pre-wrap">{comment.body}</p>

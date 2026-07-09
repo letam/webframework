@@ -3,6 +3,7 @@ import { useState, useRef } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Mic, Video, Image, Loader2, Upload } from 'lucide-react'
 import { AudioRecorderModal } from './AudioRecorder'
 import { VideoRecorderModal } from './VideoRecorder'
@@ -40,6 +41,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [videoFile, setVideoFile] = useState<File | null>(null)
 	const [imageFile, setImageFile] = useState<File | null>(null)
 	const [submitStatus, setSubmitStatus] = useState<SubmitStatus | ''>('')
+	const [isFocused, setIsFocused] = useState(false)
 	const [isAudioModalOpen, setIsAudioModalOpen] = useState(false)
 	const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -48,6 +50,9 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const imageInputRef = useRef<HTMLInputElement>(null)
 
 	const hasNoMedia = !audioBlob && !audioFile && !videoBlob && !videoFile && !imageFile
+	const canPost = !!postText.trim() || !hasNoMedia
+	// The composer rests as a single quiet line and grows once it has attention or content
+	const expanded = isFocused || canPost || !!submitStatus
 
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		// Check for Cmd+Enter (macOS) or Ctrl+Enter (Windows/Linux)
@@ -214,17 +219,21 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	}
 
 	return (
-		<div className="bg-card rounded-lg shadow-xs border max-w-lg mx-auto px-4 py-2">
+		<div className="bg-card rounded-lg shadow-xs border max-w-lg mx-auto px-4 py-3">
 			<form onSubmit={handleSubmit} className="flex flex-col w-full">
 				<div className="-mx-2">
 					<Textarea
 						ref={textareaRef}
-						placeholder="What's on your mind? Share your thoughts, upload media, or record something..."
+						placeholder="What's on your mind?"
 						value={postText}
 						onChange={handlePostTextChange}
 						onKeyDown={handleKeyDown}
-						className="w-full resize-none mb-4 border-none focus-visible:ring-0 py-1 px-2 text-base max-w-lg"
-						rows={4}
+						onFocus={() => setIsFocused(true)}
+						onBlur={() => setIsFocused(false)}
+						className={`w-full resize-none border-none focus-visible:ring-0 py-1 px-2 text-base max-w-lg transition-[min-height] duration-200 ease-out ${
+							expanded ? 'min-h-24' : 'min-h-10'
+						}`}
+						rows={1}
 						disabled={!!submitStatus}
 					/>
 				</div>
@@ -241,97 +250,129 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					/>
 				</div>
 
-				{hasNoMedia && (
-					<div className="grid grid-cols-2 gap-3 mb-4">
-						<Button
-							type="button"
-							variant="outline"
-							className="flex items-center gap-2 py-4"
-							onClick={() => setIsAudioModalOpen(true)}
-							disabled={!!submitStatus}
-						>
-							<Mic className="h-5 w-5 text-red-500 dark:text-red-400" />
-							<span className="text-base font-medium">Record Audio</span>
-						</Button>
-						<Button
-							type="button"
-							variant="outline"
-							className="flex items-center gap-2 py-4"
-							onClick={() => setIsVideoModalOpen(true)}
-							disabled={!!submitStatus}
-						>
-							<Video className="h-5 w-5 text-blue-500 dark:text-blue-400" />
-							<span className="text-base font-medium">Record Video</span>
-						</Button>
-						<Button
-							type="button"
-							variant="outline"
-							className="flex items-center gap-2 py-4"
-							onClick={openImageFileSelector}
-							disabled={!!submitStatus}
-						>
-							<Image className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />
-							<span className="text-base font-medium">Image</span>
-						</Button>
-						<Button
-							type="button"
-							variant="outline"
-							className="flex items-center gap-2 py-4"
-							onClick={openUploadFileSelector}
-							disabled={!!submitStatus}
-						>
-							<Upload className="h-5 w-5 text-violet-500 dark:text-violet-400" />
-							<span className="text-base font-medium">Upload</span>
-						</Button>
-						<input
-							type="file"
-							ref={audioInputRef}
-							className="hidden"
-							accept="audio/*"
-							onChange={handleAudioFileChange}
-							disabled={!!submitStatus}
-						/>
-						<input
-							type="file"
-							ref={uploadInputRef}
-							className="hidden"
-							accept={
-								'audio/mp3, audio/wav, audio/mp4, audio/x-m4a, audio/aiff, audio/x-m4b' +
-								', video/*, image/*'
-							}
-							onChange={handleUploadFileChange}
-							disabled={!!submitStatus}
-						/>
-						<input
-							type="file"
-							ref={imageInputRef}
-							className="hidden"
-							accept="image/*"
-							onChange={handleImageFileChange}
-							disabled={!!submitStatus}
-						/>
-					</div>
-				)}
+				<div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
+					<TooltipProvider delayDuration={300}>
+						<div className="flex items-center gap-0.5">
+							{hasNoMedia && (
+								<>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												className="h-9 w-9 rounded-full hover:bg-red-500/10"
+												onClick={() => setIsAudioModalOpen(true)}
+												disabled={!!submitStatus}
+												aria-label="Record Audio"
+											>
+												<Mic className="h-5 w-5 text-red-500 dark:text-red-400" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>Record audio</TooltipContent>
+									</Tooltip>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												className="h-9 w-9 rounded-full hover:bg-blue-500/10"
+												onClick={() => setIsVideoModalOpen(true)}
+												disabled={!!submitStatus}
+												aria-label="Record Video"
+											>
+												<Video className="h-5 w-5 text-blue-500 dark:text-blue-400" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>Record video</TooltipContent>
+									</Tooltip>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												className="h-9 w-9 rounded-full hover:bg-emerald-500/10"
+												onClick={openImageFileSelector}
+												disabled={!!submitStatus}
+												aria-label="Image"
+											>
+												<Image className="h-5 w-5 text-emerald-500 dark:text-emerald-400" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>Add an image</TooltipContent>
+									</Tooltip>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												className="h-9 w-9 rounded-full hover:bg-violet-500/10"
+												onClick={openUploadFileSelector}
+												disabled={!!submitStatus}
+												aria-label="Upload"
+											>
+												<Upload className="h-5 w-5 text-violet-500 dark:text-violet-400" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>Upload a file</TooltipContent>
+									</Tooltip>
+								</>
+							)}
+						</div>
+					</TooltipProvider>
 
-				{submitStatus && (
-					<div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-						<Loader2 className="h-4 w-4 animate-spin" />
-						<span>
-							{submitStatus === 'compressing'
-								? 'Compressing media...'
-								: submitStatus === 'preparing'
-									? 'Preparing post...'
-									: 'Submitting post...'}
-						</span>
+					<div className="flex items-center gap-3">
+						{submitStatus && (
+							<span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+								<Loader2 className="h-3.5 w-3.5 animate-spin" />
+								{submitStatus === 'compressing'
+									? 'Compressing media...'
+									: submitStatus === 'preparing'
+										? 'Preparing post...'
+										: 'Posting...'}
+							</span>
+						)}
+						<Button
+							type="submit"
+							size="sm"
+							disabled={!canPost || !!submitStatus}
+							className="rounded-full px-5 font-medium"
+						>
+							Post
+						</Button>
 					</div>
-				)}
-				<Button
-					type="submit"
+				</div>
+
+				<input
+					type="file"
+					ref={audioInputRef}
+					className="hidden"
+					accept="audio/*"
+					onChange={handleAudioFileChange}
 					disabled={!!submitStatus}
-					className="w-full py-4 text-base font-medium"
-				>
-					Post
-				</Button>
+				/>
+				<input
+					type="file"
+					ref={uploadInputRef}
+					className="hidden"
+					accept={
+						'audio/mp3, audio/wav, audio/mp4, audio/x-m4a, audio/aiff, audio/x-m4b' +
+						', video/*, image/*'
+					}
+					onChange={handleUploadFileChange}
+					disabled={!!submitStatus}
+				/>
+				<input
+					type="file"
+					ref={imageInputRef}
+					className="hidden"
+					accept="image/*"
+					onChange={handleImageFileChange}
+					disabled={!!submitStatus}
+				/>
 			</form>
 
 			<AudioRecorderModal
