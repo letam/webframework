@@ -281,6 +281,27 @@ describe('posts API', () => {
 		})
 	})
 
+	describe('updatePost', () => {
+		it('sends thumbnail updates as multipart PATCH data', async () => {
+			const { updatePost } = await importPostsApi()
+			const updatedPost = makePost({ id: 9, head: 'Updated' })
+			const poster = new File(['poster'], 'poster.jpg', { type: 'image/jpeg' })
+			fetchMock.mockResolvedValueOnce(await response(toServerPost(updatedPost)))
+
+			await updatePost(9, {
+				head: 'Updated',
+				body: 'Body',
+				thumbnail: poster,
+			})
+
+			expect(fetchMock).toHaveBeenCalledWith('/api/posts/9/', expect.any(Object))
+			const formData = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData
+			expect(formData.get('head')).toBe('Updated')
+			expect(formData.get('body')).toBe('Body')
+			expect(formData.get('thumbnail')).toBe(poster)
+		})
+	})
+
 	describe('getAuthorStats', () => {
 		it('fetches aggregate totals for an author', async () => {
 			const { getAuthorStats } = await importPostsApi()

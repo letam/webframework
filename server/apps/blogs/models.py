@@ -61,6 +61,7 @@ class Media(models.Model):
     media_type = models.CharField(max_length=255, choices=MEDIA_TYPE_CHOICES)
     duration = models.DurationField(null=True, blank=True)
     thumbnail = models.ImageField(upload_to=media_file_path, blank=True)
+    waveform = models.JSONField(null=True, blank=True)
     transcript = models.TextField(blank=True)
     transcript_status = models.CharField(
         max_length=16, blank=True, default='', choices=TRANSCRIPT_STATUS_CHOICES

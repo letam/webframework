@@ -48,6 +48,7 @@ class MediaSerializer(serializers.ModelSerializer):
     """Serializer for media attached to posts."""
 
     signed_url = serializers.SerializerMethodField()
+    thumbnail = serializers.SerializerMethodField()
 
     class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
         """Serializer metadata."""
@@ -63,6 +64,7 @@ class MediaSerializer(serializers.ModelSerializer):
             'media_type',
             'duration',
             'thumbnail',
+            'waveform',
             'transcript',
             'transcript_status',
             'alt_text',
@@ -79,6 +81,16 @@ class MediaSerializer(serializers.ModelSerializer):
             # A null signed_url is also what media without an S3 key returns,
             # so leave a trail distinguishing signing failures from that.
             logger.exception('Failed to generate signed URL for media %s', obj.pk)
+            return None
+
+    def get_thumbnail(self, obj):
+        """Return a storage URL for a generated or uploaded thumbnail."""
+        if not obj.thumbnail:
+            return None
+        try:
+            return obj.thumbnail.storage.url(obj.thumbnail.name)
+        except Exception:
+            logger.exception('Failed to generate thumbnail URL for media %s', obj.pk)
             return None
 
 

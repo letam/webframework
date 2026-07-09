@@ -3,15 +3,16 @@ import { useState, useRef, useEffect } from 'react'
 import { Play, Pause, SkipBack, SkipForward } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { isDesktop, isFirefox } from '@/lib/utils/browser'
+import { cn } from '@/lib/utils'
 
 interface AudioControlsProps {
-	audioRef: React.RefObject<HTMLAudioElement>
 	isPlaying: boolean
 	duration: number
 	currentTime: number
 	onPlayPause: () => void
 	onSeek: (time: number) => void
 	disabled?: boolean
+	waveform?: number[] | null
 }
 
 const formatTime = (timeInSeconds: number): string => {
@@ -20,15 +21,138 @@ const formatTime = (timeInSeconds: number): string => {
 	return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
+export const getWaveformSeekTime = (
+	clientX: number,
+	rectLeft: number,
+	rectWidth: number,
+	duration: number
+): number => {
+	if (rectWidth <= 0 || duration <= 0) {
+		return 0
+	}
+
+	const percentage = Math.min(1, Math.max(0, (clientX - rectLeft) / rectWidth))
+	return percentage * duration
+}
+
+const getProgressPercent = (currentTime: number, duration: number) => {
+	if (duration <= 0) {
+		return 0
+	}
+	return Math.min(100, Math.max(0, (currentTime / duration) * 100))
+}
+
+interface WaveformSeekBarProps {
+	waveform: number[]
+	duration: number
+	currentTime: number
+	onPlayPause: () => void
+	onSeek: (time: number) => void
+	disabled: boolean
+}
+
+const WaveformSeekBar: React.FC<WaveformSeekBarProps> = ({
+	waveform,
+	duration,
+	currentTime,
+	onPlayPause,
+	onSeek,
+	disabled,
+}) => {
+	const draggingRef = useRef(false)
+	const progressPercent = getProgressPercent(currentTime, duration)
+
+	const seekFromPointer = (clientX: number, element: HTMLElement) => {
+		const rect = element.getBoundingClientRect()
+		onSeek(getWaveformSeekTime(clientX, rect.left, rect.width, duration))
+	}
+
+	const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+		if (disabled) {
+			return
+		}
+		draggingRef.current = true
+		e.currentTarget.setPointerCapture?.(e.pointerId)
+		seekFromPointer(e.clientX, e.currentTarget)
+	}
+
+	const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+		if (!draggingRef.current || disabled) {
+			return
+		}
+		seekFromPointer(e.clientX, e.currentTarget)
+	}
+
+	const stopDragging = (e: React.PointerEvent<HTMLDivElement>) => {
+		draggingRef.current = false
+		if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+			e.currentTarget.releasePointerCapture(e.pointerId)
+		}
+	}
+
+	return (
+		<div
+			className={cn(
+				'flex h-12 flex-1 items-center gap-px rounded-md px-1',
+				disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'
+			)}
+			onPointerDown={handlePointerDown}
+			onPointerMove={handlePointerMove}
+			onPointerUp={stopDragging}
+			onPointerCancel={stopDragging}
+			onKeyDown={(e) => {
+				if (e.key === ' ') {
+					e.preventDefault()
+					onPlayPause()
+				} else if (e.key === 'ArrowLeft') {
+					onSeek(currentTime - 1)
+				} else if (e.key === 'ArrowRight') {
+					onSeek(currentTime + 1)
+				} else if (e.key === 'Home') {
+					onSeek(0)
+				} else if (e.key === 'End') {
+					onSeek(duration)
+				}
+			}}
+			role="slider"
+			tabIndex={disabled ? -1 : 0}
+			aria-label="Audio waveform progress"
+			aria-valuemin={0}
+			aria-valuemax={duration}
+			aria-valuenow={currentTime}
+		>
+			{waveform.map((peak, index) => {
+				const safePeak = Math.min(100, Math.max(0, peak))
+				const height = Math.max(4, Math.round((safePeak / 100) * 44))
+				const barPosition = waveform.length <= 1 ? 0 : (index / (waveform.length - 1)) * 100
+				const isPlayed = barPosition <= progressPercent
+
+				return (
+					<div
+						key={`${index}-${peak}`}
+						className={cn(
+							'pointer-events-none min-w-[1.5px] flex-1 rounded-[1.5px] motion-safe:transition-colors motion-safe:duration-100',
+							isPlayed ? 'bg-gradient-to-t from-brand-1 to-brand-2' : 'bg-muted-foreground/30'
+						)}
+						style={{ height: `${height}px` }}
+					/>
+				)
+			})}
+		</div>
+	)
+}
+
 export const AudioControls: React.FC<AudioControlsProps> = ({
-	audioRef,
 	isPlaying,
 	duration,
 	currentTime,
 	onPlayPause,
 	onSeek,
 	disabled = false,
+	waveform,
 }) => {
+	const progressPercent = getProgressPercent(currentTime, duration)
+
 	return (
 		<div className="flex flex-col space-y-2">
 			<div className="flex items-center justify-center space-x-2">
@@ -81,41 +205,49 @@ export const AudioControls: React.FC<AudioControlsProps> = ({
 
 			<div className="flex items-center space-x-2">
 				<span className="text-xs text-muted-foreground">{formatTime(currentTime)}</span>
-				<div
-					className="flex-1 h-1 bg-secondary rounded-full overflow-hidden cursor-pointer relative"
-					onClick={(e) => {
-						const rect = e.currentTarget.getBoundingClientRect()
-						const clickPosition = e.clientX - rect.left
-						const percentage = clickPosition / rect.width
-						const newTime = percentage * duration
-						onSeek(newTime)
-					}}
-					onKeyDown={(e) => {
-						if (e.key === ' ') {
-							e.preventDefault() // Prevent page scroll
-							onPlayPause()
-						} else if (e.key === 'ArrowLeft') {
-							onSeek(currentTime - 1)
-						} else if (e.key === 'ArrowRight') {
-							onSeek(currentTime + 1)
-						} else if (e.key === 'Home') {
-							onSeek(0)
-						} else if (e.key === 'End') {
-							onSeek(duration)
-						}
-					}}
-					role="slider"
-					tabIndex={0}
-					aria-label="Audio progress"
-					aria-valuemin={0}
-					aria-valuemax={duration}
-					aria-valuenow={currentTime}
-				>
-					<div
-						className="h-full bg-primary transition-all duration-100"
-						style={{ width: `${(currentTime / duration) * 100}%` }}
+				{waveform?.length ? (
+					<WaveformSeekBar
+						waveform={waveform}
+						duration={duration}
+						currentTime={currentTime}
+						onPlayPause={onPlayPause}
+						onSeek={onSeek}
+						disabled={disabled}
 					/>
-				</div>
+				) : (
+					<div
+						className="relative h-1 flex-1 cursor-pointer overflow-hidden rounded-full bg-secondary"
+						onClick={(e) => {
+							const rect = e.currentTarget.getBoundingClientRect()
+							onSeek(getWaveformSeekTime(e.clientX, rect.left, rect.width, duration))
+						}}
+						onKeyDown={(e) => {
+							if (e.key === ' ') {
+								e.preventDefault() // Prevent page scroll
+								onPlayPause()
+							} else if (e.key === 'ArrowLeft') {
+								onSeek(currentTime - 1)
+							} else if (e.key === 'ArrowRight') {
+								onSeek(currentTime + 1)
+							} else if (e.key === 'Home') {
+								onSeek(0)
+							} else if (e.key === 'End') {
+								onSeek(duration)
+							}
+						}}
+						role="slider"
+						tabIndex={0}
+						aria-label="Audio progress"
+						aria-valuemin={0}
+						aria-valuemax={duration}
+						aria-valuenow={currentTime}
+					>
+						<div
+							className="h-full bg-primary motion-safe:transition-all motion-safe:duration-100"
+							style={{ width: `${progressPercent}%` }}
+						/>
+					</div>
+				)}
 				<span className="text-xs text-muted-foreground">{formatTime(duration)}</span>
 			</div>
 		</div>
@@ -124,14 +256,14 @@ export const AudioControls: React.FC<AudioControlsProps> = ({
 
 interface AudioPlayerProps {
 	audioUrl: string
-	mimeType: string
 	duration?: number
+	waveform?: number[] | null
 }
 
 export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 	audioUrl,
-	mimeType,
 	duration: initialDuration,
+	waveform,
 }) => {
 	const [isPlaying, setIsPlaying] = useState(false)
 	const [isLoading, setIsLoading] = useState(false)
@@ -274,9 +406,12 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 	}
 
 	const seekAudio = (seconds: number) => {
+		const safeSeconds = Number.isFinite(seconds) ? seconds : 0
+		const nextTime = Math.max(0, Math.min(safeSeconds, duration))
 		if (audioRef.current) {
-			audioRef.current.currentTime = Math.max(0, Math.min(seconds, duration))
+			audioRef.current.currentTime = nextTime
 		}
+		setCurrentTime(nextTime)
 	}
 
 	const togglePlayback = async () => {
@@ -342,13 +477,13 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 	return (
 		<div className="mt-4 bg-accent/10 rounded-md p-3 relative">
 			<AudioControls
-				audioRef={audioRef}
 				isPlaying={isPlaying}
 				duration={duration}
 				currentTime={currentTime}
 				onPlayPause={togglePlayback}
 				onSeek={seekAudio}
 				disabled={isLoading}
+				waveform={waveform}
 			/>
 
 			<audio
@@ -398,21 +533,15 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
 interface VideoPlayerProps {
 	videoUrl: string
-	mimeType: string
-	duration?: number
+	thumbnail?: string | null
 }
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({
-	videoUrl,
-	mimeType,
-	duration: initialDuration,
-}) => {
+export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, thumbnail }) => {
 	const [isPlaying, setIsPlaying] = useState(false)
 	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [isLoading, setIsLoading] = useState(false)
 	const [isLoaded, setIsLoaded] = useState(false)
-	const [duration, setDuration] = useState<number>(initialDuration || 0)
 	const videoBlobRef = useRef<Blob | null>(null)
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: executed when videoUrl changes
@@ -421,7 +550,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 		setError(null)
 		setIsLoading(false)
 		setIsLoaded(false)
-		setDuration(initialDuration || 0)
 		videoBlobRef.current = null
 		const player = videoRef.current
 
@@ -493,11 +621,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 	}
 
 	const handleLoadedMetadata = () => {
-		if (videoRef.current) {
-			// Use the provided duration if available, otherwise use the video element's duration
-			const videoDuration = initialDuration || videoRef.current.duration
-			setDuration(videoDuration)
-		}
 		setIsLoading(false)
 		setIsLoaded(true)
 		setError(null)
@@ -541,14 +664,16 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 	}
 
 	return (
-		<div className="mt-4 relative rounded-md overflow-hidden">
+		<div className="relative mt-4 overflow-hidden rounded-md bg-black">
 			<video
 				ref={videoRef}
-				className="w-full rounded-md"
+				className="aspect-video w-full rounded-md bg-black object-contain"
 				onEnded={handleEnded}
 				onError={handleError}
 				onLoadedMetadata={handleLoadedMetadata}
 				controls={isPlaying}
+				poster={thumbnail || undefined}
+				preload={thumbnail ? 'none' : 'metadata'}
 			>
 				<track kind="captions" label="English" />
 				Your browser does not support the video tag.

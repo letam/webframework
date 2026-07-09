@@ -217,7 +217,6 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({
 								<div className="text-sm text-destructive">{error}</div>
 							) : (
 								<AudioControls
-									audioRef={audioRef}
 									duration={duration}
 									currentTime={currentTime}
 									isPlaying={isPlaying}

@@ -53,13 +53,20 @@ from .models import (
 )
 from .pagination import PostCursorPagination
 from .serializers import CommentSerializer, PostCreateSerializer, PostSerializer
-from .tasks import transcribe_post_media
-from .utils import MediaProbeError, is_valid_image, probe_media_duration
+from .tasks import process_post_media, transcribe_post_media
+from .utils import (
+    MediaProbeError,
+    generate_poster_rendition,
+    is_valid_image,
+    probe_media_duration,
+    save_media_thumbnail,
+)
 from .utils.get_file_mimetype import get_file_mime_type
 
 logger = logging.getLogger(__name__)
 
 VALID_MEDIA_TYPES = {choice[0] for choice in MEDIA_TYPE_CHOICES}
+POSTER_UPLOAD_LIMIT_BYTES = 5 * 1024 * 1024
 
 
 class MediaValidationError(ValueError):
@@ -104,6 +111,20 @@ def _is_truthy(value):
     return bool(value)
 
 
+def _pop_data_value(data, key):
+    """Pop and return a scalar request value from dict-like request data."""
+    value = data.get(key) if key in data else None
+    data.pop(key, None)
+    return value
+
+
+def _shallow_request_data(data):
+    """Return mutable scalar request data without deep-copying uploaded files."""
+    if hasattr(data, 'dict'):
+        return data.dict()
+    return dict(data)
+
+
 def _viewer_key_for_request(request):
     """Return the stable, non-credential viewer key for the request."""
     if request.user.is_authenticated:
@@ -137,6 +158,14 @@ def _record_post_views(request, posts):
         [PostView(post=post, viewer_key=viewer_key) for post in posts_to_record],
         ignore_conflicts=True,
     )
+
+
+def _enqueue_process_post_media(media_id):
+    """Queue derived media processing without breaking the committed post."""
+    try:
+        process_post_media.enqueue(media_id)
+    except Exception:
+        logger.exception('Failed to enqueue media processing for media %s', media_id)
 
 
 class PostViewSet(viewsets.ModelViewSet):
@@ -258,7 +287,7 @@ class PostViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        request_data = request.data.copy()
+        request_data = _shallow_request_data(request.data)
         for media_field in ('media', 'media_type', 's3_file_key'):
             request_data.pop(media_field, None)
         serializer = self.get_serializer(data=request_data)
@@ -279,8 +308,12 @@ class PostViewSet(viewsets.ModelViewSet):
                     media_kwargs['s3_file_key'] = media_payload['s3_file_key']
                     media_kwargs['duration'] = media_payload['duration']
 
-                post.media = Media.objects.create(**media_kwargs)  # pyright: ignore [reportOptionalMemberAccess]
+                media = Media.objects.create(**media_kwargs)
+                post.media = media  # pyright: ignore [reportOptionalMemberAccess]
                 post.save(update_fields=['media'])  # pyright: ignore [reportOptionalMemberAccess]
+                transaction.on_commit(
+                    lambda media_id=media.pk: _enqueue_process_post_media(media_id)
+                )
 
         # Get the created instance and serialize it with PostSerializer
         instance = serializer.instance
@@ -431,11 +464,19 @@ class PostViewSet(viewsets.ModelViewSet):
             )
 
         # Create a mutable copy of request data
-        data = request.data.copy()
+        data = _shallow_request_data(request.data)
 
         # Extract media updates from request data if they exist
-        transcript = data.pop('transcript', None)
-        alt_text = data.pop('alt_text', None)
+        transcript = _pop_data_value(data, 'transcript')
+        alt_text = _pop_data_value(data, 'alt_text')
+        thumbnail = _pop_data_value(data, 'thumbnail')
+
+        poster = None
+        if thumbnail:
+            try:
+                poster = self._validate_custom_poster(instance, thumbnail)
+            except MediaValidationError as error:
+                return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
 
         # Update the post
         serializer = self.get_serializer(instance, data=data, partial=partial)
@@ -457,7 +498,30 @@ class PostViewSet(viewsets.ModelViewSet):
             if media_updates:
                 instance.media.save(update_fields=media_updates.keys())
 
+            if poster is not None:
+                save_media_thumbnail(instance.media, poster, 'poster.jpg')
+
         return Response(serializer.data)
+
+    def _validate_custom_poster(self, post, thumbnail):
+        """Validate and normalize an uploaded custom poster image."""
+        if not post.media or post.media.media_type != 'video':
+            raise MediaValidationError('poster image can only be set for video posts')
+
+        if getattr(thumbnail, 'size', 0) > POSTER_UPLOAD_LIMIT_BYTES:
+            raise MediaValidationError('poster image is too large')
+
+        try:
+            if not is_valid_image(thumbnail):
+                raise MediaValidationError('poster image is not a valid image')
+        finally:
+            if hasattr(thumbnail, 'seek'):
+                thumbnail.seek(0)
+
+        try:
+            return generate_poster_rendition(thumbnail)
+        except Exception as error:
+            raise MediaValidationError('poster image is not a valid image') from error
 
     @action(detail=True, methods=['post', 'delete'])
     def like(self, request, pk=None):

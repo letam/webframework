@@ -1,7 +1,9 @@
 """Tests for media upload validation, S3-backed media, and signed URLs."""
 
 import os
+import subprocess
 import tempfile
+from array import array
 from datetime import timedelta
 from io import BytesIO
 from unittest import mock
@@ -42,8 +44,12 @@ class MediaPipelineTests(ViewTestCase):
 
     def _png_bytes(self):
         """Return a tiny valid PNG image."""
+        return self._image_bytes()
+
+    def _image_bytes(self, width=1, height=1, image_format='PNG'):
+        """Return valid image bytes for a generated solid image."""
         buffer = BytesIO()
-        Image.new('RGB', (1, 1)).save(buffer, format='PNG')
+        Image.new('RGB', (width, height), color='red').save(buffer, format=image_format)
         return buffer.getvalue()
 
     def _image_file(self, content=None, name='pixel.png', content_type='image/png'):
@@ -330,6 +336,327 @@ class MediaPipelineTests(ViewTestCase):
                 data = PostSerializer(post).data
 
         self.assertIsNone(data['media']['signed_url'])
+
+    def test_media_serializer_returns_thumbnail_url_and_waveform(self):
+        """Media serialization should expose derived media fields."""
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(
+                    file=self._audio_file(),
+                    media_type='audio',
+                    waveform=[0, 50, 100],
+                )
+                media.thumbnail.save(
+                    'poster.jpg',
+                    SimpleUploadedFile(
+                        'poster.jpg',
+                        self._image_bytes(image_format='JPEG'),
+                        content_type='image/jpeg',
+                    ),
+                )
+                post = Post.objects.create(author=self.user, head='Local media', media=media)
+                data = PostSerializer(post).data
+
+        self.assertEqual(data['media']['waveform'], [0, 50, 100])
+        self.assertTrue(data['media']['thumbnail'].startswith('/media/post/'))
+
+    def test_process_post_media_routes_by_media_type(self):
+        """The media processing task should dispatch to the matching media handler."""
+        from ..tasks import process_post_media
+
+        processors = {
+            'audio': mock.Mock(),
+            'video': mock.Mock(),
+            'image': mock.Mock(),
+        }
+
+        with mock.patch.dict('apps.blogs.tasks.MEDIA_PROCESSORS', processors, clear=True):
+            for media_type, processor in processors.items():
+                media = Media.objects.create(media_type=media_type)
+                process_post_media.call(media.pk)
+                processor.assert_called_once_with(media)
+
+    def test_process_post_media_video_generates_thumbnail(self):
+        """Video processing should capture a poster frame into Media.thumbnail."""
+        from ..tasks import process_post_media
+
+        with tempfile.TemporaryDirectory() as source_dir:
+            video_path = os.path.join(source_dir, 'clip.avi')
+            subprocess.run(
+                [
+                    'ffmpeg',
+                    '-y',
+                    '-f',
+                    'lavfi',
+                    '-i',
+                    'color=c=red:s=32x32:r=1:d=1',
+                    '-c:v',
+                    'mjpeg',
+                    video_path,
+                ],
+                capture_output=True,
+                check=True,
+            )
+            with open(video_path, 'rb') as video_file:
+                video_bytes = video_file.read()
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(
+                    file=SimpleUploadedFile(
+                        'clip.avi', video_bytes, content_type='video/x-msvideo'
+                    ),
+                    media_type='video',
+                    duration=timedelta(seconds=1),
+                )
+
+                process_post_media.call(media.pk)
+                media.refresh_from_db()
+
+                self.assertTrue(media.thumbnail)
+                self.assertTrue(media.thumbnail.storage.exists(media.thumbnail.name))
+                with media.thumbnail.open('rb'):
+                    with Image.open(media.thumbnail) as image:
+                        self.assertLessEqual(image.width, 1280)
+
+    def test_process_post_media_audio_generates_waveform(self):
+        """Audio processing should store normalized waveform peaks."""
+        from ..tasks import process_post_media
+
+        samples = array('h', [0, 1000, -2000, 4000] * 100)
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=samples.tobytes(),
+            stderr=b'',
+        )
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(
+                    file=self._audio_file(),
+                    media_type='audio',
+                    duration=timedelta(seconds=1),
+                )
+
+                with mock.patch(
+                    'apps.blogs.utils.media_processing.subprocess.run',
+                    return_value=completed,
+                ):
+                    process_post_media.call(media.pk)
+
+                media.refresh_from_db()
+
+        self.assertIsNotNone(media.waveform)
+        self.assertLessEqual(len(media.waveform), 120)
+        self.assertTrue(all(0 <= peak <= 100 for peak in media.waveform))
+        self.assertEqual(max(media.waveform), 100)
+
+    def test_process_post_media_audio_decode_failure_leaves_waveform_null(self):
+        """Audio decode failure should not raise or write waveform data."""
+        from ..tasks import process_post_media
+
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout=b'',
+            stderr=b'bad audio',
+        )
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(
+                    file=self._audio_file(),
+                    media_type='audio',
+                    duration=timedelta(seconds=1),
+                )
+
+                with mock.patch(
+                    'apps.blogs.utils.media_processing.subprocess.run',
+                    return_value=completed,
+                ):
+                    process_post_media.call(media.pk)
+
+                media.refresh_from_db()
+
+        self.assertIsNone(media.waveform)
+
+    def test_process_post_media_image_generates_capped_rendition(self):
+        """Large image processing should save a JPEG rendition capped at 1600px."""
+        from ..tasks import process_post_media
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(
+                    file=self._image_file(
+                        content=self._image_bytes(width=2000, height=1000),
+                        name='large.png',
+                    ),
+                    media_type='image',
+                )
+
+                process_post_media.call(media.pk)
+                media.refresh_from_db()
+
+                self.assertTrue(media.thumbnail)
+                with media.thumbnail.open('rb'):
+                    with Image.open(media.thumbnail) as image:
+                        self.assertEqual(image.format, 'JPEG')
+                        self.assertLessEqual(max(image.size), 1600)
+
+    def test_process_post_media_image_skips_small_original(self):
+        """Small image originals should be served directly without a rendition."""
+        from ..tasks import process_post_media
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(
+                    file=self._image_file(
+                        content=self._image_bytes(width=32, height=32),
+                        name='small.png',
+                    ),
+                    media_type='image',
+                )
+
+                process_post_media.call(media.pk)
+                media.refresh_from_db()
+
+        self.assertFalse(media.thumbnail)
+
+    def test_patch_custom_video_poster_replaces_old_thumbnail(self):
+        """Authors can upload a processed custom poster for video posts."""
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(
+                    file=self._audio_file(name='clip.mp4', content_type='video/mp4'),
+                    media_type='video',
+                    duration=timedelta(seconds=1),
+                )
+                media.thumbnail.save(
+                    'old.jpg',
+                    SimpleUploadedFile(
+                        'old.jpg',
+                        self._image_bytes(image_format='JPEG'),
+                        content_type='image/jpeg',
+                    ),
+                )
+                old_path = media.thumbnail.path
+                post = Post.objects.create(author=self.user, head='Video', media=media)
+
+                response = self.client.patch(
+                    reverse('post-detail', args=[post.id]),
+                    {
+                        'thumbnail': SimpleUploadedFile(
+                            'poster.png',
+                            self._image_bytes(width=2000, height=1200),
+                            content_type='image/png',
+                        ),
+                    },
+                    format='multipart',
+                )
+
+                media.refresh_from_db()
+                self.assertEqual(response.status_code, 200)
+                self.assertFalse(os.path.exists(old_path))
+                self.assertTrue(response.data['media']['thumbnail'])
+                with media.thumbnail.open('rb'):
+                    with Image.open(media.thumbnail) as image:
+                        self.assertLessEqual(max(image.size), 1280)
+
+    def test_patch_custom_poster_rejects_invalid_image_without_post_update(self):
+        """Invalid custom posters should return 400 before applying post edits."""
+        media = Media.objects.create(media_type='video')
+        post = Post.objects.create(author=self.user, head='Original', media=media)
+
+        response = self.client.patch(
+            reverse('post-detail', args=[post.id]),
+            {
+                'head': 'Changed',
+                'thumbnail': SimpleUploadedFile(
+                    'poster.jpg',
+                    b'not an image',
+                    content_type='image/jpeg',
+                ),
+            },
+            format='multipart',
+        )
+
+        post.refresh_from_db()
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(post.head, 'Original')
+
+    def test_patch_custom_poster_rejects_oversized_image(self):
+        """Poster uploads are capped at 5 MB."""
+        media = Media.objects.create(media_type='video')
+        post = Post.objects.create(author=self.user, head='Video', media=media)
+
+        response = self.client.patch(
+            reverse('post-detail', args=[post.id]),
+            {
+                'thumbnail': SimpleUploadedFile(
+                    'poster.jpg',
+                    b'x' * (5 * 1024 * 1024 + 1),
+                    content_type='image/jpeg',
+                ),
+            },
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data['error'], 'poster image is too large')
+
+    def test_patch_custom_poster_requires_author_or_admin(self):
+        """Non-authors cannot replace a video's custom poster."""
+        media = Media.objects.create(media_type='video')
+        post = Post.objects.create(author=self.user, head='Video', media=media)
+        self.client.force_authenticate(user=self.other_user)
+
+        response = self.client.patch(
+            reverse('post-detail', args=[post.id]),
+            {
+                'thumbnail': SimpleUploadedFile(
+                    'poster.png',
+                    self._image_bytes(),
+                    content_type='image/png',
+                ),
+            },
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_create_enqueues_media_processing_for_media_posts(self):
+        """Media post creation should enqueue processing after commit."""
+        with mock.patch('apps.blogs.views._enqueue_process_post_media') as mock_enqueue:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    reverse('post-list'),
+                    {
+                        'head': 'Valid image',
+                        'media': self._image_file(),
+                        'media_type': 'image',
+                    },
+                    format='multipart',
+                )
+
+        self.assertEqual(response.status_code, 201)
+        post = Post.objects.get(id=response.data['id'])
+        mock_enqueue.assert_called_once_with(post.media.pk)
+
+    def test_create_does_not_enqueue_media_processing_for_text_posts(self):
+        """Text-only post creation should not enqueue media processing."""
+        with mock.patch('apps.blogs.views._enqueue_process_post_media') as mock_enqueue:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.post(
+                    reverse('post-list'),
+                    {
+                        'head': 'Text',
+                        'body': 'No media here',
+                    },
+                )
+
+        self.assertEqual(response.status_code, 201)
+        mock_enqueue.assert_not_called()
 
     def test_local_copy_downloads_s3_media_to_a_temp_file(self):
         """local_copy should download S3-only media and clean up afterwards."""

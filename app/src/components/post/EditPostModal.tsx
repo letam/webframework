@@ -22,7 +22,8 @@ interface EditPostModalProps {
 		head: string,
 		body: string,
 		transcript?: string,
-		altText?: string
+		altText?: string,
+		poster?: File | null
 	) => Promise<void>
 }
 
@@ -36,6 +37,7 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 	const [body, setBody] = useState(post.body)
 	const [transcript, setTranscript] = useState(post.media?.transcript || '')
 	const [altText, setAltText] = useState(post.media?.alt_text || '')
+	const [poster, setPoster] = useState<File | null>(null)
 	const [isSubmitting, setIsSubmitting] = useState(false)
 
 	// Update state when post changes
@@ -44,13 +46,14 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 		setBody(post.body)
 		setTranscript(post.media?.transcript || '')
 		setAltText(post.media?.alt_text || '')
+		setPoster(null)
 	}, [post])
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
 		setIsSubmitting(true)
 		try {
-			await onSave(post.id, head, body, transcript, altText)
+			await onSave(post.id, head, body, transcript, altText, poster)
 			onOpenChange(false)
 		} catch (error) {
 			console.error('Failed to update post:', error)
@@ -121,6 +124,19 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 								className="min-h-[100px]"
 								onKeyDown={handleKeyDown}
 							/>
+						</div>
+					)}
+					{post.media && post.media.media_type === 'video' && (
+						<div className="space-y-2">
+							<Label htmlFor="poster">Poster image</Label>
+							<Input
+								id="poster"
+								type="file"
+								accept="image/*"
+								onChange={(e) => setPoster(e.target.files?.[0] ?? null)}
+								disabled={isSubmitting}
+							/>
+							{poster && <p className="text-xs text-muted-foreground">{poster.name}</p>}
 						</div>
 					)}
 

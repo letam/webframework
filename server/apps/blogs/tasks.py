@@ -7,7 +7,13 @@ from django_tasks import task
 
 from .models import Media
 from .transcription import transcribe_audio
-from .utils import convert_to_mp3
+from .utils import (
+    convert_to_mp3,
+    generate_audio_waveform,
+    generate_image_rendition,
+    generate_video_poster,
+    save_media_thumbnail,
+)
 
 logger = logging.getLogger('server.apps.blogs')
 
@@ -59,3 +65,54 @@ def transcribe_post_media(media_id: int) -> None:
     media.transcript = transcript
     media.transcript_status = 'done'
     media.save(update_fields=['transcript', 'transcript_status'])
+
+
+@task()
+def process_post_media(media_id: int) -> None:
+    """Generate derived media assets without failing the source media row."""
+    media = Media.objects.filter(pk=media_id).first()
+    if media is None:
+        logger.warning('Media %s deleted before media processing ran', media_id)
+        return
+
+    processor = MEDIA_PROCESSORS.get(media.media_type)
+    if processor is None:
+        logger.warning('Media %s has unsupported media_type %s', media_id, media.media_type)
+        return
+
+    try:
+        processor(media)
+    except Exception:
+        logger.exception('Error processing %s media %s', media.media_type, media_id)
+
+
+def _process_video_media(media: Media) -> None:
+    with media.local_copy() as path:
+        poster = generate_video_poster(path)
+
+    if poster is not None:
+        save_media_thumbnail(media, poster, 'poster.jpg')
+
+
+def _process_audio_media(media: Media) -> None:
+    with media.local_copy() as path:
+        waveform = generate_audio_waveform(path)
+
+    if waveform is not None:
+        media.waveform = waveform
+        media.save(update_fields=['waveform'])
+
+
+def _process_image_media(media: Media) -> None:
+    with media.local_copy() as path:
+        rendition = generate_image_rendition(path)
+
+    if rendition is not None:
+        save_media_thumbnail(media, rendition, 'rendition.jpg')
+
+
+MEDIA_PROCESSORS = {
+    'video': _process_video_media,
+    'audio': _process_audio_media,
+    'image': _process_image_media,
+}

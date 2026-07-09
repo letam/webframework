@@ -16,7 +16,8 @@ export interface Media {
 	signed_url?: string | null
 	mp3_file?: string
 	duration?: string
-	thumbnail?: string
+	thumbnail?: string | null
+	waveform?: number[] | null
 	transcript?: string
 	transcript_status?: '' | 'pending' | 'done' | 'error'
 	alt_text?: string
@@ -68,5 +69,6 @@ export interface UpdatePostRequest {
 	body?: string
 	transcript?: string
 	alt_text?: string
+	thumbnail?: File | null
 	visibility?: PostVisibility
 }

@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { Post } from '@/components/post/Post'
 import { markPostViewed } from '@/lib/viewTracking'
-import { makeAuthor, makePost } from '../data/mockPosts'
+import { makeAuthor, makeMedia, makePost } from '../data/mockPosts'
 
 const mockUseAuth = vi.hoisted(() => vi.fn())
 
@@ -63,5 +63,32 @@ describe('Post', () => {
 			vi.advanceTimersByTime(1)
 		})
 		expect(markPostViewed).toHaveBeenCalledWith(22)
+	})
+
+	it('opens image posts in a lightbox with a view original link', () => {
+		const post = makePost({
+			id: 33,
+			media: makeMedia({
+				media_type: 'image',
+				file: 'original.jpg',
+				s3_file_key: undefined,
+				signed_url: 'https://signed.example.com/original.jpg',
+				thumbnail: '/media/post/33/media/rendition.jpg',
+				alt_text: 'Gallery image',
+			}),
+		})
+		renderPost(post)
+
+		expect(screen.getByAltText('Gallery image')).toHaveAttribute(
+			'src',
+			'/media/post/33/media/rendition.jpg'
+		)
+
+		fireEvent.click(screen.getByLabelText('Open image preview'))
+
+		expect(screen.getByRole('link', { name: 'View original' })).toHaveAttribute(
+			'href',
+			'https://signed.example.com/original.jpg'
+		)
 	})
 })

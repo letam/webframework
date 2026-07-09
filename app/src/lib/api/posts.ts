@@ -353,7 +353,29 @@ export const deleteComment = async (postId: number, commentId: number): Promise<
 
 export const updatePost = async (id: number, data: UpdatePostRequest): Promise<Post> => {
 	try {
-		const options = await getFetchOptions('PATCH', Object.fromEntries(Object.entries(data)))
+		const thumbnail = data.thumbnail
+		let body: FormData | Record<string, unknown>
+
+		if (thumbnail instanceof File) {
+			const formData = new FormData()
+			for (const [key, value] of Object.entries(data)) {
+				if (value == null) {
+					continue
+				}
+				if (key === 'thumbnail') {
+					formData.append(key, value)
+				} else {
+					formData.append(key, String(value))
+				}
+			}
+			body = formData
+		} else {
+			body = Object.fromEntries(
+				Object.entries(data).filter(([, value]) => value !== undefined && value !== null)
+			)
+		}
+
+		const options = await getFetchOptions('PATCH', body)
 		const response = await fetch(`${SERVER_API_URL}/posts/${id}/`, options)
 
 		if (!response.ok) {

@@ -9,6 +9,8 @@ import CommentSection from './CommentSection'
 import type { Post as PostType } from '../../types/post'
 import type { PostVisibility } from '../../types/post'
 import { AudioPlayer, VideoPlayer } from './MediaPlayer'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { toast } from '@/components/ui/sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { getMediaUrl, getPost, transcribePost } from '@/lib/api/posts'
@@ -28,7 +30,8 @@ interface PostProps {
 		head: string,
 		body: string,
 		transcript?: string,
-		altText?: string
+		altText?: string,
+		poster?: File | null
 	) => Promise<void>
 	onTranscribed?: (post: PostType) => void
 	onPublish?: (id: number) => void
@@ -97,6 +100,8 @@ export const Post: React.FC<PostProps> = ({
 	const canTranscribe = isAuthenticated && (userId === post.author.id || isSuperuser)
 	const mediaUrl = post.media ? getMediaUrl(post) : undefined
 	const mediaAltText = post.media ? post.media.alt_text : undefined
+	const imageDisplayUrl =
+		post.media?.media_type === 'image' && post.media.thumbnail ? post.media.thumbnail : mediaUrl
 	const mimeType = post.media
 		? getMimeTypeFromPath(post.media.file || post.media.s3_file_key)
 		: undefined
@@ -260,16 +265,56 @@ export const Post: React.FC<PostProps> = ({
 				</div>
 
 				{post.media?.media_type === 'audio' && mediaUrl && mimeType && (
-					<AudioPlayer audioUrl={mediaUrl} mimeType={mimeType} duration={mediaDuration} />
+					<AudioPlayer
+						audioUrl={mediaUrl}
+						duration={mediaDuration}
+						waveform={post.media.waveform}
+					/>
 				)}
 
 				{post.media?.media_type === 'video' && mediaUrl && mimeType && (
-					<VideoPlayer videoUrl={mediaUrl} mimeType={mimeType} duration={mediaDuration} />
+					<VideoPlayer videoUrl={mediaUrl} thumbnail={post.media.thumbnail} />
 				)}
 
-				{post.media?.media_type === 'image' && mediaUrl && mimeType && (
+				{post.media?.media_type === 'image' && mediaUrl && mimeType && imageDisplayUrl && (
 					<div className="mt-2">
-						<img src={mediaUrl} alt={mediaAltText} className="w-full h-auto" />
+						<Dialog>
+							<DialogTrigger asChild>
+								<button type="button" className="block w-full" aria-label="Open image preview">
+									<img
+										src={imageDisplayUrl}
+										alt={mediaAltText}
+										className="h-auto w-full cursor-zoom-in rounded-md"
+									/>
+								</button>
+							</DialogTrigger>
+							<DialogContent
+								className="max-w-4xl border-0 bg-transparent p-0 shadow-none"
+								aria-describedby={undefined}
+							>
+								<DialogTitle className="sr-only">Image preview</DialogTitle>
+								<div className="flex max-h-[85vh] flex-col items-center gap-3">
+									<img
+										src={imageDisplayUrl}
+										alt={mediaAltText}
+										className="max-h-[78vh] max-w-full rounded-md object-contain"
+									/>
+									<div className="flex w-full items-center gap-3 px-1 text-sm text-white">
+										{mediaAltText && <p className="min-w-0 flex-1 truncate">{mediaAltText}</p>}
+										<Button
+											asChild
+											variant="ghost"
+											size="sm"
+											className="ml-auto text-white hover:bg-white/10 hover:text-white"
+										>
+											<a href={mediaUrl} target="_blank" rel="noopener noreferrer">
+												View original
+											</a>
+										</Button>
+									</div>
+								</div>
+							</DialogContent>
+						</Dialog>
 					</div>
 				)}
 

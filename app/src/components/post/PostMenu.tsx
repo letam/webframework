@@ -44,7 +44,8 @@ interface PostMenuProps {
 		head: string,
 		body: string,
 		transcript?: string,
-		altText?: string
+		altText?: string,
+		poster?: File | null
 	) => Promise<void>
 	onPublish?: (id: number) => void
 	onChangeVisibility?: (id: number, visibility: PostVisibility) => void

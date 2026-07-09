@@ -61,9 +61,22 @@ export const usePostHandlers = (
 	)
 
 	const handleEditPost = useCallback(
-		async (id: number, head: string, body: string, transcript?: string, altText?: string) => {
+		async (
+			id: number,
+			head: string,
+			body: string,
+			transcript?: string,
+			altText?: string,
+			poster?: File | null
+		) => {
 			try {
-				await editPost(id, { head, body, transcript, alt_text: altText })
+				await editPost(id, {
+					head,
+					body,
+					transcript,
+					alt_text: altText,
+					...(poster ? { thumbnail: poster } : {}),
+				})
 				toast.success('Post updated successfully')
 			} catch (error) {
 				console.error('Failed to update post:', error)
