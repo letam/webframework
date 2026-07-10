@@ -472,8 +472,10 @@ def _truncate(value: object, max_length: int) -> str:
     return str(value or '')[:max_length]
 
 
-def fetch_preview_for(preview: LinkPreview) -> None:
-    """Fetch and persist metadata for a pending link preview."""
+def fetch_preview_for(preview: LinkPreview, *, keep_existing_on_failure=False) -> bool:
+    """Fetch metadata for a link preview; return True when fresh data was applied."""
+    preview.fetch_attempts += 1
+
     if preview.kind == 'youtube':
         data = fetch_youtube(preview.url, preview.embed_id)
     elif preview.kind == 'twitter':
@@ -483,10 +485,14 @@ def fetch_preview_for(preview: LinkPreview) -> None:
 
     preview.fetched_at = timezone.now()
     if data is None:
+        if keep_existing_on_failure and preview.status == 'ok':
+            preview.save(update_fields=['fetched_at', 'fetch_attempts'])
+            return False
         preview.status = 'failed'
-        preview.save(update_fields=['status', 'fetched_at'])
-        return
+        preview.save(update_fields=['status', 'fetched_at', 'fetch_attempts'])
+        return False
 
+    old_image_name = preview.image.name if preview.image else ''
     preview.kind = _truncate(data.get('kind') or preview.kind, 16)
     preview.title = _truncate(data.get('title'), 500)
     preview.description = str(data.get('description') or '')
@@ -515,12 +521,27 @@ def fetch_preview_for(preview: LinkPreview) -> None:
             'published_at',
             'image',
             'fetched_at',
+            'fetch_attempts',
         ]
     )
+
+    new_image_name = preview.image.name if preview.image else ''
+    if old_image_name and new_image_name and old_image_name != new_image_name:
+        try:
+            preview.image.storage.delete(old_image_name)
+        except Exception as e:
+            logger.error(f"Error deleting old link preview image {old_image_name}: {str(e)}")
+
+    return True
 
 
 def sync_link_previews(post) -> bool:
     """Synchronize a post's LinkPreview rows with the URLs in its text."""
+    if not post.link_previews_enabled:
+        for preview in post.link_previews.all():
+            preview.delete()
+        return False
+
     urls = extract_urls(f'{post.head}\n{post.body}')
     stale_previews = post.link_previews.all()
     if urls:
@@ -549,5 +570,8 @@ def sync_link_previews(post) -> bool:
         if preview.position != position:
             preview.position = position
             preview.save(update_fields=['position'])
+        if preview.status == 'failed':
+            preview.status = 'pending'
+            preview.save(update_fields=['status'])
 
     return post.link_previews.filter(status='pending').exists()

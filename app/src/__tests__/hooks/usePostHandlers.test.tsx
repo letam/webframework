@@ -65,6 +65,18 @@ const setAutoTranscribe = (autoTranscribe: boolean) => {
 	)
 }
 
+const setLinkPreviews = (linkPreviews: boolean) => {
+	localStorage.setItem(
+		'app-settings',
+		JSON.stringify({
+			normalizeAudio: false,
+			videoQuality: 'low',
+			autoTranscribe: false,
+			linkPreviews,
+		})
+	)
+}
+
 describe('usePostHandlers auto-transcribe create flow', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
@@ -146,6 +158,27 @@ describe('usePostHandlers auto-transcribe create flow', () => {
 		expect(toast.error).toHaveBeenCalledWith('Auto-transcription failed to start')
 		expect(getCachedPosts(queryClient)[0]).toEqual(createdPost)
 		consoleError.mockRestore()
+	})
+
+	it('passes disabled link preview setting into post creation', async () => {
+		const queryClient = createQueryClient()
+		const createdPost = makePost({ id: 52, link_previews_enabled: false })
+		setLinkPreviews(false)
+		queryClient.setQueryData(['posts', {}], infiniteData([]))
+		vi.mocked(postsApi.createPost).mockResolvedValueOnce(createdPost)
+
+		const { result } = renderHook(() => usePostHandlers({}, { enabled: false }), {
+			wrapper: createWrapper(queryClient),
+		})
+
+		await act(async () => {
+			await result.current.addPost({ text: 'No cards' })
+		})
+
+		expect(postsApi.createPost).toHaveBeenCalledWith({
+			text: 'No cards',
+			link_previews_enabled: false,
+		})
 	})
 
 	it('surfaces server pin errors in the toast', async () => {

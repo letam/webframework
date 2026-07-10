@@ -496,13 +496,18 @@ class PostViewSet(viewsets.ModelViewSet):
         # Update the post
         old_head = instance.head
         old_body = instance.body
+        old_link_previews_enabled = instance.link_previews_enabled
         serializer = self.get_serializer(instance, data=data, partial=partial)
         serializer.is_valid(raise_exception=True)
 
         with transaction.atomic():
             self.perform_update(serializer)
 
-            if instance.head != old_head or instance.body != old_body:
+            if (
+                instance.head != old_head
+                or instance.body != old_body
+                or instance.link_previews_enabled != old_link_previews_enabled
+            ):
                 if sync_link_previews(instance):
                     transaction.on_commit(
                         lambda post_id=instance.pk: _enqueue_fetch_link_previews(post_id)

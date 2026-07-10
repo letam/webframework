@@ -17,6 +17,10 @@ makemigrations:
 migrate:
     uv run python server/manage.py migrate
 
+# Refresh stale and failed link previews
+refresh-link-previews *ARGS:
+    uv run python server/manage.py refresh_link_previews {{ARGS}}
+
 # Run the background task worker (only needed when TASKS_IMMEDIATE=False)
 worker:
     uv run python server/manage.py db_worker

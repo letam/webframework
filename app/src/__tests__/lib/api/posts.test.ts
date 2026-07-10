@@ -208,6 +208,25 @@ describe('posts API', () => {
 			expect(formData.get('media')).toBe(file)
 			expect(formData.get('visibility')).toBe('private')
 			expect(formData.get('is_draft')).toBeNull()
+			expect(formData.get('link_previews_enabled')).toBeNull()
+		})
+
+		it('appends link_previews_enabled false when disabled', async () => {
+			const { createPost } = await importPostsApi(false)
+			const createdPost = makePost({
+				id: 11,
+				body: 'No previews.',
+				link_previews_enabled: false,
+			})
+			fetchMock.mockResolvedValueOnce(await response(toServerPost(createdPost)))
+
+			await createPost({
+				text: 'No previews.',
+				link_previews_enabled: false,
+			})
+
+			const formData = (fetchMock.mock.calls[0][1] as RequestInit).body as FormData
+			expect(formData.get('link_previews_enabled')).toBe('false')
 		})
 	})
 
@@ -259,6 +278,18 @@ describe('posts API', () => {
 			expect(fetchMock).toHaveBeenCalledWith('/api/posts/7/')
 			expect(result.modified).toBeInstanceOf(Date)
 			expect(result.url).toBe(`${window.location.origin}/p/7/`)
+		})
+
+		it('defaults missing link_previews_enabled to true', async () => {
+			const { getPost } = await importPostsApi()
+			const post = makePost({ id: 8, body: 'Legacy post.' })
+			const serverPost: Partial<ReturnType<typeof toServerPost>> = toServerPost(post)
+			delete serverPost.link_previews_enabled
+			fetchMock.mockResolvedValueOnce(await response(serverPost))
+
+			const result = await getPost(8)
+
+			expect(result.link_previews_enabled).toBe(true)
 		})
 	})
 

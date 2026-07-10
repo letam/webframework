@@ -229,6 +229,7 @@ class Post(models.Model):
         max_length=16, choices=VISIBILITY_CHOICES, default=VISIBILITY_PUBLIC, db_index=True
     )
     is_draft = models.BooleanField(default=False, db_index=True)
+    link_previews_enabled = models.BooleanField(default=True)
     pinned_at = models.DateTimeField(null=True, blank=True)
     share_token = models.CharField(max_length=32, default=generate_share_token)
 
@@ -294,6 +295,7 @@ class LinkPreview(models.Model):
     status = models.CharField(
         max_length=16, choices=STATUS_CHOICES, default='pending', db_index=True
     )
+    fetch_attempts = models.PositiveSmallIntegerField(default=0)
     title = models.CharField(max_length=500, blank=True)
     description = models.TextField(blank=True)
     site_name = models.CharField(max_length=200, blank=True)

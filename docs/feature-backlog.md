@@ -193,6 +193,7 @@ ActivityPub only if the node idea gets serious.
 - **Periodic DB backups** — Litestream for SQLite-on-Fly was the noted choice.
 - Serve compressed media by default; check staticfiles cache-control on Fly.
 - Scheduled jobs on Fly (cron) — e.g. orphaned-media cleanup (a known gap: presigned
-  PUTs rejected at post-create are never deleted from R2).
+  PUTs rejected at post-create are never deleted from R2). Link preview refresh is ready to
+  schedule with `uv run python server/manage.py refresh_link_previews`.
 - External uptime monitoring (beyond `/healthz/`).
 - Email: `tam@wut.sh`, `tam@webframework.dev`.

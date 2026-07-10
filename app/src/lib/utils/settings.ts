@@ -6,6 +6,7 @@ export interface AppSettings {
 	normalizeAudio: boolean
 	videoQuality: 'low' | 'high'
 	autoTranscribe: boolean
+	linkPreviews: boolean
 }
 
 // Determine if audio normalization should be enabled by default
@@ -18,6 +19,7 @@ const defaultSettings: AppSettings = {
 	normalizeAudio: shouldNormalizeAudioByDefault(),
 	videoQuality: 'low',
 	autoTranscribe: false,
+	linkPreviews: true,
 }
 
 export const getSettings = (): AppSettings => {

@@ -53,6 +53,7 @@ export interface Post {
 	link_previews?: LinkPreview[]
 	visibility: PostVisibility
 	is_draft: boolean
+	link_previews_enabled: boolean
 	pinned_at?: string | null
 	share_token?: string | null
 	like_count: number
@@ -79,6 +80,7 @@ export interface CreatePostRequest {
 	media?: File
 	visibility?: PostVisibility
 	is_draft?: boolean
+	link_previews_enabled?: boolean
 }
 
 export interface UpdatePostRequest {

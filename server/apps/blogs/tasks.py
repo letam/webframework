@@ -102,7 +102,7 @@ def fetch_link_previews(post_id: int) -> None:
             logger.exception('Error fetching link preview %s for post %s', preview.pk, post_id)
             preview.status = 'failed'
             preview.fetched_at = timezone.now()
-            preview.save(update_fields=['status', 'fetched_at'])
+            preview.save(update_fields=['status', 'fetched_at', 'fetch_attempts'])
 
 
 def _process_video_media(media: Media) -> None:

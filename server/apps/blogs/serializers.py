@@ -159,6 +159,7 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
             'post_set',
             'visibility',
             'is_draft',
+            'link_previews_enabled',
             'pinned_at',
             'share_token',
             'like_count',
@@ -229,4 +230,5 @@ class PostCreateSerializer(serializers.ModelSerializer):
             'media',
             'visibility',
             'is_draft',
+            'link_previews_enabled',
         ]

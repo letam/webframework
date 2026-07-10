@@ -47,12 +47,13 @@ const SettingsPage = () => {
 	const { isAuthenticated, userId, username } = useAuth()
 	const [normalizeAudio, setNormalizeAudio] = useState(initialSettings.normalizeAudio)
 	const [autoTranscribe, setAutoTranscribe] = useState(initialSettings.autoTranscribe)
+	const [linkPreviews, setLinkPreviews] = useState(initialSettings.linkPreviews)
 	const [videoQuality, setVideoQuality] = useState(initialSettings.videoQuality)
 	const [isExporting, setIsExporting] = useState(false)
 
 	useEffect(() => {
-		updateSettings({ normalizeAudio, autoTranscribe, videoQuality })
-	}, [normalizeAudio, autoTranscribe, videoQuality])
+		updateSettings({ normalizeAudio, autoTranscribe, linkPreviews, videoQuality })
+	}, [normalizeAudio, autoTranscribe, linkPreviews, videoQuality])
 
 	const handleExportPosts = async () => {
 		if (!isAuthenticated || userId == null) {
@@ -124,6 +125,30 @@ const SettingsPage = () => {
 										id="auto-transcribe"
 										checked={autoTranscribe}
 										onCheckedChange={setAutoTranscribe}
+									/>
+								</div>
+							</div>
+						</CardContent>
+					</Card>
+
+					<Card className="mb-4">
+						<CardHeader>
+							<CardTitle>Post Settings</CardTitle>
+							<CardDescription>Configure your posting preferences</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<div className="space-y-4">
+								<div className="flex items-center justify-between">
+									<div className="space-y-0.5">
+										<Label htmlFor="link-previews">Link previews</Label>
+										<p className="text-sm text-muted-foreground">
+											Generate preview cards for links in your new posts
+										</p>
+									</div>
+									<Switch
+										id="link-previews"
+										checked={linkPreviews}
+										onCheckedChange={setLinkPreviews}
 									/>
 								</div>
 							</div>

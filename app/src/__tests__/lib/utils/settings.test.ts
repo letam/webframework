@@ -10,6 +10,10 @@ describe('settings utilities', () => {
 		expect(getSettings().autoTranscribe).toBe(false)
 	})
 
+	it('defaults link previews to true', () => {
+		expect(getSettings().linkPreviews).toBe(true)
+	})
+
 	it('persists auto-transcribe updates', () => {
 		updateSettings({ autoTranscribe: true })
 
@@ -26,6 +30,7 @@ describe('settings utilities', () => {
 			normalizeAudio: true,
 			videoQuality: 'high',
 			autoTranscribe: false,
+			linkPreviews: true,
 		})
 	})
 })

@@ -5,15 +5,17 @@ import json
 import os
 import socket
 import tempfile
-from datetime import date
-from io import BytesIO
+from datetime import date, timedelta
+from io import BytesIO, StringIO
 from unittest import mock
 
 import httpx
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
+from django.core.management import call_command
 from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APIClient
 
@@ -253,6 +255,7 @@ class LinkPreviewFetchTests(BaseTestCase):
 
         preview.refresh_from_db()
         self.assertEqual(preview.status, 'ok')
+        self.assertEqual(preview.fetch_attempts, 1)
         self.assertEqual(preview.title, 'Linked story')
         self.assertEqual(preview.description, 'Story description')
         self.assertEqual(preview.site_name, 'Example')
@@ -272,7 +275,86 @@ class LinkPreviewFetchTests(BaseTestCase):
 
         preview.refresh_from_db()
         self.assertEqual(preview.status, 'failed')
+        self.assertEqual(preview.fetch_attempts, 1)
         self.assertIsNotNone(preview.fetched_at)
+
+    def test_keep_existing_on_failure_preserves_ok_preview(self):
+        """Failed refreshes should preserve stale ok preview data when requested."""
+        old_fetched_at = timezone.now() - timedelta(days=2)
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                preview = LinkPreview.objects.create(
+                    post=self.post,
+                    url='https://example.com/story',
+                    kind='generic',
+                    status='ok',
+                    title='Existing title',
+                    description='Existing description',
+                    site_name='Existing Site',
+                    fetched_at=old_fetched_at,
+                )
+                preview.image.save('existing.jpg', ContentFile(b'existing image'), save=True)
+                old_image_name = preview.image.name
+                old_image_path = preview.image.path
+
+                with mock.patch('apps.blogs.link_previews.fetch_generic', return_value=None):
+                    fetch_preview_for(preview, keep_existing_on_failure=True)
+
+                preview.refresh_from_db()
+                self.assertEqual(preview.status, 'ok')
+                self.assertEqual(preview.title, 'Existing title')
+                self.assertEqual(preview.description, 'Existing description')
+                self.assertEqual(preview.site_name, 'Existing Site')
+                self.assertEqual(preview.image.name, old_image_name)
+                self.assertTrue(os.path.exists(old_image_path))
+                self.assertGreater(preview.fetched_at, old_fetched_at)
+                self.assertEqual(preview.fetch_attempts, 1)
+
+    def test_image_replacement_deletes_old_file(self):
+        """A successful refetch with a replacement image should remove the old file."""
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                preview = LinkPreview.objects.create(
+                    post=self.post,
+                    url='https://example.com/story',
+                    kind='generic',
+                    status='ok',
+                )
+                preview.image.save('old.jpg', ContentFile(b'old image'), save=True)
+                old_image_path = preview.image.path
+
+                buffer = BytesIO()
+                Image.new('RGB', (2, 2), color='blue').save(buffer, format='PNG')
+                image_response = httpx.Response(
+                    200,
+                    headers={'content-type': 'image/png'},
+                    content=buffer.getvalue(),
+                    request=httpx.Request('GET', 'https://example.com/image.png'),
+                )
+
+                with (
+                    mock.patch(
+                        'apps.blogs.link_previews.fetch_generic',
+                        return_value={
+                            'title': 'Updated title',
+                            'description': '',
+                            'site_name': '',
+                            'author_name': '',
+                            'author_handle': '',
+                            'embed_id': '',
+                            'image_url': 'https://example.com/image.png',
+                        },
+                    ),
+                    mock.patch('apps.blogs.link_previews._safe_get', return_value=image_response),
+                ):
+                    fetch_preview_for(preview)
+
+                preview.refresh_from_db()
+                new_image_path = preview.image.path
+
+                self.assertFalse(os.path.exists(old_image_path))
+                self.assertTrue(os.path.exists(new_image_path))
+                self.assertNotEqual(old_image_path, new_image_path)
 
     def test_task_wrapper_marks_failed_when_fetcher_raises(self):
         """The task should catch unexpected fetch errors and mark the row failed."""
@@ -451,6 +533,26 @@ class LinkPreviewApiTests(ViewTestCase):
         self.assertEqual(response.data['link_previews'], [])
         self.assertEqual(LinkPreview.objects.count(), 0)
 
+    def test_create_post_respects_link_previews_enabled_flag(self):
+        """Creating with previews disabled should store the flag and skip preview rows."""
+        disabled_response = self.client.post(
+            reverse('post-list'),
+            {
+                'body': 'Skip https://example.com/disabled',
+                'link_previews_enabled': 'false',
+            },
+        )
+        default_response = self.client.post(
+            reverse('post-list'),
+            {'body': 'Default https://example.com/default'},
+        )
+
+        self.assertEqual(disabled_response.status_code, 201)
+        self.assertFalse(disabled_response.data['link_previews_enabled'])
+        self.assertFalse(LinkPreview.objects.filter(post_id=disabled_response.data['id']).exists())
+        self.assertEqual(default_response.status_code, 201)
+        self.assertTrue(default_response.data['link_previews_enabled'])
+
     def test_pending_and_failed_previews_are_omitted_from_payload(self):
         """Only ok previews should appear in serialized post payloads."""
         post = Post.objects.create(author=self.user, body='Links')
@@ -522,6 +624,234 @@ class LinkPreviewApiTests(ViewTestCase):
 
         detail_response = self.client.get(reverse('post-detail', args=[post.id]))
         self.assertEqual(detail_response.data['link_previews'][0]['title'], 'New')
+
+    def test_patch_link_previews_enabled_false_deletes_rows_and_image_files(self):
+        """Disabling previews for an existing post should strip rows and stored images."""
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                post = Post.objects.create(
+                    author=self.user,
+                    body='Link https://toggle.example.com',
+                )
+                preview = LinkPreview.objects.create(
+                    post=post,
+                    url='https://toggle.example.com',
+                    status='ok',
+                    title='Toggle',
+                )
+                preview.image.save('toggle.jpg', ContentFile(b'image bytes'), save=True)
+                image_path = preview.image.path
+
+                response = self.client.patch(
+                    reverse('post-detail', args=[post.id]),
+                    {'link_previews_enabled': 'false'},
+                )
+
+                self.assertEqual(response.status_code, 200)
+                self.assertFalse(response.data['link_previews_enabled'])
+                self.assertEqual(response.data['link_previews'], [])
+                self.assertFalse(LinkPreview.objects.filter(post=post).exists())
+                self.assertFalse(os.path.exists(image_path))
+
+    def test_patch_link_previews_enabled_true_reextracts_and_enqueues_fetch(self):
+        """Re-enabling previews should extract existing URLs and enqueue the fetch task."""
+        post = Post.objects.create(
+            author=self.user,
+            body='Link https://toggle.example.com',
+            link_previews_enabled=False,
+        )
+
+        with mock.patch('apps.blogs.views._enqueue_fetch_link_previews') as mock_enqueue:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.patch(
+                    reverse('post-detail', args=[post.id]),
+                    {'link_previews_enabled': 'true'},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data['link_previews_enabled'])
+        preview = post.link_previews.get()
+        self.assertEqual(preview.url, 'https://toggle.example.com')
+        self.assertEqual(preview.status, 'pending')
+        mock_enqueue.assert_called_once_with(post.pk)
+
+    def test_body_edit_resets_failed_preview_and_refetches_on_commit(self):
+        """Editing text while keeping a failed URL should retry it after commit."""
+        post = Post.objects.create(author=self.user, body='Old https://retry.example.com')
+        preview = LinkPreview.objects.create(
+            post=post,
+            url='https://retry.example.com',
+            status='failed',
+            kind='generic',
+            fetch_attempts=2,
+            fetched_at=timezone.now() - timedelta(hours=2),
+        )
+
+        with mock.patch(
+            'apps.blogs.link_previews.fetch_generic',
+            return_value={
+                'title': 'Retried',
+                'description': 'Retried description',
+                'site_name': 'Retry Site',
+                'author_name': '',
+                'author_handle': '',
+                'embed_id': '',
+            },
+        ) as mock_fetch:
+            with self.captureOnCommitCallbacks(execute=True):
+                response = self.client.patch(
+                    reverse('post-detail', args=[post.id]),
+                    {'body': 'Edited https://retry.example.com'},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        mock_fetch.assert_called_once_with('https://retry.example.com')
+        preview.refresh_from_db()
+        self.assertEqual(preview.status, 'ok')
+        self.assertEqual(preview.title, 'Retried')
+        self.assertEqual(preview.fetch_attempts, 3)
+
+
+class RefreshLinkPreviewsCommandTests(BaseTestCase):
+    """Tests for the refresh_link_previews management command."""
+
+    def setUp(self):
+        """Create reusable posts and timestamps."""
+        super().setUp()
+        self.user = User.objects.create_user(
+            username='refresh_preview_author',
+            password='testpass123',
+        )
+        self.post = Post.objects.create(author=self.user, body='Links')
+        self.disabled_post = Post.objects.create(
+            author=self.user,
+            body='Disabled',
+            link_previews_enabled=False,
+        )
+        self.now = timezone.now()
+
+    def test_command_retries_and_refreshes_only_eligible_rows(self):
+        """The command should process eligible failed and stale rows and print a summary."""
+        old_time = self.now - timedelta(days=45)
+        recent_time = self.now - timedelta(minutes=10)
+        eligible_failed = LinkPreview.objects.create(
+            post=self.post,
+            url='https://failed.example.com',
+            status='failed',
+            fetch_attempts=1,
+            fetched_at=old_time,
+        )
+        capped_failed = LinkPreview.objects.create(
+            post=self.post,
+            url='https://capped.example.com',
+            status='failed',
+            fetch_attempts=4,
+            fetched_at=old_time,
+        )
+        recent_failed = LinkPreview.objects.create(
+            post=self.post,
+            url='https://recent.example.com',
+            status='failed',
+            fetch_attempts=1,
+            fetched_at=recent_time,
+        )
+        stale_ok = LinkPreview.objects.create(
+            post=self.post,
+            url='https://stale.example.com',
+            status='ok',
+            title='Stale',
+            fetch_attempts=1,
+            fetched_at=old_time,
+        )
+        fresh_ok = LinkPreview.objects.create(
+            post=self.post,
+            url='https://fresh.example.com',
+            status='ok',
+            title='Fresh',
+            fetch_attempts=1,
+            fetched_at=self.now,
+        )
+        disabled_failed = LinkPreview.objects.create(
+            post=self.disabled_post,
+            url='https://disabled.example.com',
+            status='failed',
+            fetch_attempts=1,
+            fetched_at=old_time,
+        )
+        output = StringIO()
+
+        def fake_fetch(preview, *, keep_existing_on_failure=False):
+            """Mark the preview as fetched without making network requests."""
+            preview.fetch_attempts += 1
+            preview.fetched_at = timezone.now()
+            preview.title = 'Refreshed' if keep_existing_on_failure else 'Retried'
+            preview.status = 'ok'
+            preview.save(update_fields=['fetch_attempts', 'fetched_at', 'title', 'status'])
+            return True
+
+        with mock.patch(
+            'apps.blogs.management.commands.refresh_link_previews.fetch_preview_for',
+            side_effect=fake_fetch,
+        ) as mock_fetch:
+            call_command('refresh_link_previews', stdout=output)
+
+        self.assertEqual(
+            output.getvalue().strip(),
+            'retried 1 (1 now ok), refreshed 1 (1 updated)',
+        )
+        self.assertEqual(
+            [call.args[0].pk for call in mock_fetch.call_args_list],
+            [eligible_failed.pk, stale_ok.pk],
+        )
+        eligible_failed.refresh_from_db()
+        capped_failed.refresh_from_db()
+        recent_failed.refresh_from_db()
+        stale_ok.refresh_from_db()
+        fresh_ok.refresh_from_db()
+        disabled_failed.refresh_from_db()
+
+        self.assertEqual(eligible_failed.status, 'ok')
+        self.assertEqual(eligible_failed.fetch_attempts, 2)
+        self.assertEqual(capped_failed.status, 'failed')
+        self.assertEqual(capped_failed.fetch_attempts, 4)
+        self.assertEqual(recent_failed.status, 'failed')
+        self.assertEqual(recent_failed.fetch_attempts, 1)
+        self.assertEqual(stale_ok.title, 'Refreshed')
+        self.assertEqual(stale_ok.fetch_attempts, 2)
+        self.assertEqual(fresh_ok.title, 'Fresh')
+        self.assertEqual(fresh_ok.fetch_attempts, 1)
+        self.assertEqual(disabled_failed.status, 'failed')
+        self.assertEqual(disabled_failed.fetch_attempts, 1)
+
+    def test_command_summary_does_not_count_kept_on_failure_as_updated(self):
+        """A stale row whose source is gone stays ok but must not count as updated."""
+        LinkPreview.objects.create(
+            post=self.post,
+            url='https://stale.example.com',
+            status='ok',
+            title='Stale',
+            fetch_attempts=1,
+            fetched_at=self.now - timedelta(days=45),
+        )
+        output = StringIO()
+
+        def fake_fetch(preview, *, keep_existing_on_failure=False):
+            """Simulate a dead source: keep existing data, report nothing applied."""
+            preview.fetch_attempts += 1
+            preview.fetched_at = timezone.now()
+            preview.save(update_fields=['fetch_attempts', 'fetched_at'])
+            return False
+
+        with mock.patch(
+            'apps.blogs.management.commands.refresh_link_previews.fetch_preview_for',
+            side_effect=fake_fetch,
+        ):
+            call_command('refresh_link_previews', stdout=output)
+
+        self.assertEqual(
+            output.getvalue().strip(),
+            'retried 0 (0 now ok), refreshed 1 (0 updated)',
+        )
 
 
 class LinkPreviewImageEndpointTests(ViewTestCase):

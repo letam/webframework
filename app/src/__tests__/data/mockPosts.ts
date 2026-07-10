@@ -52,6 +52,7 @@ export const makePost = (overrides: Partial<Post> = {}): Post => ({
 	link_previews: [],
 	visibility: 'public',
 	is_draft: false,
+	link_previews_enabled: true,
 	share_token: 'share-token-1',
 	like_count: 2,
 	comment_count: 1,

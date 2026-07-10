@@ -43,6 +43,7 @@ const revivePost = (post: Post): Post => ({
 			}
 		: undefined,
 	link_previews: post.link_previews ?? [],
+	link_previews_enabled: post.link_previews_enabled ?? true,
 	url: `${window.location.origin}/p/${post.id}/`,
 })
 
@@ -115,6 +116,9 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 		}
 		if (data.is_draft) {
 			formData.append('is_draft', 'true')
+		}
+		if (data.link_previews_enabled === false) {
+			formData.append('link_previews_enabled', 'false')
 		}
 
 		// // Debug logging

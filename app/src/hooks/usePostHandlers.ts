@@ -160,10 +160,14 @@ export const usePostHandlers = (
 
 	const handleAddPost = useCallback(
 		async (postData: CreatePostRequest) => {
-			const newPost = await addPost(postData)
+			const settings = getSettings()
+			const newPost = await addPost({
+				...postData,
+				link_previews_enabled: settings.linkPreviews,
+			})
 			const media = newPost.media
 			const shouldAutoTranscribe =
-				getSettings().autoTranscribe &&
+				settings.autoTranscribe &&
 				isAuthenticated &&
 				media != null &&
 				(media.media_type === 'audio' || media.media_type === 'video') &&
