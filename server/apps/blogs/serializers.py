@@ -114,6 +114,7 @@ class LinkPreviewSerializer(serializers.ModelSerializer):
             'author_name',
             'author_handle',
             'embed_id',
+            'published_at',
             'image',
         ]
 

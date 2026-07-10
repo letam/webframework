@@ -1,9 +1,11 @@
 """Tests for post link preview extraction, fetching, API serialization, and images."""
 
 import gzip
+import json
 import os
 import socket
 import tempfile
+from datetime import date
 from io import BytesIO
 from unittest import mock
 
@@ -15,7 +17,15 @@ from django.urls import reverse
 from PIL import Image
 from rest_framework.test import APIClient
 
-from ..link_previews import _safe_get, detect_kind, extract_urls, fetch_preview_for
+from ..link_previews import (
+    _safe_get,
+    detect_kind,
+    extract_urls,
+    fetch_generic,
+    fetch_preview_for,
+    fetch_twitter,
+    fetch_youtube,
+)
 from ..models import VISIBILITY_PRIVATE, LinkPreview, Post
 from ..tasks import fetch_link_previews
 from . import BaseTestCase, ViewTestCase
@@ -236,6 +246,7 @@ class LinkPreviewFetchTests(BaseTestCase):
                 'author_name': '',
                 'author_handle': '',
                 'embed_id': '',
+                'published_at': date(2024, 5, 1),
             },
         ):
             fetch_preview_for(preview)
@@ -245,6 +256,7 @@ class LinkPreviewFetchTests(BaseTestCase):
         self.assertEqual(preview.title, 'Linked story')
         self.assertEqual(preview.description, 'Story description')
         self.assertEqual(preview.site_name, 'Example')
+        self.assertEqual(preview.published_at, date(2024, 5, 1))
         self.assertIsNotNone(preview.fetched_at)
 
     def test_fetch_preview_for_marks_failed_when_fetcher_returns_none(self):
@@ -278,6 +290,118 @@ class LinkPreviewFetchTests(BaseTestCase):
         self.assertIsNotNone(preview.fetched_at)
 
 
+class LinkPreviewDateParsingTests(BaseTestCase):
+    """Tests for publication-date extraction in the per-kind fetchers."""
+
+    @staticmethod
+    def _response(body: bytes, content_type: str) -> httpx.Response:
+        return httpx.Response(
+            200,
+            headers={'content-type': content_type},
+            content=body,
+            request=httpx.Request('GET', 'https://example.com/'),
+        )
+
+    def test_fetch_twitter_parses_blockquote_date(self):
+        """The trailing anchor text in the oEmbed blockquote is the tweet date."""
+        oembed = {
+            'author_name': 'jack',
+            'html': (
+                '<blockquote class="twitter-tweet"><p lang="en" dir="ltr">'
+                'just setting up my twttr</p>&mdash; jack (@jack) '
+                '<a href="https://x.com/jack/status/20?ref_src=twsrc%5Etfw">'
+                'March 21, 2006</a></blockquote>'
+            ),
+        }
+        with mock.patch(
+            'apps.blogs.link_previews._safe_get',
+            return_value=self._response(json.dumps(oembed).encode(), 'application/json'),
+        ):
+            data = fetch_twitter('https://x.com/jack/status/20', 'jack')
+
+        self.assertIsNotNone(data)
+        self.assertEqual(data['description'], 'just setting up my twttr')
+        self.assertEqual(data['published_at'], date(2006, 3, 21))
+
+    def test_fetch_twitter_falls_back_to_snowflake_id_date(self):
+        """Without a parseable anchor date, the snowflake status ID dates the tweet."""
+        oembed = {'author_name': 'user', 'html': '<blockquote><p>hi</p></blockquote>'}
+        with mock.patch(
+            'apps.blogs.link_previews._safe_get',
+            return_value=self._response(json.dumps(oembed).encode(), 'application/json'),
+        ):
+            data = fetch_twitter('https://x.com/user/status/1585841080431321088', 'user')
+
+        self.assertIsNotNone(data)
+        self.assertEqual(data['published_at'], date(2022, 10, 28))
+
+    def test_fetch_twitter_pre_snowflake_id_yields_no_date(self):
+        """Sequential pre-2010 status IDs encode no timestamp and must not invent one."""
+        oembed = {'author_name': 'jack', 'html': '<blockquote><p>hi</p></blockquote>'}
+        with mock.patch(
+            'apps.blogs.link_previews._safe_get',
+            return_value=self._response(json.dumps(oembed).encode(), 'application/json'),
+        ):
+            data = fetch_twitter('https://x.com/jack/status/20', 'jack')
+
+        self.assertIsNotNone(data)
+        self.assertIsNone(data['published_at'])
+
+    def test_fetch_youtube_parses_date_published_meta(self):
+        """The watch page's datePublished itemprop meta should date the video."""
+        oembed = {'title': 'Video', 'author_name': 'Channel', 'thumbnail_url': ''}
+        page = (
+            '<html><head>'
+            '<meta itemprop="datePublished" content="2009-10-24T23:57:33-07:00">'
+            '<meta property="og:description" content="A classic.">'
+            '</head></html>'
+        )
+        with mock.patch(
+            'apps.blogs.link_previews._safe_get',
+            side_effect=[
+                self._response(json.dumps(oembed).encode(), 'application/json'),
+                self._response(page.encode(), 'text/html'),
+            ],
+        ):
+            data = fetch_youtube('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'dQw4w9WgXcQ')
+
+        self.assertIsNotNone(data)
+        self.assertEqual(data['published_at'], date(2009, 10, 24))
+
+    def test_fetch_youtube_falls_back_to_publish_date_json(self):
+        """Without meta tags, the player-response publishDate JSON should be used."""
+        oembed = {'title': 'Video', 'author_name': 'Channel', 'thumbnail_url': ''}
+        page = '<html><body>"publishDate":"2020-01-15T00:00:00-08:00"</body></html>'
+        with mock.patch(
+            'apps.blogs.link_previews._safe_get',
+            side_effect=[
+                self._response(json.dumps(oembed).encode(), 'application/json'),
+                self._response(page.encode(), 'text/html'),
+            ],
+        ):
+            data = fetch_youtube('https://www.youtube.com/watch?v=dQw4w9WgXcQ', 'dQw4w9WgXcQ')
+
+        self.assertIsNotNone(data)
+        self.assertEqual(data['published_at'], date(2020, 1, 15))
+
+    def test_fetch_generic_parses_article_published_time(self):
+        """OpenGraph article:published_time should date generic pages."""
+        page = (
+            '<html><head>'
+            '<meta property="og:title" content="A story">'
+            '<meta property="article:published_time" content="2024-05-01T12:00:00+00:00">'
+            '</head></html>'
+        )
+        with mock.patch(
+            'apps.blogs.link_previews._safe_get',
+            return_value=self._response(page.encode(), 'text/html'),
+        ):
+            data = fetch_generic('https://example.com/story')
+
+        self.assertIsNotNone(data)
+        self.assertEqual(data['published_at'], date(2024, 5, 1))
+
+
 class LinkPreviewApiTests(ViewTestCase):
     """Tests for API creation, update, and serialization behavior."""
 
@@ -299,6 +423,7 @@ class LinkPreviewApiTests(ViewTestCase):
                 'author_name': 'Channel Name',
                 'author_handle': 'channel',
                 'embed_id': 'dQw4w9WgXcQ',
+                'published_at': date(2009, 10, 24),
             },
         ):
             with self.captureOnCommitCallbacks(execute=True):
@@ -316,6 +441,7 @@ class LinkPreviewApiTests(ViewTestCase):
         detail_response = self.client.get(reverse('post-detail', args=[post.id]))
         self.assertEqual(detail_response.data['link_previews'][0]['title'], 'Video title')
         self.assertEqual(detail_response.data['link_previews'][0]['embed_id'], 'dQw4w9WgXcQ')
+        self.assertEqual(detail_response.data['link_previews'][0]['published_at'], '2009-10-24')
 
     def test_create_post_with_no_urls_returns_empty_previews(self):
         """Posts without URLs should serialize an empty preview array."""

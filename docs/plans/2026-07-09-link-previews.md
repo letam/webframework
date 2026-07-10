@@ -6,6 +6,15 @@ the stale `content-encoding` header or every gzip-served page failed to parse; (
 endpoint had to clear DRF's prefetch cache or PATCH responses returned stale previews. Plus the
 YouTube iframe needs `referrerPolicy="strict-origin-when-cross-origin"` (player error 153).
 
+Addendum 2026-07-09: `published_at` (nullable DateField, serialized `YYYY-MM-DD`) added to the
+contract. Sources — youtube: watch page `datePublished` itemprop meta, falling back to the
+player-response `"publishDate"` JSON; twitter: the date anchor text closing the oEmbed
+blockquote (`&lang=en` pinned), falling back to the snowflake timestamp in the status ID
+(post-Nov-2010 IDs only); generic: `article:published_time`. Cards render it as "Mmm d, yyyy" —
+appended to the YouTube meta line and the generic site line, own line under tweet text. The
+date string is parsed component-wise on the frontend (UTC-midnight `Date` would render a day
+early west of Greenwich).
+
 URLs in a post's text get rendered as rich preview cards in the feed. Metadata is fetched
 **server-side** (client-side is impossible: x.com/YouTube block cross-origin reads), stored per
 post, and served through the existing post API. Three card kinds:
@@ -35,6 +44,7 @@ serialized; pending/failed rows are omitted):
   "author_name": "Channel Name",       // channel (youtube) / display name (twitter) / "" (generic)
   "author_handle": "rickastleyofficial", // twitter handle or youtube @handle path seg when known, else ""
   "embed_id": "dQw4w9WgXcQ",           // youtube video id, else ""
+  "published_at": "2009-10-24",        // source publication date or null
   "image": "http://localhost:8000/api/link-previews/12/image/"  // absolute URL or null
 }
 ```

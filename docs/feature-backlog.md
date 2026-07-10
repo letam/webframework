@@ -159,8 +159,9 @@ ActivityPub only if the node idea gets serious.
 ## P3 — Everything else worth keeping
 
 - **Link previews** ✅ Shipped 2026-07-09 — YouTube (title/channel/description, click-to-play
-  embed), X/tweet quote cards, and generic OG cards; server-side fetch with SSRF guarding and
-  re-hosted thumbnails. Spec: docs/plans/2026-07-09-link-previews.md.
+  embed), X/tweet quote cards, and generic OG cards, each with the source's publication date
+  when available; server-side fetch with SSRF guarding and re-hosted thumbnails.
+  Spec: docs/plans/2026-07-09-link-previews.md.
 - **Rich text** — bold/italic in the composer (was marked ASAP once); full rich-text
   editor only if genuinely needed.
 - **Magic-link sign-in**; registration via a shared signup code that refreshes daily;

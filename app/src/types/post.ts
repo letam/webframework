@@ -37,6 +37,7 @@ export interface LinkPreview {
 	author_name: string
 	author_handle: string
 	embed_id: string
+	published_at: string | null
 	image: string | null
 }
 

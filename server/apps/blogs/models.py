@@ -300,6 +300,7 @@ class LinkPreview(models.Model):
     author_name = models.CharField(max_length=200, blank=True)
     author_handle = models.CharField(max_length=100, blank=True)
     embed_id = models.CharField(max_length=100, blank=True)
+    published_at = models.DateField(null=True, blank=True)
     image = models.ImageField(upload_to='link_previews/%Y/%m/', blank=True)
     fetched_at = models.DateTimeField(null=True, blank=True)
 

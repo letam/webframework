@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { format } from 'date-fns'
 import { Play } from 'lucide-react'
 import type { LinkPreview } from '@/types/post'
 
@@ -13,9 +14,24 @@ const hostname = (url: string) => {
 	}
 }
 
+// Build the date locally from the ISO parts; new Date('2006-03-21') is UTC
+// midnight and would render as the previous day west of Greenwich.
+const formatPublishedDate = (iso: string | null) => {
+	if (!iso) {
+		return ''
+	}
+	const [year, month, day] = iso.split('-').map(Number)
+	if (!year || !month || !day) {
+		return ''
+	}
+	return format(new Date(year, month - 1, day), 'MMM d, yyyy')
+}
+
 const YouTubeCard = ({ preview }: { preview: LinkPreview }) => {
 	const [playing, setPlaying] = useState(false)
-	const meta = preview.author_name ? `${preview.author_name} · YouTube` : 'YouTube'
+	const meta = [preview.author_name, 'YouTube', formatPublishedDate(preview.published_at)]
+		.filter(Boolean)
+		.join(' · ')
 
 	return (
 		<div data-testid="link-preview-youtube" className="overflow-hidden rounded-md border">
@@ -85,6 +101,11 @@ const TwitterCard = ({ preview }: { preview: LinkPreview }) => (
 		<div className="mt-2 line-clamp-6 whitespace-pre-line text-sm leading-relaxed">
 			{preview.description}
 		</div>
+		{preview.published_at && (
+			<div className="mt-2 text-[13px] text-muted-foreground">
+				{formatPublishedDate(preview.published_at)}
+			</div>
+		)}
 	</a>
 )
 
@@ -98,7 +119,9 @@ const GenericCard = ({ preview }: { preview: LinkPreview }) => (
 	>
 		<div className="min-w-0 flex-1 p-3">
 			<div className="truncate text-[13px] text-muted-foreground">
-				{preview.site_name || hostname(preview.url)}
+				{[preview.site_name || hostname(preview.url), formatPublishedDate(preview.published_at)]
+					.filter(Boolean)
+					.join(' · ')}
 			</div>
 			<div className="mt-0.5 line-clamp-2 text-sm font-medium leading-snug">{preview.title}</div>
 			{preview.description && (

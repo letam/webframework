@@ -5,6 +5,7 @@ import ipaddress
 import logging
 import re
 import socket
+from datetime import UTC, date, datetime
 from html.parser import HTMLParser
 from io import BytesIO
 from urllib.parse import parse_qs, quote, urljoin, urlparse
@@ -28,6 +29,8 @@ USER_AGENT = 'webframework-linkpreview/1.0 (+https://github.com/tam/webframework
 URL_RE = re.compile(r'(?:https?://|www\.)[^\s<>"\']+', re.IGNORECASE)
 YOUTUBE_VIDEO_ID_RE = re.compile(r'^[A-Za-z0-9_-]{6,20}$')
 TWITTER_STATUS_RE = re.compile(r'^/([^/]+)/status/\d+/?', re.IGNORECASE)
+TWEET_DATE_RE = re.compile(r'>\s*([A-Z][a-z]+ \d{1,2}, \d{4})\s*</a>\s*</blockquote>')
+TWITTER_SNOWFLAKE_EPOCH_MS = 1288834974657
 REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
 
@@ -51,7 +54,7 @@ class MetadataParser(HTMLParser):
         if tag.lower() != 'meta':
             return
 
-        key = attrs_dict.get('property') or attrs_dict.get('name')
+        key = attrs_dict.get('property') or attrs_dict.get('name') or attrs_dict.get('itemprop')
         content = attrs_dict.get('content')
         if key and content:
             self.meta[key.lower()] = content.strip()
@@ -271,7 +274,29 @@ def _parse_html_metadata(text: str) -> MetadataParser:
     return parser
 
 
-def fetch_youtube(url: str, video_id: str) -> dict[str, str] | None:
+def _parse_iso_date(value: str) -> date | None:
+    try:
+        return datetime.fromisoformat(value).date()
+    except ValueError:
+        return None
+
+
+def _tweet_date_from_snowflake(url: str) -> date | None:
+    """Derive a tweet's date from its snowflake status ID."""
+    match = re.search(r'/status/(\d+)', urlparse(url).path)
+    if not match:
+        return None
+
+    status_id = int(match.group(1))
+    # Pre-snowflake IDs (before Nov 2010) are sequential and encode no timestamp.
+    if status_id < (1 << 40):
+        return None
+
+    milliseconds = (status_id >> 22) + TWITTER_SNOWFLAKE_EPOCH_MS
+    return datetime.fromtimestamp(milliseconds / 1000, tz=UTC).date()
+
+
+def fetch_youtube(url: str, video_id: str) -> dict[str, object] | None:
     """Fetch YouTube oEmbed and best-effort page metadata."""
     oembed_url = f'https://www.youtube.com/oembed?url={quote(url, safe="")}&format=json'
     oembed = _safe_get(oembed_url, max_bytes=MAX_HTML_BYTES)
@@ -291,6 +316,7 @@ def fetch_youtube(url: str, video_id: str) -> dict[str, str] | None:
     description = ''
     author_handle = ''
     page_title = ''
+    published_at = None
     page = _safe_get(f'https://www.youtube.com/watch?v={video_id}', max_bytes=MAX_HTML_BYTES)
     if page is not None and page.status_code < 400:
         page_text = _decode_response(page)
@@ -306,6 +332,13 @@ def fetch_youtube(url: str, video_id: str) -> dict[str, str] | None:
         if handle_match:
             author_handle = handle_match.group(1)
 
+        published_raw = parser.meta.get('datepublished') or parser.meta.get('uploaddate') or ''
+        if not published_raw:
+            publish_match = re.search(r'"publishDate":"([^"]+)"', page_text)
+            if publish_match:
+                published_raw = publish_match.group(1)
+        published_at = _parse_iso_date(published_raw)
+
     if not title:
         title = page_title
     if not title:
@@ -319,15 +352,16 @@ def fetch_youtube(url: str, video_id: str) -> dict[str, str] | None:
         'author_name': author_name,
         'author_handle': author_handle,
         'embed_id': video_id,
+        'published_at': published_at,
         'image_url': thumbnail_url or f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg',
     }
 
 
-def fetch_twitter(url: str, handle: str) -> dict[str, str] | None:
+def fetch_twitter(url: str, handle: str) -> dict[str, object] | None:
     """Fetch Twitter/X oEmbed metadata."""
     oembed_url = (
         f'https://publish.twitter.com/oembed?url={quote(url, safe="")}'
-        '&omit_script=true&dnt=true&hide_thread=true'
+        '&omit_script=true&dnt=true&hide_thread=true&lang=en'
     )
     response = _safe_get(oembed_url, max_bytes=MAX_HTML_BYTES)
     if response is None or response.status_code >= 400:
@@ -338,9 +372,22 @@ def fetch_twitter(url: str, handle: str) -> dict[str, str] | None:
     except ValueError:
         return None
 
+    oembed_html = str(data.get('html') or '')
     parser = ParagraphTextParser()
-    parser.feed(str(data.get('html') or ''))
+    parser.feed(oembed_html)
     tweet_text = parser.text
+
+    # The blockquote ends with the tweet's date as anchor text ("March 21, 2006"
+    # with lang=en); the snowflake ID covers tweets where that ever changes.
+    published_at = None
+    date_match = TWEET_DATE_RE.search(oembed_html)
+    if date_match:
+        try:
+            published_at = datetime.strptime(date_match.group(1), '%B %d, %Y').date()
+        except ValueError:
+            published_at = None
+    if published_at is None:
+        published_at = _tweet_date_from_snowflake(url)
 
     return {
         'kind': 'twitter',
@@ -350,10 +397,11 @@ def fetch_twitter(url: str, handle: str) -> dict[str, str] | None:
         'author_name': str(data.get('author_name') or ''),
         'author_handle': handle,
         'embed_id': '',
+        'published_at': published_at,
     }
 
 
-def fetch_generic(url: str) -> dict[str, str] | None:
+def fetch_generic(url: str) -> dict[str, object] | None:
     """Fetch generic OpenGraph metadata for a page."""
     response = _safe_get(url, max_bytes=MAX_HTML_BYTES)
     if response is None or response.status_code >= 400:
@@ -386,6 +434,7 @@ def fetch_generic(url: str) -> dict[str, str] | None:
         'author_name': '',
         'author_handle': '',
         'embed_id': '',
+        'published_at': _parse_iso_date(parser.meta.get('article:published_time', '')),
         'image_url': image_url,
     }
 
@@ -445,6 +494,8 @@ def fetch_preview_for(preview: LinkPreview) -> None:
     preview.author_name = _truncate(data.get('author_name'), 200)
     preview.author_handle = _truncate(data.get('author_handle') or preview.author_handle, 100)
     preview.embed_id = _truncate(data.get('embed_id') or preview.embed_id, 100)
+    published_at = data.get('published_at')
+    preview.published_at = published_at if isinstance(published_at, date) else None
 
     image_url = data.get('image_url')
     if image_url:
@@ -461,6 +512,7 @@ def fetch_preview_for(preview: LinkPreview) -> None:
             'author_name',
             'author_handle',
             'embed_id',
+            'published_at',
             'image',
             'fetched_at',
         ]
