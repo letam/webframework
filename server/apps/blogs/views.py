@@ -5,6 +5,7 @@ import logging
 import mimetypes
 import os
 import tempfile
+from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -23,6 +24,7 @@ from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirec
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateformat import format as format_date
 from django.views.decorators.http import require_GET
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -945,6 +947,41 @@ def _get_usable_media_file_path(media):
         return None
 
 
+def _format_preview_date(published_at):
+    return format_date(published_at, 'M j, Y') if published_at else ''
+
+
+def _preview_count(value, unit):
+    number = value or 0
+    return f'{number} {unit}' if number == 1 else f'{number} {unit}s'
+
+
+def _link_preview_meta(preview):
+    """Muted meta line for a share-page preview card; mirrors LinkPreviewCard.tsx copy."""
+    date_str = _format_preview_date(preview.published_at)
+    if preview.kind == 'youtube':
+        parts = [preview.author_name, 'YouTube', date_str]
+    elif preview.kind == 'hackernews':
+        if preview.extra.get('is_comment'):
+            author = preview.author_name
+            parts = [f'Comment by {author}' if author else 'Comment', date_str]
+        else:
+            parts = [
+                _preview_count(preview.extra.get('score'), 'point'),
+                _preview_count(preview.extra.get('comments'), 'comment'),
+                f'by {preview.author_name}' if preview.author_name else '',
+                date_str,
+            ]
+    elif preview.kind == 'chatgpt':
+        parts = ['Shared conversation', date_str]
+    elif preview.kind == 'generic':
+        hostname = (urlsplit(preview.url).hostname or '').removeprefix('www.')
+        parts = [preview.site_name or hostname or preview.url, date_str]
+    else:  # twitter and reddit style their pieces in the template
+        parts = [date_str] if preview.kind == 'twitter' else []
+    return ' · '.join(part for part in parts if part)
+
+
 def post_detail(request, post_id):
     """View for individual post detail pages.
 
@@ -973,10 +1010,25 @@ def post_detail(request, post_id):
         if post.visibility == VISIBILITY_UNLISTED:
             media_url = f'{media_url}?token={post.share_token}'
 
+    link_previews = []
+    if post.link_previews_enabled:
+        for preview in post.link_previews.all():
+            if preview.status != 'ok':
+                continue
+            image_url = None
+            if preview.image:
+                image_url = reverse('link-preview-image', args=[preview.id])
+                if post.visibility == VISIBILITY_UNLISTED:
+                    image_url = f'{image_url}?token={post.share_token}'
+            link_previews.append(
+                {'preview': preview, 'image_url': image_url, 'meta': _link_preview_meta(preview)}
+            )
+
     # Prepare context for HTML template
     context = {
         'post': post,
         'media_url': media_url,
+        'link_previews': link_previews,
         'like_count': post.likes.count(),
         'comment_count': post.comments.count(),
         'view_count': post.views.count(),

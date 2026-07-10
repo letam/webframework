@@ -546,9 +546,9 @@ else:
                 "'sha256-nzTgYzXYDNe6BAHiiI7NNlfK8n/auuOAhh2t92YvuXo='",
                 #
                 # Hashes for styles in Django HTML templates
-                "'sha256-GWweojyzwwt2WuqsMmaOTzMtCkOvLHnP8sc9dK1mDVo='",
-                "'sha256-JayKhsDueQH1eSiZMpD2bwcA5rUMPYRclFLcblDmxvU='",
-                "'sha256-c2svKMHHIytNvecMVUzr4RNy61AT1b0sYT937DFULOk='",
+                "'sha256-GWweojyzwwt2WuqsMmaOTzMtCkOvLHnP8sc9dK1mDVo='",  # shared/base.html
+                "'sha256-IRlJG500ORUkBOhtvOMpg7SkjvGWHfulUZyeuTyhpVE='",  # blogs/post_detail.html
+                "'sha256-c2svKMHHIytNvecMVUzr4RNy61AT1b0sYT937DFULOk='",  # shared/header.html
             ],
             'connect-src': [SELF, 'http://127.0.0.1:8000'],
         }

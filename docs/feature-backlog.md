@@ -167,6 +167,10 @@ ActivityPub only if the node idea gets serious.
   Reddit (oEmbed: title/author/subreddit — the only unauthenticated door Reddit leaves open),
   and ChatGPT share cards (og:title + UUID-timestamp date), each with brand marks.
   Specs: docs/plans/2026-07-09-link-previews.md, docs/plans/2026-07-10-link-preview-sources.md.
+  The server-rendered `/p/<id>` share page renders cards for all six kinds too (2026-07-10,
+  docs/plans/2026-07-10-share-page-link-previews.md) — that work also fixed a pre-existing prod
+  bug (stale CSP style hash left the share page unstyled in production) and added a CSP hash
+  regression test.
 - **Rich text** — bold/italic in the composer (was marked ASAP once); full rich-text
   editor only if genuinely needed.
 - **Magic-link sign-in**; registration via a shared signup code that refreshes daily;

@@ -32,7 +32,7 @@ from ..link_previews import (
     fetch_youtube,
     sync_link_previews,
 )
-from ..models import VISIBILITY_PRIVATE, LinkPreview, Post
+from ..models import VISIBILITY_PRIVATE, VISIBILITY_UNLISTED, LinkPreview, Post
 from ..tasks import fetch_link_previews
 from . import BaseTestCase, ViewTestCase
 
@@ -1331,3 +1331,268 @@ class LinkPreviewDeletionTests(BaseTestCase):
 
                 self.assertFalse(LinkPreview.objects.filter(id=preview_id).exists())
                 self.assertFalse(os.path.exists(image_path))
+
+
+class SharePageLinkPreviewTests(ViewTestCase):
+    """Tests for link preview cards on server-rendered share pages."""
+
+    def setUp(self):
+        """Create a reusable post author."""
+        super().setUp()
+        self.user = User.objects.create_user(
+            username='share_preview_author',
+            password='testpass123',
+        )
+
+    def _post(self, **kwargs):
+        """Create a public post suitable for a share-page preview test."""
+        return Post.objects.create(author=self.user, body='Links', **kwargs)
+
+    def _render(self, post):
+        """Request the server-rendered share page for a post."""
+        response = self.client.get(reverse('post_detail', args=[post.id]))
+        self.assertEqual(response.status_code, 200)
+        return response.content
+
+    def test_youtube_preview_renders_feed_parity_copy(self):
+        """YouTube cards should include their title, meta line, and play badge."""
+        post = self._post()
+        LinkPreview.objects.create(
+            post=post,
+            url='https://youtube.com/watch?v=dQw4w9WgXcQ',
+            kind='youtube',
+            status='ok',
+            title='Never Gonna Give You Up',
+            author_name='Rick Astley',
+            published_at=date(2009, 10, 25),
+        )
+
+        content = self._render(post)
+
+        self.assertIn(b'Never Gonna Give You Up', content)
+        self.assertIn(b'Rick Astley \xc2\xb7 YouTube \xc2\xb7 Oct 25, 2009', content)
+        self.assertIn(b'<span class="lp-play">', content)
+
+    def test_twitter_preview_renders_feed_parity_copy(self):
+        """Twitter cards should include author, handle, text, and publication date."""
+        post = self._post()
+        LinkPreview.objects.create(
+            post=post,
+            url='https://x.com/example/status/1',
+            kind='twitter',
+            status='ok',
+            author_name='Jane Doe',
+            author_handle='janedoe',
+            description='An excellent post',
+            published_at=date(2024, 1, 2),
+        )
+
+        content = self._render(post)
+
+        self.assertIn(b'Jane Doe', content)
+        self.assertIn(b'@janedoe', content)
+        self.assertIn(b'An excellent post', content)
+        self.assertIn(b'Jan 2, 2024', content)
+
+    def test_hackernews_story_preview_renders_feed_parity_copy(self):
+        """Hacker News story cards should include score, comments, author, and domain."""
+        post = self._post()
+        LinkPreview.objects.create(
+            post=post,
+            url='https://news.ycombinator.com/item?id=1',
+            kind='hackernews',
+            status='ok',
+            title='A Hacker News Story',
+            author_name='pg',
+            extra={'score': 57, 'comments': 3, 'domain': 'ycombinator.com'},
+            published_at=date(2006, 10, 9),
+        )
+
+        content = self._render(post)
+
+        self.assertIn(b'A Hacker News Story', content)
+        self.assertIn(b'ycombinator.com', content)
+        self.assertIn(
+            b'57 points \xc2\xb7 3 comments \xc2\xb7 by pg \xc2\xb7 Oct 9, 2006',
+            content,
+        )
+
+    def test_hackernews_comment_preview_renders_feed_parity_copy(self):
+        """Hacker News comment cards should use the comment-specific meta line."""
+        post = self._post()
+        LinkPreview.objects.create(
+            post=post,
+            url='https://news.ycombinator.com/item?id=2',
+            kind='hackernews',
+            status='ok',
+            author_name='sama',
+            extra={'is_comment': True},
+            published_at=date(2006, 10, 9),
+        )
+
+        content = self._render(post)
+
+        self.assertIn(b'Comment by sama \xc2\xb7 Oct 9, 2006', content)
+
+    def test_reddit_preview_renders_feed_parity_copy(self):
+        """Reddit cards should include their subreddit, source, title, and author."""
+        post = self._post()
+        LinkPreview.objects.create(
+            post=post,
+            url='https://reddit.com/r/programming/comments/abc/a-post',
+            kind='reddit',
+            status='ok',
+            title='A Reddit Post',
+            author_name='ChemicalRascal',
+            extra={'subreddit': 'programming'},
+        )
+
+        content = self._render(post)
+
+        self.assertIn(b'r/programming', content)
+        self.assertIn(b'Reddit', content)
+        self.assertIn(b'A Reddit Post', content)
+        self.assertIn(b'u/ChemicalRascal', content)
+
+    def test_chatgpt_preview_renders_feed_parity_copy(self):
+        """ChatGPT cards should include their title and shared-conversation meta line."""
+        post = self._post()
+        LinkPreview.objects.create(
+            post=post,
+            url='https://chatgpt.com/share/67681bfe-1234-5678-90ab-cdef12345678',
+            kind='chatgpt',
+            status='ok',
+            title='A Shared Conversation',
+            published_at=date(2024, 12, 22),
+        )
+
+        content = self._render(post)
+
+        self.assertIn(b'ChatGPT', content)
+        self.assertIn(b'A Shared Conversation', content)
+        self.assertIn(b'Shared conversation \xc2\xb7 Dec 22, 2024', content)
+
+    def test_generic_preview_renders_feed_parity_copy(self):
+        """Generic cards should include their site label, title, description, and date."""
+        post = self._post()
+        LinkPreview.objects.create(
+            post=post,
+            url='https://example.com/article',
+            kind='generic',
+            status='ok',
+            site_name='Example',
+            title='An Example Article',
+            description='A concise summary.',
+            published_at=date(2024, 6, 1),
+        )
+
+        content = self._render(post)
+
+        self.assertIn(b'Example \xc2\xb7 Jun 1, 2024', content)
+        self.assertIn(b'An Example Article', content)
+        self.assertIn(b'A concise summary.', content)
+
+    def test_hackernews_preview_uses_singular_count_copy(self):
+        """Hacker News score and comment counts should use singular forms for one."""
+        post = self._post()
+        LinkPreview.objects.create(
+            post=post,
+            url='https://news.ycombinator.com/item?id=3',
+            kind='hackernews',
+            status='ok',
+            extra={'score': 1, 'comments': 1},
+        )
+
+        content = self._render(post)
+
+        self.assertIn(b'1 point \xc2\xb7 1 comment', content)
+
+    def test_non_ok_previews_and_disabled_previews_do_not_render(self):
+        """Pending, failed, and disabled previews should not produce share-page cards."""
+        post = self._post()
+        LinkPreview.objects.create(
+            post=post,
+            url='https://pending.example.com',
+            status='pending',
+            title='Pending title',
+        )
+        LinkPreview.objects.create(
+            post=post,
+            url='https://failed.example.com',
+            status='failed',
+            title='Failed title',
+        )
+
+        content = self._render(post)
+
+        self.assertNotIn(b'Pending title', content)
+        self.assertNotIn(b'Failed title', content)
+        self.assertNotIn(b'<div class="link-previews">', content)
+
+        disabled_post = self._post(link_previews_enabled=False)
+        LinkPreview.objects.create(
+            post=disabled_post,
+            url='https://ok.example.com',
+            status='ok',
+            title='Disabled title',
+        )
+
+        disabled_content = self._render(disabled_post)
+
+        self.assertNotIn(b'Disabled title', disabled_content)
+        self.assertNotIn(b'<div class="link-previews">', disabled_content)
+
+    def test_unlisted_preview_image_uses_share_token(self):
+        """Unlisted share pages should carry their token to preview image endpoints."""
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                post = self._post(visibility=VISIBILITY_UNLISTED)
+                preview = LinkPreview.objects.create(
+                    post=post,
+                    url='https://example.com/article',
+                    status='ok',
+                    title='Image preview',
+                )
+                preview.image.save('preview.jpg', ContentFile(b'image bytes'), save=True)
+
+                response = self.client.get(
+                    reverse('post_detail', args=[post.id]),
+                    {'token': post.share_token},
+                )
+                self.assertEqual(response.status_code, 200)
+                content = response.content
+
+        expected_url = (
+            f'{reverse("link-preview-image", args=[preview.id])}?token={post.share_token}'.encode()
+        )
+        self.assertIn(expected_url, content)
+
+    def test_preview_fields_are_autoescaped(self):
+        """Remote preview content should be escaped by the share-page template."""
+        post = self._post()
+        LinkPreview.objects.create(
+            post=post,
+            url='https://example.com/unsafe',
+            status='ok',
+            title='<script>alert(1)</script>',
+        )
+
+        content = self._render(post)
+
+        self.assertIn(b'&lt;script&gt;alert(1)&lt;/script&gt;', content)
+        self.assertNotIn(b'<script>alert(1)</script>', content)
+
+    def test_generic_preview_uses_hostname_when_site_name_is_empty(self):
+        """Generic cards should fall back to a URL hostname without www."""
+        post = self._post()
+        LinkPreview.objects.create(
+            post=post,
+            url='https://www.example.com/a',
+            status='ok',
+            site_name='',
+            title='Hostname fallback',
+        )
+
+        content = self._render(post)
+
+        self.assertIn(b'example.com', content)
