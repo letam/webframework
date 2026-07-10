@@ -234,7 +234,7 @@ export const Post: React.FC<PostProps> = ({
 	return (
 		<div
 			ref={postRef}
-			className="group bg-card rounded-lg shadow-xs border transition-[border-color,box-shadow] duration-200 hover:border-primary/20 hover:shadow-sm max-w-lg mx-auto px-4 py-3 animate-rise-in"
+			className="group bg-card animate-rise-in border-b border-border/60 px-4 py-3 transition-[border-color,box-shadow] duration-200 sm:rounded-lg sm:border sm:border-border sm:shadow-xs sm:hover:border-primary/20 sm:hover:shadow-sm"
 			data-testid={`post-${post.id}`}
 		>
 			<div className="flex items-center gap-2">
@@ -252,7 +252,7 @@ export const Post: React.FC<PostProps> = ({
 			</div>
 
 			<div className="">
-				<div className="mt-2 max-w-lg">
+				<div className="mt-2">
 					{post.head && (
 						<div className="mt-1 text-[17px] font-semibold leading-snug tracking-tight">
 							<FormatText onTagClick={onTagClick}>{post.head}</FormatText>

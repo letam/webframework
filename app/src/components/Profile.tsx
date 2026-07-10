@@ -103,7 +103,7 @@ const Profile: React.FC = () => {
 
 	if (!isAuthenticated) {
 		return (
-			<div className="max-w-2xl mx-auto">
+			<div className="max-w-[600px] mx-auto">
 				<div className="bg-card rounded-lg shadow-xs border p-8 mt-8 text-center">
 					<h1 className="text-xl font-bold">Your profile</h1>
 					<p className="mt-2 text-muted-foreground">
@@ -148,7 +148,9 @@ const Profile: React.FC = () => {
 				{list.length === 0 ? (
 					<div className="p-8 text-center text-muted-foreground">{emptyMessage}</div>
 				) : (
-					list.map((post) => renderPostCard(post, source))
+					<div className="-mx-4 sm:mx-0 space-y-0 sm:space-y-4">
+						{list.map((post) => renderPostCard(post, source))}
+					</div>
 				)}
 				<InfiniteScrollSentinel
 					onLoadMore={() => source.fetchNextPage()}
@@ -184,7 +186,9 @@ const Profile: React.FC = () => {
 									{group.posts.length} {group.posts.length === 1 ? 'post' : 'posts'}
 								</span>
 							</div>
-							{group.posts.map((post) => renderPostCard(post, mine))}
+							<div className="-mx-4 sm:mx-0 space-y-0 sm:space-y-4">
+								{group.posts.map((post) => renderPostCard(post, mine))}
+							</div>
 						</section>
 					))
 				)}
@@ -217,11 +221,15 @@ const Profile: React.FC = () => {
 							<Pin className="h-3.5 w-3.5" />
 							<span>Pinned</span>
 						</div>
-						{pinned.posts.map((post) => renderPostCard(post, pinned))}
+						<div className="-mx-4 sm:mx-0 space-y-0 sm:space-y-4">
+							{pinned.posts.map((post) => renderPostCard(post, pinned))}
+						</div>
 					</div>
 				)}
 				{hasPosts ? (
-					unpinnedPosts.map((post) => renderPostCard(post, mine))
+					<div className="-mx-4 sm:mx-0 space-y-0 sm:space-y-4">
+						{unpinnedPosts.map((post) => renderPostCard(post, mine))}
+					</div>
 				) : (
 					<div className="p-8 text-center text-muted-foreground">
 						You haven't posted anything yet.
@@ -286,7 +294,7 @@ const Profile: React.FC = () => {
 	}
 
 	return (
-		<div className="max-w-2xl mx-auto">
+		<div className="max-w-[600px] mx-auto">
 			{error && <div className="text-center py-4 text-red-500 mb-4">Error: {error.message}</div>}
 
 			<div className="bg-card rounded-lg shadow-xs overflow-hidden mb-4 border">

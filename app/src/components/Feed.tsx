@@ -73,7 +73,7 @@ const Feed: React.FC = () => {
 	)
 
 	return (
-		<div className="max-w-2xl mx-auto">
+		<div className="max-w-[600px] mx-auto">
 			{error && <div className="text-center py-4 text-red-500 mb-4">Error: {error.message}</div>}
 
 			<div className="my-4">
@@ -109,14 +109,14 @@ const Feed: React.FC = () => {
 				</div>
 			)}
 
-			<div className="space-y-4 my-6">
+			<div className="my-6 -mx-4 sm:mx-0 space-y-0 sm:space-y-4">
 				{isLoading ? (
-					<div className="space-y-4">
+					<div className="space-y-0 sm:space-y-4">
 						<span className="sr-only">Loading posts...</span>
 						{[0, 1, 2].map((n) => (
 							<div
 								key={n}
-								className="bg-card rounded-lg shadow-xs border max-w-lg mx-auto p-4 animate-pulse"
+								className="bg-card border-b border-border/60 p-4 animate-pulse sm:rounded-lg sm:border sm:shadow-xs"
 								style={{ animationDelay: `${n * 120}ms` }}
 							>
 								<div className="flex items-center gap-2">
@@ -151,7 +151,7 @@ const Feed: React.FC = () => {
 						/>
 					))
 				) : posts.length === 0 ? (
-					<div className="max-w-lg mx-auto text-center py-12 animate-rise-in">
+					<div className="max-w-lg mx-auto px-4 text-center py-12 animate-rise-in">
 						<EchoMark muted className="mx-auto h-12 w-12 text-muted-foreground/50" />
 						<p className="mt-4 font-medium">It's quiet in here</p>
 						<p className="mt-1 text-sm text-muted-foreground">
@@ -159,7 +159,7 @@ const Feed: React.FC = () => {
 						</p>
 					</div>
 				) : (
-					<div className="max-w-lg mx-auto text-center py-12 text-muted-foreground animate-rise-in">
+					<div className="max-w-lg mx-auto px-4 text-center py-12 text-muted-foreground animate-rise-in">
 						No posts match the current filters.
 					</div>
 				)}
