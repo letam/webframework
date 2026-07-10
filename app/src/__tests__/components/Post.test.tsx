@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { Post } from '@/components/post/Post'
+import { updateSettings } from '@/lib/utils/settings'
 import { markPostViewed } from '@/lib/viewTracking'
 import { makeAuthor, makeLinkPreview, makeMedia, makePost } from '../data/mockPosts'
 
@@ -38,6 +39,7 @@ describe('Post', () => {
 	beforeEach(() => {
 		vi.useFakeTimers()
 		vi.clearAllMocks()
+		localStorage.clear()
 		mockUseAuth.mockReturnValue({
 			isAuthenticated: true,
 			userId: 99,
@@ -120,5 +122,13 @@ describe('Post', () => {
 		expect(screen.queryByTestId('link-preview-generic')).not.toBeInTheDocument()
 		expect(screen.queryByTestId('link-preview-youtube')).not.toBeInTheDocument()
 		expect(screen.queryByTestId('link-preview-twitter')).not.toBeInTheDocument()
+	})
+
+	it('does not render link preview cards when showing previews is disabled', () => {
+		updateSettings({ showLinkPreviews: false })
+		renderPost(makePost({ link_previews: [makeLinkPreview({ title: 'Preview title' })] }))
+
+		expect(screen.queryByTestId('link-preview-generic')).not.toBeInTheDocument()
+		expect(screen.queryByText('Preview title')).not.toBeInTheDocument()
 	})
 })

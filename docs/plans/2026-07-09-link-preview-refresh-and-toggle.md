@@ -111,7 +111,9 @@ Settings in this app are client-side (`app/src/lib/utils/settings.ts`, localStor
 
 - No scheduler/cron wiring (Fly scheduled machines are a separate ops task — note the command
   in docs/feature-backlog.md's ops section as ready-to-schedule).
-- No reader-side "hide cards" toggle.
+- No reader-side "hide cards" toggle. (Shipped later the same day as a follow-up: client-only
+  `showLinkPreviews` setting gating the card render in Post.tsx; the author-side row was
+  relabeled "Create link previews" to disambiguate from the new "Show link previews" row.)
 - No per-post UI control in the post menu (the API now supports PATCHing
   `link_previews_enabled`; UI can come later).
 

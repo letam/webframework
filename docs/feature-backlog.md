@@ -160,7 +160,9 @@ ActivityPub only if the node idea gets serious.
 
 - **Link previews** ✅ Shipped 2026-07-09 — YouTube (title/channel/description, click-to-play
   embed), X/tweet quote cards, and generic OG cards, each with the source's publication date
-  when available; server-side fetch with SSRF guarding and re-hosted thumbnails.
+  when available; server-side fetch with SSRF guarding and re-hosted thumbnails. Settings has
+  both an author-side "Create link previews" toggle (per-post flag) and a reader-side "Show
+  link previews" toggle (client-only render gate).
   Spec: docs/plans/2026-07-09-link-previews.md.
 - **Rich text** — bold/italic in the composer (was marked ASAP once); full rich-text
   editor only if genuinely needed.

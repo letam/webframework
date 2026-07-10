@@ -60,11 +60,11 @@ describe('SettingsPage', () => {
 		})
 	})
 
-	it('renders and persists the link previews toggle', async () => {
+	it('renders and persists the create link previews toggle', async () => {
 		const user = userEvent.setup()
 		render(<SettingsPage />)
 
-		const toggle = screen.getByRole('switch', { name: 'Link previews' })
+		const toggle = screen.getByRole('switch', { name: 'Create link previews' })
 		expect(toggle).toBeChecked()
 		expect(
 			screen.getByText('Generate preview cards for links in your new posts')
@@ -75,6 +75,24 @@ describe('SettingsPage', () => {
 		await waitFor(() => {
 			expect(getSettings().linkPreviews).toBe(false)
 		})
+	})
+
+	it('renders and persists the show link previews toggle', async () => {
+		const user = userEvent.setup()
+		render(<SettingsPage />)
+
+		const toggle = screen.getByRole('switch', { name: 'Show link previews' })
+		expect(toggle).toBeChecked()
+		expect(
+			screen.getByText('Display preview cards for links in posts you read')
+		).toBeInTheDocument()
+
+		await user.click(toggle)
+
+		await waitFor(() => {
+			expect(getSettings().showLinkPreviews).toBe(false)
+		})
+		expect(getSettings().linkPreviews).toBe(true)
 	})
 
 	it('hides the data export button for anonymous users', () => {

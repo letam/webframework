@@ -16,6 +16,7 @@ import { toast } from '@/components/ui/sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { getMediaUrl, getPost, transcribePost } from '@/lib/api/posts'
 import { getMimeTypeFromPath } from '@/lib/utils/file'
+import { getSettings } from '@/lib/utils/settings'
 import { parseDurationString } from '@/lib/utils/media'
 import { markPostViewed } from '@/lib/viewTracking'
 
@@ -319,7 +320,7 @@ export const Post: React.FC<PostProps> = ({
 					</div>
 				)}
 
-				{post.link_previews && post.link_previews.length > 0 && (
+				{getSettings().showLinkPreviews && post.link_previews && post.link_previews.length > 0 && (
 					<div className="mt-3 space-y-2">
 						{post.link_previews.map((preview) => (
 							<LinkPreviewCard key={preview.id} preview={preview} />

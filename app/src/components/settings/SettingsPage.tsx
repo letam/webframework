@@ -48,12 +48,13 @@ const SettingsPage = () => {
 	const [normalizeAudio, setNormalizeAudio] = useState(initialSettings.normalizeAudio)
 	const [autoTranscribe, setAutoTranscribe] = useState(initialSettings.autoTranscribe)
 	const [linkPreviews, setLinkPreviews] = useState(initialSettings.linkPreviews)
+	const [showLinkPreviews, setShowLinkPreviews] = useState(initialSettings.showLinkPreviews)
 	const [videoQuality, setVideoQuality] = useState(initialSettings.videoQuality)
 	const [isExporting, setIsExporting] = useState(false)
 
 	useEffect(() => {
-		updateSettings({ normalizeAudio, autoTranscribe, linkPreviews, videoQuality })
-	}, [normalizeAudio, autoTranscribe, linkPreviews, videoQuality])
+		updateSettings({ normalizeAudio, autoTranscribe, linkPreviews, showLinkPreviews, videoQuality })
+	}, [normalizeAudio, autoTranscribe, linkPreviews, showLinkPreviews, videoQuality])
 
 	const handleExportPosts = async () => {
 		if (!isAuthenticated || userId == null) {
@@ -140,7 +141,7 @@ const SettingsPage = () => {
 							<div className="space-y-4">
 								<div className="flex items-center justify-between">
 									<div className="space-y-0.5">
-										<Label htmlFor="link-previews">Link previews</Label>
+										<Label htmlFor="link-previews">Create link previews</Label>
 										<p className="text-sm text-muted-foreground">
 											Generate preview cards for links in your new posts
 										</p>
@@ -149,6 +150,20 @@ const SettingsPage = () => {
 										id="link-previews"
 										checked={linkPreviews}
 										onCheckedChange={setLinkPreviews}
+									/>
+								</div>
+
+								<div className="flex items-center justify-between">
+									<div className="space-y-0.5">
+										<Label htmlFor="show-link-previews">Show link previews</Label>
+										<p className="text-sm text-muted-foreground">
+											Display preview cards for links in posts you read
+										</p>
+									</div>
+									<Switch
+										id="show-link-previews"
+										checked={showLinkPreviews}
+										onCheckedChange={setShowLinkPreviews}
 									/>
 								</div>
 							</div>
