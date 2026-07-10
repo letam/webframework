@@ -16,7 +16,13 @@ Including another URLconf
 """
 
 from apps.auth import views as auth_views
-from apps.blogs.views import PostViewSet, get_post_media_mime_type, post_detail, stream_post_media
+from apps.blogs.views import (
+    PostViewSet,
+    get_post_media_mime_type,
+    link_preview_image,
+    post_detail,
+    stream_post_media,
+)
 from apps.uploads.views import get_presigned_url
 from apps.users.views import avatar
 from apps.website.views import index
@@ -51,6 +57,11 @@ urlpatterns = [
         name='get_post_media_mime_type',
     ),
     path('api/posts/<int:post_id>/media/', stream_post_media, name='stream_post_media'),
+    path(
+        'api/link-previews/<int:preview_id>/image/',
+        link_preview_image,
+        name='link-preview-image',
+    ),
     #
     path('api/', include(router.urls)),
     #

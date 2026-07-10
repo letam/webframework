@@ -487,6 +487,7 @@ if USE_LOCAL_FILE_STORAGE and not os.path.exists(MEDIA_ROOT):
 CONTENT_SECURITY_POLICY_DIRECTIVES = {
     'default-src': [SELF],
     'frame-ancestors': [SELF],
+    'frame-src': [SELF, 'https://www.youtube-nocookie.com'],
     'form-action': [SELF],
     'report-uri': '/csp-report/',
     #

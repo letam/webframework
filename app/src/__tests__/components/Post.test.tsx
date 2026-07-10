@@ -4,7 +4,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { Post } from '@/components/post/Post'
 import { markPostViewed } from '@/lib/viewTracking'
-import { makeAuthor, makeMedia, makePost } from '../data/mockPosts'
+import { makeAuthor, makeLinkPreview, makeMedia, makePost } from '../data/mockPosts'
 
 const mockUseAuth = vi.hoisted(() => vi.fn())
 
@@ -90,5 +90,35 @@ describe('Post', () => {
 			'href',
 			'https://signed.example.com/original.jpg'
 		)
+	})
+
+	it('renders link preview cards after media', () => {
+		const post = makePost({
+			id: 44,
+			media: makeMedia({
+				media_type: 'image',
+				file: 'original.jpg',
+				s3_file_key: undefined,
+				signed_url: 'https://signed.example.com/original.jpg',
+				thumbnail: '/media/post/44/media/rendition.jpg',
+				alt_text: 'Post image',
+			}),
+			link_previews: [makeLinkPreview({ title: 'Preview title' })],
+		})
+		renderPost(post)
+
+		const mediaButton = screen.getByLabelText('Open image preview')
+		const previewCard = screen.getByTestId('link-preview-generic')
+
+		expect(screen.getByText('Preview title')).toBeInTheDocument()
+		expect(mediaButton.compareDocumentPosition(previewCard)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
+	})
+
+	it('does not render link preview cards for an empty array', () => {
+		renderPost(makePost({ link_previews: [] }))
+
+		expect(screen.queryByTestId('link-preview-generic')).not.toBeInTheDocument()
+		expect(screen.queryByTestId('link-preview-youtube')).not.toBeInTheDocument()
+		expect(screen.queryByTestId('link-preview-twitter')).not.toBeInTheDocument()
 	})
 })

@@ -25,6 +25,21 @@ export interface Media {
 	modified: Date
 }
 
+export type LinkPreviewKind = 'youtube' | 'twitter' | 'generic'
+
+export interface LinkPreview {
+	id: number
+	url: string
+	kind: LinkPreviewKind
+	title: string
+	description: string
+	site_name: string
+	author_name: string
+	author_handle: string
+	embed_id: string
+	image: string | null
+}
+
 export interface Post {
 	id: number
 	url: string
@@ -34,6 +49,7 @@ export interface Post {
 	head: string
 	body: string
 	media?: Media
+	link_previews?: LinkPreview[]
 	visibility: PostVisibility
 	is_draft: boolean
 	pinned_at?: string | null

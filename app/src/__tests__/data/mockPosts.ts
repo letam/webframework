@@ -1,5 +1,5 @@
 import type { PostsPage } from '@/lib/api/posts'
-import type { Author, Media, Post } from '@/types/post'
+import type { Author, LinkPreview, Media, Post } from '@/types/post'
 
 export const makeAuthor = (overrides: Partial<Author> = {}): Author => ({
 	id: 1,
@@ -25,6 +25,20 @@ export const makeMedia = (overrides: Partial<Media> = {}): Media => ({
 	...overrides,
 })
 
+export const makeLinkPreview = (overrides: Partial<LinkPreview> = {}): LinkPreview => ({
+	id: 100,
+	url: 'https://example.com/story',
+	kind: 'generic',
+	title: 'A useful linked story',
+	description: 'A short description for the linked story.',
+	site_name: 'Example',
+	author_name: '',
+	author_handle: '',
+	embed_id: '',
+	image: null,
+	...overrides,
+})
+
 export const makePost = (overrides: Partial<Post> = {}): Post => ({
 	id: 1,
 	url: 'http://localhost:3000/p/1/',
@@ -34,6 +48,7 @@ export const makePost = (overrides: Partial<Post> = {}): Post => ({
 	head: 'A useful post',
 	body: 'Just recorded a new episode about web correctness.',
 	media: undefined,
+	link_previews: [],
 	visibility: 'public',
 	is_draft: false,
 	share_token: 'share-token-1',

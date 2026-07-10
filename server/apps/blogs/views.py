@@ -40,12 +40,14 @@ from apps.uploads.s3 import (
     head_object,
 )
 
+from .link_previews import sync_link_previews
 from .models import (
     MEDIA_TYPE_CHOICES,
     VISIBILITY_PUBLIC,
     VISIBILITY_UNLISTED,
     Comment,
     Like,
+    LinkPreview,
     Media,
     Post,
     PostView,
@@ -53,7 +55,7 @@ from .models import (
 )
 from .pagination import PostCursorPagination
 from .serializers import CommentSerializer, PostCreateSerializer, PostSerializer
-from .tasks import process_post_media, transcribe_post_media
+from .tasks import fetch_link_previews, process_post_media, transcribe_post_media
 from .utils import (
     MediaProbeError,
     generate_poster_rendition,
@@ -168,6 +170,14 @@ def _enqueue_process_post_media(media_id):
         logger.exception('Failed to enqueue media processing for media %s', media_id)
 
 
+def _enqueue_fetch_link_previews(post_id):
+    """Queue link preview fetching without breaking the committed post."""
+    try:
+        fetch_link_previews.enqueue(post_id)
+    except Exception:
+        logger.exception('Failed to enqueue link preview fetching for post %s', post_id)
+
+
 class PostViewSet(viewsets.ModelViewSet):
     """API viewset for creating, reading, updating, and deleting posts."""
 
@@ -181,7 +191,7 @@ class PostViewSet(viewsets.ModelViewSet):
         """Return the annotated post queryset before visibility filtering."""
         queryset = (
             Post.objects.select_related('author', 'media')
-            .prefetch_related('post_set')
+            .prefetch_related('post_set', 'link_previews')
             .annotate(
                 like_count=_related_count(Like),
                 comment_count=_related_count(Comment),
@@ -313,6 +323,11 @@ class PostViewSet(viewsets.ModelViewSet):
                 post.save(update_fields=['media'])  # pyright: ignore [reportOptionalMemberAccess]
                 transaction.on_commit(
                     lambda media_id=media.pk: _enqueue_process_post_media(media_id)
+                )
+
+            if sync_link_previews(post):
+                transaction.on_commit(
+                    lambda post_id=post.pk: _enqueue_fetch_link_previews(post_id)
                 )
 
         # Get the created instance and serialize it with PostSerializer
@@ -479,27 +494,41 @@ class PostViewSet(viewsets.ModelViewSet):
                 return Response({'error': str(error)}, status=status.HTTP_400_BAD_REQUEST)
 
         # Update the post
+        old_head = instance.head
+        old_body = instance.body
         serializer = self.get_serializer(instance, data=data, partial=partial)
         serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
 
-        if instance.media:
-            # Get updates for media
-            media_updates = {}
+        with transaction.atomic():
+            self.perform_update(serializer)
 
-            if transcript is not None:
-                instance.media.transcript = transcript
-                media_updates['transcript'] = transcript
+            if instance.head != old_head or instance.body != old_body:
+                if sync_link_previews(instance):
+                    transaction.on_commit(
+                        lambda post_id=instance.pk: _enqueue_fetch_link_previews(post_id)
+                    )
 
-            if alt_text is not None:
-                instance.media.alt_text = alt_text
-                media_updates['alt_text'] = alt_text
+            if instance.media:
+                # Get updates for media
+                media_updates = {}
 
-            if media_updates:
-                instance.media.save(update_fields=media_updates.keys())
+                if transcript is not None:
+                    instance.media.transcript = transcript
+                    media_updates['transcript'] = transcript
 
-            if poster is not None:
-                save_media_thumbnail(instance.media, poster, 'poster.jpg')
+                if alt_text is not None:
+                    instance.media.alt_text = alt_text
+                    media_updates['alt_text'] = alt_text
+
+                if media_updates:
+                    instance.media.save(update_fields=media_updates.keys())
+
+                if poster is not None:
+                    save_media_thumbnail(instance.media, poster, 'poster.jpg')
+
+        if getattr(instance, '_prefetched_objects_cache', None):
+            # Drop stale prefetches (e.g. link_previews) so the response reflects the update.
+            instance._prefetched_objects_cache = {}
 
         return Response(serializer.data)
 
@@ -885,6 +914,20 @@ def stream_post_media(request, post_id):
     response['Content-Range'] = f'bytes {start}-{end - 1}/{file_size}'
     response['Accept-Ranges'] = 'bytes'
     response.status_code = 206  # Partial Content
+    return response
+
+
+@require_GET
+def link_preview_image(request, preview_id):
+    """Serve a stored link preview image through post visibility checks."""
+    preview = get_object_or_404(LinkPreview.objects.select_related('post'), id=preview_id)
+    if not preview.image:
+        raise Http404
+    if not preview.post.is_visible_to(request.user, token=request.GET.get('token')):
+        raise Http404
+
+    response = FileResponse(preview.image.open('rb'), content_type='image/jpeg')
+    response['Cache-Control'] = 'private, max-age=86400'
     return response
 
 

@@ -9,6 +9,7 @@ import CommentSection from './CommentSection'
 import type { Post as PostType } from '../../types/post'
 import type { PostVisibility } from '../../types/post'
 import { AudioPlayer, VideoPlayer } from './MediaPlayer'
+import LinkPreviewCard from './LinkPreviewCard'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { toast } from '@/components/ui/sonner'
@@ -315,6 +316,14 @@ export const Post: React.FC<PostProps> = ({
 								</div>
 							</DialogContent>
 						</Dialog>
+					</div>
+				)}
+
+				{post.link_previews && post.link_previews.length > 0 && (
+					<div className="mt-3 space-y-2">
+						{post.link_previews.map((preview) => (
+							<LinkPreviewCard key={preview.id} preview={preview} />
+						))}
 					</div>
 				)}
 

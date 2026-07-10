@@ -262,6 +262,12 @@ class Post(models.Model):
 
     def delete(self, *args, **kwargs):
         """Delete the post and its associated media row."""
+        for preview in self.link_previews.all():
+            try:
+                preview.delete()
+            except Exception as e:
+                logger.error(f"Error deleting link preview {preview.id}: {str(e)}")
+
         # Delete the media record
         if self.media:
             try:
@@ -270,6 +276,53 @@ class Post(models.Model):
                 logger.error(f"Error deleting media record {self.media.id}: {str(e)}")
 
         # Delete the record
+        return super().delete(*args, **kwargs)
+
+
+class LinkPreview(models.Model):
+    """Fetched rich-card metadata for a URL mentioned in a post."""
+
+    KIND_CHOICES = [('youtube', 'YouTube'), ('twitter', 'Twitter/X'), ('generic', 'Generic')]
+    STATUS_CHOICES = [('pending', 'Pending'), ('ok', 'OK'), ('failed', 'Failed')]
+
+    created = models.DateTimeField(auto_now_add=True)
+    modified = models.DateTimeField(auto_now=True)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='link_previews')
+    url = models.URLField(max_length=2000)
+    position = models.PositiveSmallIntegerField(default=0)
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES, default='generic')
+    status = models.CharField(
+        max_length=16, choices=STATUS_CHOICES, default='pending', db_index=True
+    )
+    title = models.CharField(max_length=500, blank=True)
+    description = models.TextField(blank=True)
+    site_name = models.CharField(max_length=200, blank=True)
+    author_name = models.CharField(max_length=200, blank=True)
+    author_handle = models.CharField(max_length=100, blank=True)
+    embed_id = models.CharField(max_length=100, blank=True)
+    image = models.ImageField(upload_to='link_previews/%Y/%m/', blank=True)
+    fetched_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        """Model options for link previews."""
+
+        ordering = ['position', 'id']
+        constraints = [
+            models.UniqueConstraint(fields=['post', 'url'], name='unique_post_link_url'),
+        ]
+
+    def __str__(self):
+        """Return a readable preview label."""
+        return f'{self.kind} preview for post {self.post_id}'
+
+    def delete(self, *args, **kwargs):
+        """Delete the stored preview image and the database row."""
+        if self.image:
+            try:
+                self.image.storage.delete(self.image.name)
+            except Exception as e:
+                logger.error(f"Error deleting link preview image {self.image.name}: {str(e)}")
+
         return super().delete(*args, **kwargs)
 
 

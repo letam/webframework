@@ -3,9 +3,11 @@
 import logging
 import os
 
+from django.utils import timezone
 from django_tasks import task
 
-from .models import Media
+from .link_previews import fetch_preview_for
+from .models import Media, Post
 from .transcription import transcribe_audio
 from .utils import (
     convert_to_mp3,
@@ -84,6 +86,23 @@ def process_post_media(media_id: int) -> None:
         processor(media)
     except Exception:
         logger.exception('Error processing %s media %s', media.media_type, media_id)
+
+
+@task()
+def fetch_link_previews(post_id: int) -> None:
+    """Fetch pending link previews for a post."""
+    post = Post.objects.filter(pk=post_id).first()
+    if post is None:
+        return
+
+    for preview in post.link_previews.filter(status='pending'):
+        try:
+            fetch_preview_for(preview)
+        except Exception:
+            logger.exception('Error fetching link preview %s for post %s', preview.pk, post_id)
+            preview.status = 'failed'
+            preview.fetched_at = timezone.now()
+            preview.save(update_fields=['status', 'fetched_at'])
 
 
 def _process_video_media(media: Media) -> None:

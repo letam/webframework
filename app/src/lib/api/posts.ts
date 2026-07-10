@@ -42,6 +42,7 @@ const revivePost = (post: Post): Post => ({
 				modified: new Date(post.media.modified),
 			}
 		: undefined,
+	link_previews: post.link_previews ?? [],
 	url: `${window.location.origin}/p/${post.id}/`,
 })
 

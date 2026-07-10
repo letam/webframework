@@ -3,12 +3,13 @@
 import logging
 
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 from rest_framework import serializers
 
 from apps.uploads.s3 import generate_presigned_get_url
 from apps.users.utils import get_avatar_url
 
-from .models import Comment, Media, Post
+from .models import Comment, LinkPreview, Media, Post
 
 logger = logging.getLogger(__name__)
 
@@ -94,11 +95,46 @@ class MediaSerializer(serializers.ModelSerializer):
             return None
 
 
+class LinkPreviewSerializer(serializers.ModelSerializer):
+    """Serializer for successfully fetched link previews."""
+
+    image = serializers.SerializerMethodField()
+
+    class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
+        """Serializer metadata."""
+
+        model = LinkPreview
+        fields = [
+            'id',
+            'url',
+            'kind',
+            'title',
+            'description',
+            'site_name',
+            'author_name',
+            'author_handle',
+            'embed_id',
+            'image',
+        ]
+
+    def get_image(self, obj):
+        """Return the protected image endpoint URL when an image exists."""
+        if not obj.image:
+            return None
+
+        url = reverse('link-preview-image', args=[obj.pk])
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
+
 class PostSerializer(serializers.HyperlinkedModelSerializer):
     """Serializer for post read responses."""
 
     author = UserNameSerializer(read_only=True)
     media = MediaSerializer(read_only=True)
+    link_previews = serializers.SerializerMethodField()
     post_set = serializers.SerializerMethodField()
     like_count = serializers.SerializerMethodField()
     comment_count = serializers.SerializerMethodField()
@@ -118,6 +154,7 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
             'head',
             'body',
             'media',
+            'link_previews',
             'post_set',
             'visibility',
             'is_draft',
@@ -171,6 +208,11 @@ class PostSerializer(serializers.HyperlinkedModelSerializer):
         request = self.context.get('request')
         user = request.user if request else None
         return [child.id for child in obj.post_set.all() if child.is_visible_to(user)]
+
+    def get_link_previews(self, obj):
+        """Return successfully fetched link previews in stored order."""
+        previews = [preview for preview in obj.link_previews.all() if preview.status == 'ok']
+        return LinkPreviewSerializer(previews, many=True, context=self.context).data
 
 
 class PostCreateSerializer(serializers.ModelSerializer):
