@@ -1,5 +1,6 @@
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -197,6 +198,16 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 					)}
 				</Button>
 			</PopoverTrigger>
+			{isOpen &&
+				isMobile &&
+				typeof document !== 'undefined' &&
+				createPortal(
+					<div
+						className="fixed inset-0 z-40 bg-black/40 animate-in fade-in-0"
+						aria-hidden="true"
+					/>,
+					document.body
+				)}
 			<PopoverContent
 				className={cn('w-80', !isMobile && 'w-[640px]')}
 				align={isMobile ? 'end' : 'center'}

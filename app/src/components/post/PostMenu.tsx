@@ -102,7 +102,7 @@ const PostMenu: React.FC<PostMenuProps> = ({
 
 	return (
 		<>
-			<DropdownMenu>
+			<DropdownMenu modal={false}>
 				<TooltipProvider>
 					<Tooltip>
 						<DropdownMenuTrigger asChild>
