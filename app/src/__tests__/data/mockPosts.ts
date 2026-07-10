@@ -35,6 +35,7 @@ export const makeLinkPreview = (overrides: Partial<LinkPreview> = {}): LinkPrevi
 	author_name: '',
 	author_handle: '',
 	embed_id: '',
+	extra: {},
 	published_at: null,
 	image: null,
 	...overrides,

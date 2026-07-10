@@ -283,7 +283,14 @@ class Post(models.Model):
 class LinkPreview(models.Model):
     """Fetched rich-card metadata for a URL mentioned in a post."""
 
-    KIND_CHOICES = [('youtube', 'YouTube'), ('twitter', 'Twitter/X'), ('generic', 'Generic')]
+    KIND_CHOICES = [
+        ('youtube', 'YouTube'),
+        ('twitter', 'Twitter/X'),
+        ('hackernews', 'Hacker News'),
+        ('reddit', 'Reddit'),
+        ('chatgpt', 'ChatGPT'),
+        ('generic', 'Generic'),
+    ]
     STATUS_CHOICES = [('pending', 'Pending'), ('ok', 'OK'), ('failed', 'Failed')]
 
     created = models.DateTimeField(auto_now_add=True)
@@ -302,6 +309,7 @@ class LinkPreview(models.Model):
     author_name = models.CharField(max_length=200, blank=True)
     author_handle = models.CharField(max_length=100, blank=True)
     embed_id = models.CharField(max_length=100, blank=True)
+    extra = models.JSONField(default=dict, blank=True)
     published_at = models.DateField(null=True, blank=True)
     image = models.ImageField(upload_to='link_previews/%Y/%m/', blank=True)
     fetched_at = models.DateTimeField(null=True, blank=True)

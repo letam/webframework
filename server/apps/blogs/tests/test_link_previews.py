@@ -23,10 +23,14 @@ from ..link_previews import (
     _safe_get,
     detect_kind,
     extract_urls,
+    fetch_chatgpt,
     fetch_generic,
+    fetch_hackernews,
     fetch_preview_for,
+    fetch_reddit,
     fetch_twitter,
     fetch_youtube,
+    sync_link_previews,
 )
 from ..models import VISIBILITY_PRIVATE, LinkPreview, Post
 from ..tasks import fetch_link_previews
@@ -77,6 +81,40 @@ class LinkPreviewExtractionTests(BaseTestCase):
             ('twitter', 'another'),
         )
         self.assertEqual(detect_kind('https://example.com/story'), ('generic', ''))
+
+    def test_detect_kind_identifies_new_provider_urls_and_excludes_unsupported_urls(self):
+        """Provider detection should recognize only supported HN, Reddit, and ChatGPT links."""
+        self.assertEqual(
+            detect_kind('https://news.ycombinator.com/item?id=123&next=456'),
+            ('hackernews', '123'),
+        )
+        self.assertEqual(detect_kind('https://news.ycombinator.com/newest'), ('generic', ''))
+        self.assertEqual(
+            detect_kind('https://news.ycombinator.com/user?id=someone'),
+            ('generic', ''),
+        )
+
+        for hostname in ('reddit.com', 'www.reddit.com', 'old.reddit.com', 'np.reddit.com'):
+            with self.subTest(hostname=hostname):
+                self.assertEqual(
+                    detect_kind(f'https://{hostname}/r/python/comments/abc123/a-post'),
+                    ('reddit', ''),
+                )
+        self.assertEqual(
+            detect_kind('https://www.reddit.com/r/python/s/token'),
+            ('generic', ''),
+        )
+        self.assertEqual(detect_kind('https://redd.it/abc'), ('generic', ''))
+
+        share_id = '67681bfe-1234-5678-90ab-cdef12345678'
+        for url in (
+            f'https://chatgpt.com/share/{share_id}',
+            f'https://chatgpt.com/share/e/{share_id}',
+            f'https://chat.openai.com/share/{share_id}',
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(detect_kind(url), ('chatgpt', ''))
+        self.assertEqual(detect_kind('https://chatgpt.com/g/foo'), ('generic', ''))
 
 
 class LinkPreviewSsrfTests(BaseTestCase):
@@ -277,6 +315,79 @@ class LinkPreviewFetchTests(BaseTestCase):
         self.assertEqual(preview.status, 'failed')
         self.assertEqual(preview.fetch_attempts, 1)
         self.assertIsNotNone(preview.fetched_at)
+
+    def test_fetch_preview_for_dispatches_new_kinds_and_persists_extra(self):
+        """New preview kinds should call their fetchers and persist provider metadata."""
+        hackernews = LinkPreview.objects.create(
+            post=self.post,
+            url='https://news.ycombinator.com/item?id=123',
+            kind='hackernews',
+            embed_id='123',
+        )
+        reddit = LinkPreview.objects.create(
+            post=self.post,
+            url='https://www.reddit.com/r/python/comments/abc123/a-post',
+            kind='reddit',
+        )
+        chatgpt = LinkPreview.objects.create(
+            post=self.post,
+            url='https://chatgpt.com/share/67681bfe-1234-5678-90ab-cdef12345678',
+            kind='chatgpt',
+        )
+        metadata = {
+            'title': 'Title',
+            'description': '',
+            'site_name': 'Source',
+            'author_name': '',
+            'author_handle': '',
+            'embed_id': '',
+            'published_at': None,
+        }
+
+        with (
+            mock.patch(
+                'apps.blogs.link_previews.fetch_hackernews',
+                return_value={**metadata, 'kind': 'hackernews', 'extra': {'score': 1}},
+            ) as mock_hackernews,
+            mock.patch(
+                'apps.blogs.link_previews.fetch_reddit',
+                return_value={**metadata, 'kind': 'reddit', 'extra': {'subreddit': 'python'}},
+            ) as mock_reddit,
+            mock.patch(
+                'apps.blogs.link_previews.fetch_chatgpt',
+                return_value={**metadata, 'kind': 'chatgpt', 'extra': {}},
+            ) as mock_chatgpt,
+        ):
+            fetch_preview_for(hackernews)
+            fetch_preview_for(reddit)
+            fetch_preview_for(chatgpt)
+
+        mock_hackernews.assert_called_once_with(hackernews.url, '123')
+        mock_reddit.assert_called_once_with(reddit.url)
+        mock_chatgpt.assert_called_once_with(chatgpt.url)
+        hackernews.refresh_from_db()
+        reddit.refresh_from_db()
+        chatgpt.refresh_from_db()
+        self.assertEqual(hackernews.extra, {'score': 1})
+        self.assertEqual(reddit.extra, {'subreddit': 'python'})
+        self.assertEqual(chatgpt.extra, {})
+
+    def test_sync_link_previews_redetects_a_kept_generic_row(self):
+        """Editing a post should upgrade kept generic URLs to newly recognized kinds."""
+        self.post.body = 'https://www.reddit.com/r/python/comments/abc123/a-post'
+        self.post.save(update_fields=['body'])
+        preview = LinkPreview.objects.create(
+            post=self.post,
+            url='https://www.reddit.com/r/python/comments/abc123/a-post',
+            kind='generic',
+            status='ok',
+        )
+
+        self.assertTrue(sync_link_previews(self.post))
+
+        preview.refresh_from_db()
+        self.assertEqual(preview.kind, 'reddit')
+        self.assertEqual(preview.status, 'pending')
 
     def test_keep_existing_on_failure_preserves_ok_preview(self):
         """Failed refreshes should preserve stale ok preview data when requested."""
@@ -484,6 +595,244 @@ class LinkPreviewDateParsingTests(BaseTestCase):
         self.assertEqual(data['published_at'], date(2024, 5, 1))
 
 
+class LinkPreviewSourceFetchTests(BaseTestCase):
+    """Tests for Hacker News, Reddit, and ChatGPT preview fetchers."""
+
+    @staticmethod
+    def _response(body: bytes, content_type: str = 'application/json', status_code: int = 200):
+        """Build a canned HTTPX response without making a network request."""
+        return httpx.Response(
+            status_code,
+            headers={'content-type': content_type},
+            content=body,
+            request=httpx.Request('GET', 'https://example.com/'),
+        )
+
+    def test_fetch_hackernews_story_returns_full_metadata(self):
+        """A Hacker News story should include its scores, domain, author, and date."""
+        item = {
+            'type': 'story',
+            'title': 'Show HN: A small project',
+            'by': 'pg',
+            'score': 57,
+            'descendants': 3,
+            'time': 1160352000,
+            'url': 'https://www.example.com/project',
+        }
+        with mock.patch(
+            'apps.blogs.link_previews._safe_get',
+            return_value=self._response(json.dumps(item).encode()),
+        ) as mock_get:
+            data = fetch_hackernews('https://news.ycombinator.com/item?id=123', '123')
+
+        self.assertEqual(
+            data,
+            {
+                'kind': 'hackernews',
+                'title': 'Show HN: A small project',
+                'description': '',
+                'site_name': 'Hacker News',
+                'author_name': 'pg',
+                'author_handle': '',
+                'embed_id': '123',
+                'published_at': date(2006, 10, 9),
+                'extra': {'score': 57, 'comments': 3, 'domain': 'example.com'},
+            },
+        )
+        mock_get.assert_called_once_with(
+            'https://hacker-news.firebaseio.com/v0/item/123.json',
+            max_bytes=2_000_000,
+        )
+
+    def test_fetch_hackernews_ask_text_strips_html_and_omits_empty_domain(self):
+        """Ask HN text should be rendered as clean text without a domain field."""
+        item = {
+            'type': 'story',
+            'title': 'Ask HN: What are you building?',
+            'text': '<p>Hello &amp; <i>world</i></p><p>Next<br>line</p>',
+            'by': 'asker',
+            'score': 0,
+            'descendants': 0,
+            'time': 1160352000,
+        }
+        with mock.patch(
+            'apps.blogs.link_previews._safe_get',
+            return_value=self._response(json.dumps(item).encode()),
+        ):
+            data = fetch_hackernews('https://news.ycombinator.com/item?id=124', '124')
+
+        self.assertIsNotNone(data)
+        self.assertEqual(data['description'], 'Hello & world Next line')
+        self.assertEqual(data['extra'], {'score': 0, 'comments': 0})
+
+    def test_fetch_hackernews_missing_timestamp_yields_no_date(self):
+        """A story without a time field should have no publication date, not the epoch."""
+        item = {'type': 'story', 'title': 'Undated story', 'by': 'pg'}
+        with mock.patch(
+            'apps.blogs.link_previews._safe_get',
+            return_value=self._response(json.dumps(item).encode()),
+        ):
+            data = fetch_hackernews('https://news.ycombinator.com/item?id=128', '128')
+
+        self.assertIsNotNone(data)
+        self.assertIsNone(data['published_at'])
+
+    def test_fetch_hackernews_rejects_missing_deleted_dead_and_unknown_items(self):
+        """Unavailable or unsupported Hacker News items should not produce cards."""
+        cases = [
+            b'null',
+            json.dumps({'type': 'story', 'deleted': True}).encode(),
+            json.dumps({'type': 'story', 'dead': True}).encode(),
+            json.dumps({'type': 'pollopt', 'title': 'Option'}).encode(),
+        ]
+        for body in cases:
+            with self.subTest(body=body):
+                with mock.patch(
+                    'apps.blogs.link_previews._safe_get',
+                    return_value=self._response(body),
+                ):
+                    self.assertIsNone(
+                        fetch_hackernews('https://news.ycombinator.com/item?id=125', '125')
+                    )
+
+    def test_fetch_hackernews_comment_walks_to_its_story(self):
+        """A Hacker News comment should use its parent story title and comment metadata."""
+        comment = {
+            'type': 'comment',
+            'text': 'An <i>insightful</i> comment',
+            'by': 'sama',
+            'time': 1160352000,
+            'parent': 200,
+        }
+        story = {'type': 'story', 'title': 'The parent story'}
+        with mock.patch(
+            'apps.blogs.link_previews._safe_get',
+            side_effect=[
+                self._response(json.dumps(comment).encode()),
+                self._response(json.dumps(story).encode()),
+            ],
+        ):
+            data = fetch_hackernews('https://news.ycombinator.com/item?id=126', '126')
+
+        self.assertIsNotNone(data)
+        self.assertEqual(data['title'], 'The parent story')
+        self.assertEqual(data['description'], 'An insightful comment')
+        self.assertEqual(data['extra'], {'is_comment': True})
+
+    def test_fetch_hackernews_comment_parent_walk_is_capped(self):
+        """A comment whose story lies beyond eight parents should render without a title."""
+        comment = {'type': 'comment', 'text': 'Comment', 'parent': 1}
+        parents = [{'type': 'comment', 'parent': parent_id + 1} for parent_id in range(1, 9)]
+        responses = [self._response(json.dumps(comment).encode())]
+        responses.extend(self._response(json.dumps(parent).encode()) for parent in parents)
+        with mock.patch('apps.blogs.link_previews._safe_get', side_effect=responses):
+            data = fetch_hackernews('https://news.ycombinator.com/item?id=127', '127')
+
+        self.assertIsNotNone(data)
+        self.assertEqual(data['title'], '')
+
+    def test_fetch_reddit_uses_a_canonical_www_oembed_url(self):
+        """Reddit oEmbed requests should canonicalize old hostnames and drop URL queries."""
+        oembed = {'title': 'A post title', 'author_name': 'ChemicalRascal'}
+        with mock.patch(
+            'apps.blogs.link_previews._safe_get',
+            return_value=self._response(json.dumps(oembed).encode()),
+        ) as mock_get:
+            data = fetch_reddit(
+                'https://old.reddit.com/r/programming/comments/abc123/a-post/?context=3'
+            )
+
+        self.assertEqual(
+            mock_get.call_args.args[0],
+            'https://www.reddit.com/oembed?url='
+            'https%3A%2F%2Fwww.reddit.com%2Fr%2Fprogramming%2Fcomments%2Fabc123%2Fa-post%2F',
+        )
+        self.assertEqual(
+            data,
+            {
+                'kind': 'reddit',
+                'title': 'A post title',
+                'description': '',
+                'site_name': 'Reddit',
+                'author_name': 'ChemicalRascal',
+                'author_handle': '',
+                'embed_id': '',
+                'published_at': None,
+                'extra': {'subreddit': 'programming'},
+            },
+        )
+
+    def test_fetch_reddit_rejects_failures_and_missing_titles(self):
+        """Reddit failures and oEmbed payloads without titles should not produce cards."""
+        for response in (
+            None,
+            self._response(b'', status_code=400),
+            self._response(b'{}'),
+        ):
+            with self.subTest(response=response):
+                with mock.patch('apps.blogs.link_previews._safe_get', return_value=response):
+                    self.assertIsNone(
+                        fetch_reddit('https://www.reddit.com/r/python/comments/abc123/a-post')
+                    )
+
+    def test_fetch_chatgpt_uses_the_first_share_open_graph_title(self):
+        """A share page should retain its first prefixed title and UUID-derived date."""
+        page = (
+            '<meta property="og:title" content="ChatGPT - Planning a project">'
+            '<meta property="og:description" content="Marketing copy">'
+            '<meta content="https://chatgpt.com" property="og:url">'
+        )
+        with mock.patch(
+            'apps.blogs.link_previews._safe_get',
+            return_value=self._response(page.encode(), 'text/html'),
+        ):
+            data = fetch_chatgpt('https://chatgpt.com/share/67681bfe-1234-5678-90ab-cdef12345678')
+
+        self.assertEqual(
+            data,
+            {
+                'kind': 'chatgpt',
+                'title': 'Planning a project',
+                'description': '',
+                'site_name': 'ChatGPT',
+                'author_name': '',
+                'author_handle': '',
+                'embed_id': '',
+                'published_at': date(2024, 12, 22),
+                'extra': {},
+            },
+        )
+
+    def test_fetch_chatgpt_rejects_shells_and_unprefixed_titles(self):
+        """Dead shares and app-level titles should fail cleanly without a preview."""
+        for page in (
+            '<html><head></head></html>',
+            '<meta content="ChatGPT" property="og:title">',
+        ):
+            with self.subTest(page=page):
+                with mock.patch(
+                    'apps.blogs.link_previews._safe_get',
+                    return_value=self._response(page.encode(), 'text/html'),
+                ):
+                    self.assertIsNone(
+                        fetch_chatgpt(
+                            'https://chatgpt.com/share/67681bfe-1234-5678-90ab-cdef12345678'
+                        )
+                    )
+
+    def test_fetch_chatgpt_keeps_a_valid_title_when_uuid_timestamp_is_implausible(self):
+        """An implausible UUID timestamp should omit only the derived publication date."""
+        page = '<meta property="og:title" content="ChatGPT - Still a valid share">'
+        with mock.patch(
+            'apps.blogs.link_previews._safe_get',
+            return_value=self._response(page.encode(), 'text/html'),
+        ):
+            data = fetch_chatgpt('https://chatgpt.com/share/00000000-1234-5678-90ab-cdef12345678')
+
+        self.assertIsNotNone(data)
+        self.assertIsNone(data['published_at'])
+
+
 class LinkPreviewApiTests(ViewTestCase):
     """Tests for API creation, update, and serialization behavior."""
 
@@ -579,6 +928,26 @@ class LinkPreviewApiTests(ViewTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual([preview['title'] for preview in response.data['link_previews']], ['OK'])
+
+    def test_link_preview_extra_is_serialized_through_the_post_api(self):
+        """Provider-specific preview metadata should be included in successful API cards."""
+        post = Post.objects.create(author=self.user, body='Link')
+        LinkPreview.objects.create(
+            post=post,
+            url='https://news.ycombinator.com/item?id=123',
+            kind='hackernews',
+            status='ok',
+            title='A story',
+            extra={'score': 57, 'comments': 3, 'domain': 'example.com'},
+        )
+
+        response = self.client.get(reverse('post-detail', args=[post.id]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data['link_previews'][0]['extra'],
+            {'score': 57, 'comments': 3, 'domain': 'example.com'},
+        )
 
     def test_update_removes_deleted_urls_and_fetches_new_urls(self):
         """Updating post text should delete stale rows and fetch newly added URLs."""

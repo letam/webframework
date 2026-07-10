@@ -89,4 +89,90 @@ describe('LinkPreviewCard', () => {
 		rerender(<LinkPreviewCard preview={{ ...preview, published_at: null }} />)
 		expect(screen.queryByText('Mar 21, 2006')).toBeNull()
 	})
+
+	it('renders a Hacker News story card with its metadata and anchor attrs', () => {
+		const preview = makeLinkPreview({
+			kind: 'hackernews',
+			url: 'https://news.ycombinator.com/item?id=1',
+			title: 'The Story of the Internet',
+			description: 'A concise summary of the story.',
+			author_name: 'pg',
+			published_at: '2006-10-09',
+			extra: { score: 57, comments: 3, domain: 'example.com' },
+		})
+
+		render(<LinkPreviewCard preview={preview} />)
+
+		const card = screen.getByTestId('link-preview-hackernews')
+		expect(within(card).getByText('Hacker News')).toBeInTheDocument()
+		expect(within(card).getByText('example.com')).toBeInTheDocument()
+		expect(within(card).getByText('The Story of the Internet')).toBeInTheDocument()
+		expect(within(card).getByText('A concise summary of the story.')).toBeInTheDocument()
+		expect(
+			within(card).getByText('57 points · 3 comments · by pg · Oct 9, 2006')
+		).toBeInTheDocument()
+		expect(card).toHaveAttribute('href', 'https://news.ycombinator.com/item?id=1')
+		expect(card).toHaveAttribute('target', '_blank')
+		expect(card).toHaveAttribute('rel', 'noopener noreferrer')
+	})
+
+	it('uses singular Hacker News count labels', () => {
+		const preview = makeLinkPreview({
+			kind: 'hackernews',
+			extra: { score: 1, comments: 1 },
+		})
+
+		render(<LinkPreviewCard preview={preview} />)
+
+		expect(screen.getByText('1 point · 1 comment')).toBeInTheDocument()
+	})
+
+	it('renders a Hacker News comment without an empty title element', () => {
+		const preview = makeLinkPreview({
+			kind: 'hackernews',
+			title: '',
+			description: 'This is a comment.',
+			author_name: 'sama',
+			extra: { is_comment: true },
+		})
+
+		render(<LinkPreviewCard preview={preview} />)
+
+		const card = screen.getByTestId('link-preview-hackernews')
+		expect(within(card).getByText('Comment by sama')).toBeInTheDocument()
+		expect(within(card).getByText('This is a comment.')).toBeInTheDocument()
+		expect(within(card).queryByText('A useful linked story')).toBeNull()
+	})
+
+	it('renders a Reddit card', () => {
+		const preview = makeLinkPreview({
+			kind: 'reddit',
+			title: 'A useful programming discussion',
+			author_name: 'ChemicalRascal',
+			extra: { subreddit: 'programming' },
+		})
+
+		render(<LinkPreviewCard preview={preview} />)
+
+		const card = screen.getByTestId('link-preview-reddit')
+		expect(within(card).getByText('r/programming')).toBeInTheDocument()
+		expect(within(card).getByText('Reddit')).toBeInTheDocument()
+		expect(within(card).getByText('A useful programming discussion')).toBeInTheDocument()
+		expect(within(card).getByText('u/ChemicalRascal')).toBeInTheDocument()
+	})
+
+	it('renders a ChatGPT share card', () => {
+		const preview = makeLinkPreview({
+			kind: 'chatgpt',
+			title: 'Planning a weekend project',
+			published_at: '2024-12-22',
+		})
+
+		render(<LinkPreviewCard preview={preview} />)
+
+		const card = screen.getByTestId('link-preview-chatgpt')
+		expect(within(card).getByText('ChatGPT')).toBeInTheDocument()
+		expect(within(card).getByText('Planning a weekend project')).toBeInTheDocument()
+		expect(within(card).getByText('Shared conversation · Dec 22, 2024')).toBeInTheDocument()
+	})
 })

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { localImagePost, makePost, mockPosts, s3AudioPost } from '@/__tests__/data/mockPosts'
-import type { Post } from '@/types/post'
+import {
+	localImagePost,
+	makeLinkPreview,
+	makePost,
+	mockPosts,
+	s3AudioPost,
+} from '@/__tests__/data/mockPosts'
+import type { LinkPreview, Post } from '@/types/post'
 
 vi.mock('@/lib/utils/fetch', () => ({
 	getFetchOptions: vi.fn(async (method: string, body?: BodyInit | Record<string, unknown>) => ({
@@ -290,6 +296,20 @@ describe('posts API', () => {
 			const result = await getPost(8)
 
 			expect(result.link_previews_enabled).toBe(true)
+		})
+
+		it('defaults missing preview extra metadata to an empty object', async () => {
+			const { getPost } = await importPostsApi()
+			const post = makePost({ id: 9, link_previews: [makeLinkPreview()] })
+			const serverPost = toServerPost(post)
+			if (serverPost.link_previews) {
+				delete (serverPost.link_previews[0] as Partial<LinkPreview>).extra
+			}
+			fetchMock.mockResolvedValueOnce(await response(serverPost))
+
+			const result = await getPost(9)
+
+			expect(result.link_previews?.[0].extra).toEqual({})
 		})
 	})
 

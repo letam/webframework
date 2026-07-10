@@ -162,8 +162,11 @@ ActivityPub only if the node idea gets serious.
   embed), X/tweet quote cards, and generic OG cards, each with the source's publication date
   when available; server-side fetch with SSRF guarding and re-hosted thumbnails. Settings has
   both an author-side "Create link previews" toggle (per-post flag) and a reader-side "Show
-  link previews" toggle (client-only render gate).
-  Spec: docs/plans/2026-07-09-link-previews.md.
+  link previews" toggle (client-only render gate). Extended 2026-07-10 with dedicated
+  Hacker News (Firebase API: points/comments/author/date, comment links via parent walk),
+  Reddit (oEmbed: title/author/subreddit — the only unauthenticated door Reddit leaves open),
+  and ChatGPT share cards (og:title + UUID-timestamp date), each with brand marks.
+  Specs: docs/plans/2026-07-09-link-previews.md, docs/plans/2026-07-10-link-preview-sources.md.
 - **Rich text** — bold/italic in the composer (was marked ASAP once); full rich-text
   editor only if genuinely needed.
 - **Magic-link sign-in**; registration via a shared signup code that refreshes daily;

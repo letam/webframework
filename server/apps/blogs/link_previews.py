@@ -5,7 +5,7 @@ import ipaddress
 import logging
 import re
 import socket
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from html.parser import HTMLParser
 from io import BytesIO
 from urllib.parse import parse_qs, quote, urljoin, urlparse
@@ -29,6 +29,8 @@ USER_AGENT = 'webframework-linkpreview/1.0 (+https://github.com/tam/webframework
 URL_RE = re.compile(r'(?:https?://|www\.)[^\s<>"\']+', re.IGNORECASE)
 YOUTUBE_VIDEO_ID_RE = re.compile(r'^[A-Za-z0-9_-]{6,20}$')
 TWITTER_STATUS_RE = re.compile(r'^/([^/]+)/status/\d+/?', re.IGNORECASE)
+REDDIT_POST_RE = re.compile(r'^/r/([^/]+)/comments/[a-z0-9]+', re.IGNORECASE)
+CHATGPT_SHARE_RE = re.compile(r'^/share/(?:e/)?([0-9a-fA-F-]{8,})/?$')
 TWEET_DATE_RE = re.compile(r'>\s*([A-Z][a-z]+ \d{1,2}, \d{4})\s*</a>\s*</blockquote>')
 TWITTER_SNOWFLAKE_EPOCH_MS = 1288834974657
 REDIRECT_STATUSES = {301, 302, 303, 307, 308}
@@ -107,6 +109,29 @@ class ParagraphTextParser(HTMLParser):
         return ' '.join(html.unescape(''.join(self.parts)).split())
 
 
+class HtmlTextParser(HTMLParser):
+    """Extract normalized text from an HTML fragment."""
+
+    def __init__(self):
+        """Initialize parser state."""
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        """Separate paragraph and line-break content."""
+        if tag.lower() in {'p', 'br'}:
+            self.parts.append(' ')
+
+    def handle_data(self, data):
+        """Collect text content from the fragment."""
+        self.parts.append(data)
+
+    @property
+    def text(self):
+        """Return the whitespace-collapsed fragment text."""
+        return ' '.join(''.join(self.parts).split())
+
+
 def extract_urls(text: str) -> list[str]:
     """Return up to three unique URLs from post text."""
     urls = []
@@ -126,6 +151,13 @@ def extract_urls(text: str) -> list[str]:
                 break
 
     return urls
+
+
+def _strip_html_fragment(fragment: str) -> str:
+    """Return normalized plain text from a small HTML fragment."""
+    parser = HtmlTextParser()
+    parser.feed(fragment)
+    return parser.text
 
 
 def detect_kind(url: str) -> tuple[str, str]:
@@ -158,6 +190,24 @@ def detect_kind(url: str) -> tuple[str, str]:
         match = TWITTER_STATUS_RE.match(path)
         if match:
             return 'twitter', match.group(1)
+
+    if hostname == 'news.ycombinator.com' and path == '/item':
+        item_id = parse_qs(parsed.query).get('id', [''])[0]
+        if item_id.isdigit():
+            return 'hackernews', item_id
+
+    if hostname in {
+        'reddit.com',
+        'www.reddit.com',
+        'old.reddit.com',
+        'np.reddit.com',
+        'new.reddit.com',
+        'm.reddit.com',
+    } and REDDIT_POST_RE.match(path):
+        return 'reddit', ''
+
+    if hostname in {'chatgpt.com', 'chat.openai.com'} and CHATGPT_SHARE_RE.match(path):
+        return 'chatgpt', ''
 
     return 'generic', ''
 
@@ -439,6 +489,219 @@ def fetch_generic(url: str) -> dict[str, object] | None:
     }
 
 
+def _fetch_hackernews_item(item_id: object) -> dict[str, object] | None:
+    """Fetch and validate one Hacker News Firebase item."""
+    response = _safe_get(
+        f'https://hacker-news.firebaseio.com/v0/item/{item_id}.json',
+        max_bytes=MAX_HTML_BYTES,
+    )
+    if response is None or response.status_code >= 400:
+        return None
+
+    try:
+        item = response.json()
+    except ValueError:
+        return None
+
+    if not isinstance(item, dict) or item.get('deleted') or item.get('dead'):
+        return None
+    return item
+
+
+def _hackernews_published_at(item: dict[str, object]) -> date | None:
+    """Return an item's UTC publication date when its timestamp is valid."""
+    timestamp = item.get('time')
+    if not timestamp:
+        return None
+    try:
+        return datetime.fromtimestamp(int(timestamp), tz=UTC).date()
+    except (OverflowError, OSError, TypeError, ValueError):
+        return None
+
+
+def _hackernews_integer(item: dict[str, object], key: str) -> int:
+    """Return a Hacker News numeric field, falling back to zero."""
+    try:
+        return int(item.get(key) or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _hackernews_parent_story_title(parent_id: object) -> str:
+    """Walk up to eight parents and return the enclosing story title when available."""
+    current_parent_id = parent_id
+    for _hop in range(8):
+        if not current_parent_id:
+            return ''
+        parent = _fetch_hackernews_item(current_parent_id)
+        if parent is None:
+            return ''
+        if parent.get('type') == 'story':
+            return str(parent.get('title') or '')
+        current_parent_id = parent.get('parent')
+    return ''
+
+
+def fetch_hackernews(url: str, item_id: str) -> dict[str, object] | None:
+    """Fetch a Hacker News item from the official Firebase API."""
+    del url
+    item = _fetch_hackernews_item(item_id)
+    if item is None:
+        return None
+
+    item_type = item.get('type')
+    published_at = _hackernews_published_at(item)
+    author_name = str(item.get('by') or '')
+
+    if item_type in {'story', 'job', 'poll'}:
+        title = str(item.get('title') or '')
+        if not title:
+            return None
+
+        extra = {
+            'score': _hackernews_integer(item, 'score'),
+            'comments': _hackernews_integer(item, 'descendants'),
+        }
+        outbound_url = str(item.get('url') or '')
+        domain = (urlparse(outbound_url).hostname or '').removeprefix('www.')
+        if domain:
+            extra['domain'] = domain
+
+        return {
+            'kind': 'hackernews',
+            'title': title,
+            'description': _strip_html_fragment(str(item.get('text') or '')),
+            'site_name': 'Hacker News',
+            'author_name': author_name,
+            'author_handle': '',
+            'embed_id': item_id,
+            'published_at': published_at,
+            'extra': extra,
+        }
+
+    if item_type != 'comment':
+        return None
+
+    description = _strip_html_fragment(str(item.get('text') or ''))
+    if not description:
+        return None
+
+    return {
+        'kind': 'hackernews',
+        'title': _hackernews_parent_story_title(item.get('parent')),
+        'description': description,
+        'site_name': 'Hacker News',
+        'author_name': author_name,
+        'author_handle': '',
+        'embed_id': item_id,
+        'published_at': published_at,
+        'extra': {'is_comment': True},
+    }
+
+
+def fetch_reddit(url: str) -> dict[str, object] | None:
+    """Fetch Reddit post metadata through its unauthenticated oEmbed endpoint."""
+    path = urlparse(url).path
+    match = REDDIT_POST_RE.match(path)
+    if not match:
+        return None
+
+    canonical = f'https://www.reddit.com{path}'
+    oembed_url = f'https://www.reddit.com/oembed?url={quote(canonical, safe="")}'
+    response = _safe_get(oembed_url, max_bytes=MAX_HTML_BYTES)
+    if response is None or response.status_code >= 400:
+        return None
+
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+
+    title = str(data.get('title') or '')
+    if not title:
+        return None
+
+    return {
+        'kind': 'reddit',
+        'title': title,
+        'description': '',
+        'site_name': 'Reddit',
+        'author_name': str(data.get('author_name') or ''),
+        'author_handle': '',
+        'embed_id': '',
+        'published_at': None,
+        'extra': {'subreddit': match.group(1)},
+    }
+
+
+def _first_meta_content(text: str, property_name: str) -> str:
+    """Return the first meta content value for a property, in either attribute order."""
+    escaped_property = re.escape(property_name)
+    property_first = re.compile(
+        rf'<meta[^>]*property=["\']{escaped_property}["\'][^>]*content=["\']([^"\']*)["\']',
+        re.IGNORECASE,
+    )
+    content_first = re.compile(
+        rf'<meta[^>]*content=["\']([^"\']*)["\'][^>]*property=["\']{escaped_property}["\']',
+        re.IGNORECASE,
+    )
+    matches = [
+        match for pattern in (property_first, content_first) if (match := pattern.search(text))
+    ]
+    if not matches:
+        return ''
+    first_match = min(matches, key=lambda match: match.start())
+    return html.unescape(first_match.group(1))
+
+
+def _chatgpt_published_at(url: str) -> date | None:
+    """Derive a plausible share date from the first UUID segment, failing closed."""
+    match = CHATGPT_SHARE_RE.match(urlparse(url).path)
+    if not match:
+        return None
+
+    try:
+        created_at = datetime.fromtimestamp(int(match.group(1)[:8], 16), tz=UTC)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+    earliest = datetime(2022, 11, 30, tzinfo=UTC)
+    tomorrow = datetime.now(UTC) + timedelta(days=1)
+    if not earliest <= created_at <= tomorrow:
+        return None
+    return created_at.date()
+
+
+def fetch_chatgpt(url: str) -> dict[str, object] | None:
+    """Fetch a ChatGPT share title from the first OpenGraph title tag."""
+    response = _safe_get(url, max_bytes=MAX_HTML_BYTES)
+    if response is None or response.status_code >= 400:
+        return None
+    if 'text/html' not in response.headers.get('content-type', '').lower():
+        return None
+
+    title = _first_meta_content(_decode_response(response), 'og:title')
+    if not title.startswith('ChatGPT - '):
+        return None
+    title = title.removeprefix('ChatGPT - ').strip()
+    if not title:
+        return None
+
+    return {
+        'kind': 'chatgpt',
+        'title': title,
+        'description': '',
+        'site_name': 'ChatGPT',
+        'author_name': '',
+        'author_handle': '',
+        'embed_id': '',
+        'published_at': _chatgpt_published_at(url),
+        'extra': {},
+    }
+
+
 def download_preview_image(preview: LinkPreview, image_url: str) -> None:
     """Download, validate, normalize, and save a preview image."""
     response = _safe_get(image_url, max_bytes=MAX_IMAGE_BYTES)
@@ -480,6 +743,12 @@ def fetch_preview_for(preview: LinkPreview, *, keep_existing_on_failure=False) -
         data = fetch_youtube(preview.url, preview.embed_id)
     elif preview.kind == 'twitter':
         data = fetch_twitter(preview.url, preview.author_handle)
+    elif preview.kind == 'hackernews':
+        data = fetch_hackernews(preview.url, preview.embed_id)
+    elif preview.kind == 'reddit':
+        data = fetch_reddit(preview.url)
+    elif preview.kind == 'chatgpt':
+        data = fetch_chatgpt(preview.url)
     else:
         data = fetch_generic(preview.url)
 
@@ -500,6 +769,7 @@ def fetch_preview_for(preview: LinkPreview, *, keep_existing_on_failure=False) -
     preview.author_name = _truncate(data.get('author_name'), 200)
     preview.author_handle = _truncate(data.get('author_handle') or preview.author_handle, 100)
     preview.embed_id = _truncate(data.get('embed_id') or preview.embed_id, 100)
+    preview.extra = data.get('extra') or {}
     published_at = data.get('published_at')
     preview.published_at = published_at if isinstance(published_at, date) else None
 
@@ -518,6 +788,7 @@ def fetch_preview_for(preview: LinkPreview, *, keep_existing_on_failure=False) -
             'author_name',
             'author_handle',
             'embed_id',
+            'extra',
             'published_at',
             'image',
             'fetched_at',
@@ -560,18 +831,29 @@ def sync_link_previews(post) -> bool:
                 'position': position,
                 'kind': kind,
             }
-            if kind == 'youtube':
+            if kind in {'youtube', 'hackernews'}:
                 create_kwargs['embed_id'] = provider_id
             if kind == 'twitter':
                 create_kwargs['author_handle'] = provider_id
             LinkPreview.objects.create(**create_kwargs)
             continue
 
+        update_fields = []
         if preview.position != position:
             preview.position = position
-            preview.save(update_fields=['position'])
-        if preview.status == 'failed':
+            update_fields.append('position')
+
+        kind, provider_id = detect_kind(preview.url)
+        if kind != preview.kind:
+            preview.kind = kind
+            preview.embed_id = provider_id if kind in {'youtube', 'hackernews'} else ''
             preview.status = 'pending'
-            preview.save(update_fields=['status'])
+            update_fields.extend(['kind', 'embed_id', 'status'])
+        elif preview.status == 'failed':
+            preview.status = 'pending'
+            update_fields.append('status')
+
+        if update_fields:
+            preview.save(update_fields=update_fields)
 
     return post.link_previews.filter(status='pending').exists()

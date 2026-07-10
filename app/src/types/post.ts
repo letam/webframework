@@ -25,7 +25,21 @@ export interface Media {
 	modified: Date
 }
 
-export type LinkPreviewKind = 'youtube' | 'twitter' | 'generic'
+export type LinkPreviewKind =
+	| 'youtube'
+	| 'twitter'
+	| 'hackernews'
+	| 'reddit'
+	| 'chatgpt'
+	| 'generic'
+
+export interface LinkPreviewExtra {
+	score?: number
+	comments?: number
+	domain?: string
+	subreddit?: string
+	is_comment?: boolean
+}
 
 export interface LinkPreview {
 	id: number
@@ -37,6 +51,7 @@ export interface LinkPreview {
 	author_name: string
 	author_handle: string
 	embed_id: string
+	extra: LinkPreviewExtra
 	published_at: string | null
 	image: string | null
 }
