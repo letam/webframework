@@ -123,7 +123,7 @@ bun run format        # Biome format (write)
 bun run format:check  # Biome format (check only)
 
 # Tests
-bun test              # Run Vitest once
+bun run test          # Run Vitest once (bare `bun test` runs Bun's own runner and fails)
 bun run test:watch    # Watch mode
 bun run test:coverage # Coverage report
 
