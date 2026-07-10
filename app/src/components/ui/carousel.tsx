@@ -117,11 +117,11 @@ const Carousel = React.forwardRef<
 				canScrollNext,
 			}}
 		>
+			{/* biome-ignore lint/a11y/useSemanticElements: Copied from https://ui.shadcn.com/docs/components/carousel */}
 			<div
 				ref={ref}
 				onKeyDownCapture={handleKeyDown}
 				className={cn('relative', className)}
-				// biome-ignore lint/a11y/useSemanticElements: Copied from https://ui.shadcn.com/docs/components/carousel
 				role="region"
 				aria-roledescription="carousel"
 				{...props}
@@ -159,6 +159,7 @@ const CarouselItem = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLD
 		const { orientation } = useCarousel()
 
 		return (
+			// biome-ignore lint/a11y/useSemanticElements: Copied from https://ui.shadcn.com/docs/components/carousel
 			<div
 				ref={ref}
 				role="group"

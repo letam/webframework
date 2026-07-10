@@ -66,6 +66,7 @@ const VideoRecorder = forwardRef<
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: auto-start should only respond to the external trigger and current recording state
 	useEffect(() => {
 		if (autoStart && !isRecording && !videoURL) {
 			startRecording()

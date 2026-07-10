@@ -68,9 +68,7 @@ describe('useComments hook', () => {
 		const post = makePost({ id: 11, comment_count: 1 })
 		queryClient.setQueryData(['posts', {}], infiniteData([post]))
 		vi.mocked(postsApi.getComments).mockResolvedValueOnce([makeComment()])
-		vi.mocked(postsApi.createComment).mockResolvedValueOnce(
-			makeComment({ id: 2, body: 'Second!' })
-		)
+		vi.mocked(postsApi.createComment).mockResolvedValueOnce(makeComment({ id: 2, body: 'Second!' }))
 
 		const { result } = renderHook(() => useComments(post.id), {
 			wrapper: createWrapper(queryClient),

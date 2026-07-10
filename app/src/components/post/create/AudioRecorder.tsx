@@ -261,6 +261,7 @@ const AudioRecorder = ({
 		}
 	}
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: auto-start should only respond to the external trigger and current status
 	useEffect(() => {
 		if (autoStart && status === 'idle') {
 			startRecording()
@@ -425,7 +426,7 @@ const AudioRecorder = ({
 		}
 	}
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies:
+	// biome-ignore lint/correctness/useExhaustiveDependencies: cleanup should only run when this recorder unmounts
 	useEffect(() => {
 		return () => {
 			reset()

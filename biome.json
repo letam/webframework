@@ -9,6 +9,8 @@
 		"includes": [
 			"**",
 			"!**/dist/**/*",
+			"!**/playwright-report/**/*",
+			"!**/test-results/**/*",
 			"!**/tsconfig*.json",
 			"!**/vite.config.ts",
 			"!**/.vscode/**/*"
@@ -23,6 +25,8 @@
 		"includes": [
 			"**",
 			"!**/dist/**/*",
+			"!**/playwright-report/**/*",
+			"!**/test-results/**/*",
 			"!**/tsconfig*.json",
 			"!**/vite.config.ts",
 			"!**/.vscode/**/*"

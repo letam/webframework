@@ -261,11 +261,7 @@
 	background-clip: text;
 	-webkit-background-clip: text;
 	color: transparent;
-	background-image: linear-gradient(
-		to right,
-		hsl(var(--brand-1)),
-		hsl(var(--brand-2))
-	);
+	background-image: linear-gradient(to right, hsl(var(--brand-1)), hsl(var(--brand-2)));
 }
 
 /* Hashtags rendered inside sanitized post text (see FormatText in Post.tsx) */

@@ -57,7 +57,7 @@ const InputOTPSeparator = React.forwardRef<
 	React.ElementRef<'div'>,
 	React.ComponentPropsWithoutRef<'div'>
 >(({ ...props }, ref) => (
-	// biome-ignore lint/a11y/useFocusableInteractive lint/a11y/useSemanticElements: Copied from https://ui.shadcn.com/docs/components/input-otp
+	// biome-ignore lint/a11y/useAriaPropsForRole lint/a11y/useFocusableInteractive lint/a11y/useSemanticElements: Copied from https://ui.shadcn.com/docs/components/input-otp
 	<div ref={ref} role="separator" {...props}>
 		<Dot />
 	</div>

@@ -11,7 +11,7 @@
 		"preview": "vite preview",
 		"format": "biome format --write .",
 		"check": "biome check .",
-		"format:check": "biome format --check .",
+		"format:check": "biome check --linter-enabled=false .",
 		"test": "vitest",
 		"test:watch": "vitest watch",
 		"test:coverage": "vitest run --coverage",
