@@ -33,7 +33,10 @@ console_command = '/code/manage.py shell'
 [[http_service.checks]]
   interval = '30s'
   timeout = '5s'
-  grace_period = '15s'
+  # Generous grace: start-prod.sh runs migrations on boot, and Django cold-start
+  # on a 512MB shared VM is slow. Too-short a grace flags a healthy-but-booting
+  # machine as failed.
+  grace_period = '40s'
   method = 'GET'
   path = '/healthz/'
 

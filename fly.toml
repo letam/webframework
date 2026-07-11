@@ -1,24 +1,45 @@
-# fly.toml app configuration file generated for web-framework-2025-lively-glitter-9000 on 2025-02-25T21:58:41-05:00
+# ─────────────────────────────────────────────────────────────────────────────
+# REFERENCE ONLY — do not deploy with this file directly.
 #
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+# The canonical, deployable configs live in:
+#   • admin/configs/fly-sqlite.toml    (production: SQLite on a mounted volume)
+#   • admin/configs/fly-postgres.toml  (alternative: managed Postgres)
 #
+# Deploy with:
+#   just fly-deploy-app-sqlite webframework
+#   # or: fly deploy --config admin/configs/fly-sqlite.toml --app webframework
+#
+# This file is a human-readable snapshot of the *live* production (SQLite) setup
+# so you can eyeball it without opening admin/configs/. Every `fly` command MUST
+# pass an explicit `--app` and `--config`; a bare `fly deploy` that falls back to
+# this file is not the supported path.
+#
+# NOTE ON MIGRATIONS: release_command CANNOT run migrations here, because the
+# release VM has no access to the Fly volume that holds the SQLite database.
+# Migrations run at container startup instead (see server/start-prod.sh).
+# ─────────────────────────────────────────────────────────────────────────────
 
-app = 'web-framework-2025-lively-glitter-9000'
-primary_region = 'iad'
+app = 'webframework'
+primary_region = 'yyz'
 console_command = '/code/manage.py shell'
 
 [build]
 
 [deploy]
-  release_command = 'python manage.py migrate --noinput'
+# Intentionally NO release_command — the release VM cannot see /data (the volume).
+# Migrations are applied on boot by server/start-prod.sh.
 
 [env]
   PORT = '8000'
 
+[[mounts]]
+  source = 'myapp_data'
+  destination = '/data'
+
 [http_service]
   internal_port = 8000
   force_https = true
-  auto_stop_machines = 'stop'
+  auto_stop_machines = 'off' # single always-on machine owns the volume
   auto_start_machines = true
   min_machines_running = 1
   processes = ['app']
@@ -26,7 +47,7 @@ console_command = '/code/manage.py shell'
 [[http_service.checks]]
   interval = '30s'
   timeout = '5s'
-  grace_period = '15s'
+  grace_period = '40s' # start-prod.sh migrates on boot; 512MB cold-start is slow
   method = 'GET'
   path = '/healthz/'
 
@@ -38,3 +59,7 @@ console_command = '/code/manage.py shell'
 [[statics]]
   guest_path = '/code/static'
   url_prefix = '/static/'
+
+[[statics]]
+  guest_path = '/data/uploads'
+  url_prefix = '/media/'
