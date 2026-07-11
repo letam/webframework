@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { applyMarkdownShortcut } from '@/lib/utils/richText'
 import type { Post } from '@/types/post'
 
 interface EditPostModalProps {
@@ -72,6 +73,12 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 		}
 	}
 
+	// Body content also supports **bold** / *italic* via Cmd/Ctrl+B / +I.
+	const handleBodyKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		if (applyMarkdownShortcut(e, setBody)) return
+		handleKeyDown(e)
+	}
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-[425px]">
@@ -97,7 +104,7 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 							onChange={(e) => setBody(e.target.value)}
 							placeholder="Enter post content"
 							className="min-h-[100px]"
-							onKeyDown={handleKeyDown}
+							onKeyDown={handleBodyKeyDown}
 						/>
 					</div>
 					{post.media && post.media.media_type !== 'image' && (

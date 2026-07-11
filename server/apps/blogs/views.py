@@ -66,6 +66,7 @@ from .utils import (
     save_media_thumbnail,
 )
 from .utils.get_file_mimetype import get_file_mime_type
+from .utils.text import strip_inline_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -1036,12 +1037,18 @@ def post_detail(request, post_id):
         'debug': settings.DEBUG,
     }
 
-    # Add Open Graph data
+    # Add Open Graph data. Meta values are plain text, so strip the markdown
+    # markers (**bold** / *italic*) rather than rendering them.
+    og_title_source = post.head or post.body or 'Post'
+    og_title = strip_inline_markdown(og_title_source)
+    if not post.head:
+        og_title = og_title[:140] + '...' if len(og_title) > 140 else og_title
+    og_description = strip_inline_markdown(post.body)
+    if len(og_description) > 200:
+        og_description = og_description[:200] + '...'
     og_data = {
-        'title': post.head
-        or (post.body[:140] + '...' if len(post.body) > 140 else post.body)
-        or 'Post',
-        'description': post.body[:200] + '...' if len(post.body) > 200 else post.body,
+        'title': og_title or 'Post',
+        'description': og_description,
         'type': 'article',
         'url': request.build_absolute_uri(),
     }

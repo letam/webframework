@@ -17,6 +17,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { getMediaUrl, getPost, transcribePost } from '@/lib/api/posts'
 import { getMimeTypeFromPath } from '@/lib/utils/file'
 import { getSettings } from '@/lib/utils/settings'
+import { renderInlineMarkdown } from '@/lib/utils/richText'
 import { parseDurationString } from '@/lib/utils/media'
 import { markPostViewed } from '@/lib/viewTracking'
 
@@ -49,7 +50,7 @@ const FormatText: React.FC<{
 	className?: string
 	onTagClick?: (tag: string) => void
 }> = ({ children, className, onTagClick }) => {
-	const content = DOMPurify.sanitize(children)
+	const content = renderInlineMarkdown(DOMPurify.sanitize(children))
 		.replace(/\n/g, '<br/>')
 		.replace(/((?:https?:\/\/|www\.)[^\s<>"']+)/g, (_match, url) => {
 			const href = url.startsWith('www.') ? `http://${url}` : url

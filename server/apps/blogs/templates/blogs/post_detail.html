@@ -1,5 +1,6 @@
 {% extends 'shared/base.html' %}
 {% load static %}
+{% load post_formatting %}
 
 {% block title %}{{ og_data.title }} - Echo Sphere{% endblock %}
 {% block description %}{{ og_data.description }}{% endblock %}
@@ -408,11 +409,11 @@
   </div>
 
   {% if post.head %}
-  <h1 class="post-title">{{ post.head }}</h1>
+  <h1 class="post-title">{{ post.head|format_inline }}</h1>
   {% endif %}
 
   {% if post.body %}
-  <div class="post-body">{{ post.body|linebreaks }}</div>
+  <div class="post-body">{{ post.body|format_post_body }}</div>
   {% endif %}
 
   {% if post.media and media_url %}

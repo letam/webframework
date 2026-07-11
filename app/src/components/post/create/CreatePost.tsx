@@ -11,13 +11,15 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Mic, Video, Image, Loader2, Upload, Globe, Link2, Lock } from 'lucide-react'
+import { Mic, Video, Image, Loader2, Upload, Globe, Link2, Lock, Bold, Italic } from 'lucide-react'
 import { AudioRecorderModal } from './AudioRecorder'
 import { VideoRecorderModal } from './VideoRecorder'
 import MediaPreview from './MediaPreview'
 import type { CreatePostRequest, PostVisibility } from '@/types/post'
 import { convertWavToWebM, getAudioExtension } from '@/lib/utils/audio'
 import { getSettings } from '@/lib/utils/settings'
+import { applyMarkdownShortcut, toggleMarker } from '@/lib/utils/richText'
+import { modifierKeyLabel } from '@/lib/utils/browser'
 import { useAuth } from '@/hooks/useAuth'
 
 interface CreatePostProps {
@@ -91,13 +93,29 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const expanded = isFocused || canPost || !!submitStatus
 	const VisibilityIcon =
 		VISIBILITY_OPTIONS.find((option) => option.value === visibility)?.icon ?? Globe
+	const modKey = modifierKeyLabel()
 
-	const handleKeyDown = (e: React.KeyboardEvent) => {
-		// Check for Cmd+Enter (macOS) or Ctrl+Enter (Windows/Linux)
+	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+		// Cmd/Ctrl+Enter posts; Cmd/Ctrl+B and Cmd/Ctrl+I format the selection.
 		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
 			e.preventDefault()
 			void submitPost(false)
+			return
 		}
+		applyMarkdownShortcut(e, setPostText)
+	}
+
+	// Toolbar B/I buttons: wrap the textarea's current selection, same as the
+	// keyboard shortcut, keeping focus and selection on the text.
+	const formatSelection = (marker: string) => {
+		const el = textareaRef.current
+		if (!el) return
+		const { value, start, end } = toggleMarker(el.value, el.selectionStart, el.selectionEnd, marker)
+		setPostText(value)
+		requestAnimationFrame(() => {
+			el.focus()
+			el.setSelectionRange(start, end)
+		})
 	}
 
 	const handlePostTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -298,6 +316,45 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				<div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
 					<TooltipProvider delayDuration={300}>
 						<div className="flex items-center gap-0.5">
+							{expanded && (
+								<>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground"
+												onMouseDown={(e) => e.preventDefault()}
+												onClick={() => formatSelection('**')}
+												disabled={!!submitStatus}
+												aria-label="Bold"
+											>
+												<Bold className="h-4 w-4" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>Bold ({modKey}B)</TooltipContent>
+									</Tooltip>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground"
+												onMouseDown={(e) => e.preventDefault()}
+												onClick={() => formatSelection('*')}
+												disabled={!!submitStatus}
+												aria-label="Italic"
+											>
+												<Italic className="h-4 w-4" />
+											</Button>
+										</TooltipTrigger>
+										<TooltipContent>Italic ({modKey}I)</TooltipContent>
+									</Tooltip>
+									{hasNoMedia && <span className="mx-1 h-5 w-px bg-border" aria-hidden />}
+								</>
+							)}
 							{hasNoMedia && (
 								<>
 									<Tooltip>

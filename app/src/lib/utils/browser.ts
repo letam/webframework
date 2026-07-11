@@ -55,3 +55,13 @@ export const isFirefox = (): boolean => {
 	const userAgent = navigator.userAgent
 	return /Firefox/.test(userAgent) && !/Seamonkey/.test(userAgent)
 }
+
+export const isMac = (): boolean => {
+	if (navigator.userAgentData?.platform) {
+		return navigator.userAgentData.platform === 'macOS'
+	}
+	return /Mac/.test(navigator.userAgent) && !isIOS()
+}
+
+// The modifier key shown in shortcut hints: ⌘ on Mac, Ctrl elsewhere.
+export const modifierKeyLabel = (): string => (isMac() ? '⌘' : 'Ctrl+')
