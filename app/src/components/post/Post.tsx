@@ -43,6 +43,8 @@ interface PostProps {
 	onCopyShareLink?: (post: PostType) => void
 	onResetShareLink?: (post: PostType) => void
 	onTagClick?: (tag: string) => void
+	/** Highlighted and scrolled into view by keyboard navigation. */
+	focused?: boolean
 }
 
 const FormatText: React.FC<{
@@ -94,6 +96,7 @@ export const Post: React.FC<PostProps> = ({
 	onCopyShareLink,
 	onResetShareLink,
 	onTagClick,
+	focused = false,
 }) => {
 	const { isAuthenticated, userId, isSuperuser } = useAuth()
 	const [commentsOpen, setCommentsOpen] = useState(false)
@@ -232,10 +235,19 @@ export const Post: React.FC<PostProps> = ({
 		}
 	}, [post.author.id, post.id, post.is_draft, userId])
 
+	useEffect(() => {
+		if (focused) {
+			postRef.current?.scrollIntoView({ block: 'nearest' })
+		}
+	}, [focused])
+
 	return (
 		<div
 			ref={postRef}
-			className="group bg-card animate-rise-in border-b border-border/60 px-4 py-3 transition-[border-color,box-shadow] duration-200 sm:rounded-lg sm:border sm:border-border sm:shadow-xs sm:hover:border-primary/20 sm:hover:shadow-sm"
+			className={cn(
+				'group bg-card animate-rise-in border-b border-border/60 px-4 py-3 transition-[border-color,box-shadow] duration-200 scroll-mt-20 sm:rounded-lg sm:border sm:border-border sm:shadow-xs sm:hover:border-primary/20 sm:hover:shadow-sm',
+				focused && 'border-primary/40 ring-2 ring-primary/50 sm:border-primary/40'
+			)}
 			data-testid={`post-${post.id}`}
 		>
 			<div className="flex items-center gap-2">

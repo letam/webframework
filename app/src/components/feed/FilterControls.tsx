@@ -123,7 +123,8 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 					/>
 					<input
 						id={filterInputId}
-						className="h-9 w-full rounded-full border border-input bg-background pl-9 pr-3 text-base transition-colors focus:border-ring focus:outline-hidden focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
+						data-feed-filter-input
+						className="h-9 w-full scroll-mt-20 rounded-full border border-input bg-background pl-9 pr-3 text-base transition-colors focus:border-ring focus:outline-hidden focus:ring-2 focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
 						type="text"
 						placeholder="Filter posts…"
 						value={filterText}

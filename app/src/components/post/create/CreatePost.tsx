@@ -287,13 +287,14 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				<div className="-mx-2">
 					<Textarea
 						ref={textareaRef}
+						data-composer-input
 						placeholder="What's on your mind?"
 						value={postText}
 						onChange={handlePostTextChange}
 						onKeyDown={handleKeyDown}
 						onFocus={() => setIsFocused(true)}
 						onBlur={() => setIsFocused(false)}
-						className={`w-full resize-none border-none focus-visible:ring-0 py-1 px-2 text-base max-w-lg transition-[min-height] duration-200 ease-out ${
+						className={`w-full resize-none border-none focus-visible:ring-0 py-1 px-2 text-base max-w-lg scroll-mt-20 transition-[min-height] duration-200 ease-out ${
 							expanded ? 'min-h-24' : 'min-h-10'
 						}`}
 						rows={1}

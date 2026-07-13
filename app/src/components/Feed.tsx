@@ -1,14 +1,16 @@
 import type React from 'react'
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Post } from './post/Post'
 import CreatePost from './post/create'
 import { usePostHandlers } from '../hooks/usePostHandlers'
 import type { CreatePostRequest } from '@/types/post'
 import { usePostFilters } from '@/hooks/usePostFilters'
+import { useFeedKeyboard } from '@/hooks/useFeedKeyboard'
 import { EchoMark } from '@/components/EchoMark'
 import { FilterControls } from './feed/FilterControls'
 import { ActiveFiltersList } from './feed/ActiveFiltersList'
 import { InfiniteScrollSentinel } from './feed/InfiniteScrollSentinel'
+import { KeyboardShortcutsDialog } from './feed/KeyboardShortcutsDialog'
 
 const Feed: React.FC = () => {
 	const {
@@ -72,6 +74,50 @@ const Feed: React.FC = () => {
 		[addFiltersFromText]
 	)
 
+	const [shortcutsOpen, setShortcutsOpen] = useState(false)
+
+	const focusComposer = useCallback(() => {
+		const el = document.querySelector<HTMLTextAreaElement>('[data-composer-input]')
+		el?.focus()
+		el?.scrollIntoView({ block: 'nearest' })
+	}, [])
+
+	const focusFilter = useCallback(() => {
+		const el = document.querySelector<HTMLInputElement>('[data-feed-filter-input]')
+		el?.focus()
+		el?.select()
+		el?.scrollIntoView({ block: 'nearest' })
+	}, [])
+
+	const { focusedIndex, setFocusedIndex } = useFeedKeyboard({
+		postCount: filteredPosts.length,
+		onLike: (index) => {
+			const post = filteredPosts[index]
+			if (post) {
+				handleLike(post.id)
+			}
+		},
+		onOpen: (index) => {
+			const post = filteredPosts[index]
+			if (post) {
+				window.open(`/p/${post.id}/`, '_blank', 'noopener')
+			}
+		},
+		onCompose: focusComposer,
+		onFocusFilter: focusFilter,
+		onShowHelp: () => setShortcutsOpen(true),
+		onJumpToTop: () => window.scrollTo({ top: 0, behavior: 'smooth' }),
+		enabled: !shortcutsOpen,
+	})
+
+	// The selection tracks a position, so drop it when the filter set changes and
+	// a different post would slide under the ring. filters/matchMode are change
+	// triggers here, not values the effect reads.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentional change triggers, not reads
+	useEffect(() => {
+		setFocusedIndex(-1)
+	}, [filters, matchMode])
+
 	return (
 		<div className="max-w-[600px] mx-auto">
 			{error && <div className="text-center py-4 text-red-500 mb-4">Error: {error.message}</div>}
@@ -134,10 +180,11 @@ const Feed: React.FC = () => {
 						))}
 					</div>
 				) : filteredPosts.length > 0 ? (
-					filteredPosts.map((post) => (
+					filteredPosts.map((post, index) => (
 						<Post
 							key={post.id}
 							post={post}
+							focused={index === focusedIndex}
 							onLike={handleLike}
 							onDelete={handleDeletePost}
 							onEdit={handleEditPost}
@@ -171,8 +218,26 @@ const Feed: React.FC = () => {
 					/>
 				)}
 			</div>
+			{!isLoading && filteredPosts.length > 0 && (
+				<div className="hidden pt-2 text-center sm:block">
+					<button
+						type="button"
+						onClick={() => setShortcutsOpen(true)}
+						className="text-xs text-muted-foreground/70 transition-colors hover:text-foreground"
+					>
+						Press{' '}
+						<kbd className="rounded border border-border bg-muted px-1 font-mono text-[10px]">
+							?
+						</kbd>{' '}
+						for keyboard shortcuts
+					</button>
+				</div>
+			)}
+
 			{/* Bottom padding */}
 			<div className="h-96"></div>
+
+			<KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
 		</div>
 	)
 }
