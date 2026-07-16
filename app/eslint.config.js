@@ -1,9 +1,11 @@
-// NOTE: `bun run lint` is temporarily non-functional under TypeScript 7.
-// typescript-eslint (all channels) still declares `typescript` peer `<6.1.0`
-// and @typescript-eslint/typescript-estree throws on load against the TS 7
-// native compiler. ESLint is not a CI gate here — Biome (`bunx biome ci`) is
-// the lint gate and `tsc --noEmit` is the type gate; both run in CI and pass.
-// Re-enable this once typescript-eslint ships TypeScript 7 support.
+// NOTE: typescript-eslint doesn't support the TypeScript 7 native compiler yet
+// (peer `typescript >=4.8.4 <6.1.0`), so it can't load against TS 7 directly.
+// We run the two side-by-side per the TS 7 release guidance
+// (https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/):
+// package.json aliases `typescript` -> real TS 6.0.x (what typescript-eslint
+// imports) and `@typescript/native` -> TS 7 (which owns the `tsc` binary, so
+// `tsc --noEmit` still type-checks on TS 7). Collapse this back to a single
+// `typescript` once typescript-eslint supports TS 7.
 import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
