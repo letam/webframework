@@ -15,7 +15,10 @@ dependencies = [
     "django-storages==1.14.6",
     "django-tasks-db==0.12.0",
     "django-tasks==0.12.0",
-    "django==6.1b1",
+    # Django 6.1 has no PyPI release carrying the 2026-07-07 security fixes (6.1b1
+    # predates them). Pin the stable/6.1.x branch tip, which includes CVE-2026-48588,
+    # CVE-2026-53877, and CVE-2026-53878. Repin to 6.1b2/rc1 once Django publishes it.
+    "django @ git+https://github.com/django/django.git@b2ac13f2dcf253d7807bfb61b3e67e9a9d2df355",
     "djangorestframework-stubs[compatible-mypy]>=3.17.0",
     "djangorestframework==3.17.1",
     "environs[django]>=15.0.1",
