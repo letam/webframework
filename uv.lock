@@ -168,12 +168,16 @@ wheels = [
 
 [[package]]
 name = "django"
-version = "6.1b1"
-source = { git = "https://github.com/django/django.git?rev=b2ac13f2dcf253d7807bfb61b3e67e9a9d2df355#b2ac13f2dcf253d7807bfb61b3e67e9a9d2df355" }
+version = "6.1rc1"
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "asgiref" },
     { name = "sqlparse" },
     { name = "tzdata", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f9/6e/250a009775787f4f83e2af2ee47f8722505722266907471c298863a1d42e/django-6.1rc1.tar.gz", hash = "sha256:3964a696caea6ccfcc22f9a31ae1e322546002e52ea46bc8fdfe85a518ef6394", size = 11209590, upload-time = "2026-07-22T20:07:51.603Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3d/91/54c1548dd7fd14b1d63df33d6b085b7350695bdbd38d9ce5890cf8a2d8be/django-6.1rc1-py3-none-any.whl", hash = "sha256:f8a355d15fa6aa4cb65a71d692b55acfc84a1fe4ba5d375fa1164fe6b7a34ef5", size = 8411536, upload-time = "2026-07-22T20:07:43.766Z" },
 ]
 
 [[package]]
@@ -1181,7 +1185,7 @@ dev = [
 requires-dist = [
     { name = "boto3", specifier = "==1.43.49" },
     { name = "dj-database-url", specifier = "==3.1.2" },
-    { name = "django", git = "https://github.com/django/django.git?rev=b2ac13f2dcf253d7807bfb61b3e67e9a9d2df355" },
+    { name = "django", specifier = "==6.1rc1" },
     { name = "django-cors-headers", specifier = "==4.9.0" },
     { name = "django-csp", specifier = "==4.0" },
     { name = "django-extensions", specifier = "==4.1" },
