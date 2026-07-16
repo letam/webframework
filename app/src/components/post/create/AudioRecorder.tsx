@@ -47,15 +47,6 @@ interface StatusMessageProps {
 	recordingTime?: number
 }
 
-const isRecordingInProgress = (status: RecordingStatus): boolean => {
-	return (
-		status === 'loading' ||
-		status === 'recording' ||
-		status === 'paused' ||
-		status === 'normalizing'
-	)
-}
-
 const formatTime = (seconds: number): string => {
 	const mins = Math.floor(seconds / 60)
 	const secs = seconds % 60
