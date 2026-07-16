@@ -131,6 +131,21 @@ class AuthViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 405)
 
 
+# Give the rate-limit tests their own cache. The default LocMemCache is
+# process-global and shared with the rest of the suite; under the full test run
+# it accumulates entries and, once it passes MAX_ENTRIES (300), culls keys —
+# which can silently evict the counter mid-test and make the throttle never
+# trip (the CI-only `400 != 429` flake). A dedicated cache with a large
+# MAX_ENTRIES keeps these tests hermetic and deterministic.
+@override_settings(
+    CACHES={
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'ratelimit-tests',
+            'OPTIONS': {'MAX_ENTRIES': 1_000_000},
+        }
+    }
+)
 class RateLimitTests(TestCase):
     """Tests for per-IP rate limiting of the auth endpoints."""
 
