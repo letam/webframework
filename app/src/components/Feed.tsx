@@ -119,7 +119,7 @@ const Feed: React.FC = () => {
 	}, [filters, matchMode])
 
 	return (
-		<div className="max-w-[600px] mx-auto">
+		<div className="max-w-[600px] mx-auto" data-testid="feed">
 			{error && <div className="text-center py-4 text-red-500 mb-4">Error: {error.message}</div>}
 
 			<div className="my-4">
