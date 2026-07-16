@@ -25,6 +25,11 @@ RUN apt-get install -y libpq-dev gcc
 # Install curl (and certificates) for uv installation
 RUN apt-get install -y --no-install-recommends curl ca-certificates
 
+# git is required to resolve the temporary git-sourced Django pin in pyproject.toml
+# (the 2026-07-07 security release has no patched 6.1 PyPI build yet). Remove this
+# once Django is repinned to a PyPI release. See config/drf_django61_compat.py notes.
+RUN apt-get install -y --no-install-recommends git
+
 # Clean up apt package lists
 RUN rm -rf /var/lib/apt/lists/*
 
