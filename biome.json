@@ -1,6 +1,14 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
 	"assist": { "actions": { "source": { "organizeImports": "off" } } },
+	"files": {
+		"includes": [
+			"**",
+			"!**/dist/**/*",
+			"!**/playwright-report/**/*",
+			"!**/test-results/**/*"
+		]
+	},
 	"linter": {
 		"enabled": true,
 		"rules": {

@@ -22,6 +22,11 @@ from csp.constants import SELF
 from django.utils.log import DEFAULT_LOGGING
 from environs import Env
 
+# Restore django.utils.cache.cc_delim_re for DRF 3.17.1 on Django 6.1 (beta).
+# Must run before any DRF import; see the module docstring. Remove when DRF
+# ships a Django-6.1-compatible release.
+from config import drf_django61_compat  # noqa: F401
+
 # Configure logging
 LOGGING = {
     'version': 1,
@@ -443,18 +448,22 @@ if DEBUG:
 
 
 # File storage configuration
-USE_LOCAL_FILE_STORAGE = os.getenv('USE_LOCAL_FILE_STORAGE', 'False').lower() == 'true'
+# Read via the environs `env` (not os.getenv): environs>=15 loads .env values
+# into the Env instance rather than os.environ, so os.getenv no longer sees them.
+USE_LOCAL_FILE_STORAGE = env.bool('USE_LOCAL_FILE_STORAGE', False)
 
 # S3-compatible object storage configuration
-AWS_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY')
-AWS_S3_ENDPOINT_URL = f"https://{os.getenv('R2_ACCOUNT_ID')}.{os.getenv('R2_ENDPOINT_DOMAIN')}"
-AWS_STORAGE_BUCKET_NAME = os.getenv('R2_BUCKET_NAME')
+AWS_ACCESS_KEY_ID = env.str('R2_ACCESS_KEY_ID', default=None)
+AWS_SECRET_ACCESS_KEY = env.str('R2_SECRET_ACCESS_KEY', default=None)
+R2_ACCOUNT_ID = env.str('R2_ACCOUNT_ID', default=None)
+R2_ENDPOINT_DOMAIN = env.str('R2_ENDPOINT_DOMAIN', default=None)
+AWS_S3_ENDPOINT_URL = f'https://{R2_ACCOUNT_ID}.{R2_ENDPOINT_DOMAIN}'
+AWS_STORAGE_BUCKET_NAME = env.str('R2_BUCKET_NAME', default=None)
 AWS_S3_REGION_NAME = 'auto'  # R2 doesn't need a specific region
 AWS_DEFAULT_ACL = 'public-read'
 AWS_QUERYSTRING_AUTH = False  # Don't add complex authentication-related query parameters to URLs
-AWS_S3_ENDPOINT_FOR_CSP = os.getenv('R2_ENDPOINT_DOMAIN_FOR_CSP')
-SENTRY_FRONTEND_INGEST_FOR_CSP = os.getenv('SENTRY_FRONTEND_INGEST_FOR_CSP')
+AWS_S3_ENDPOINT_FOR_CSP = env.str('R2_ENDPOINT_DOMAIN_FOR_CSP', default=None)
+SENTRY_FRONTEND_INGEST_FOR_CSP = env.str('SENTRY_FRONTEND_INGEST_FOR_CSP', default=None)
 
 # Media files configuration
 MEDIA_URL = env.str('MEDIA_URL', default='/media/')
@@ -588,10 +597,10 @@ CONTENT_SECURITY_POLICY = {
 
 
 # OpenAI API Key
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_API_KEY = env.str('OPENAI_API_KEY', default=None)
 
 # Error monitoring — a no-op unless a DSN is configured.
-SENTRY_DSN = os.getenv('SENTRY_DSN')
+SENTRY_DSN = env.str('SENTRY_DSN', default=None)
 if SENTRY_DSN:
     import sentry_sdk
 
