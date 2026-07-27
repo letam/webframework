@@ -498,7 +498,8 @@ CONTENT_SECURITY_POLICY_DIRECTIVES = {
     'frame-ancestors': [SELF],
     'frame-src': [SELF, 'https://www.youtube-nocookie.com'],
     'form-action': [SELF],
-    'report-uri': '/csp-report/',
+    # No 'report-uri': /csp-report/ had no view, so the SPA catch-all took the POST
+    # and CSRF rejected it. Re-add only with a real endpoint, or Sentry's ingest.
     #
     'media-src': [SELF, 'blob:'],
     'img-src': [SELF, 'blob:'],
@@ -539,7 +540,10 @@ else:
         {
             'script-src': [
                 SELF,
-                "'sha256-Ucm0AC6Vg7xQaBrSEjxBw5seBgXx38qp1ezaIVXWjWk='",
+                # Anti-FOUC theme script in app/index.html, which builds into the shell
+                # this branch serves (website/dist/index.html). Recompute when that
+                # script changes -- test_csp_hashes.py enforces it.
+                "'sha256-vX/WPm+OPB5oEGTIOc/PEDwUw1rNsn80bG2B5D8C9Fo='",
                 #
                 # Hashes for scripts in Django HTML templates
                 "'sha256-DjsUj0pC5ySPg95mtQ6lmWjVIWW5WZ6Kta+NTTdw6FM='",
