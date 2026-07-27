@@ -24,6 +24,27 @@ export default defineConfig(() => ({
 		base: '/static/app/',
 	}),
 
+	build: {
+		rolldownOptions: {
+			output: {
+				// Pull React out of the app entry: it is eagerly loaded either way, so this
+				// costs nothing on first paint but keeps ~74 kB gzip cached across deploys
+				// that only touch our source. Deliberately React-only -- a broad
+				// `{ test: /node_modules/ }` group hoists route-lazy deps into the eager
+				// bundle, costing ~32 kB gzip on first load.
+				// Reference: https://rolldown.rs/in-depth/manual-code-splitting
+				codeSplitting: {
+					groups: [
+						{
+							name: 'react-vendor',
+							test: /node_modules[\\/](react|react-dom|react-router|scheduler)[\\/]/,
+						},
+					],
+				},
+			},
+		},
+	},
+
 	test: {
 		environment: 'jsdom',
 		setupFiles: ['./vitest.setup.ts'],
