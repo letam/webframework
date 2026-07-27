@@ -8,7 +8,7 @@ ARG NODE_IMAGE_VERSION=${NODE_VERSION}-alpine
 
 
 # Build Stage: Backend
-FROM python:${PYTHON_IMAGE_VERSION} as build-backend
+FROM python:${PYTHON_IMAGE_VERSION} AS build-backend
 
 # Set environment variables
 # Prevents Python from writing pyc files to disk
@@ -50,8 +50,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY server .
 
 # Collect static files
-ENV SECRET_KEY "DUMMY_SECRET_KEY_FOR_BUILD_PROCESS"
-RUN python manage.py collectstatic --noinput
+# SECRET_KEY is only needed to import settings; scope it to this one command
+# rather than the whole stage.
+RUN SECRET_KEY="DUMMY_SECRET_KEY_FOR_BUILD_PROCESS" python manage.py collectstatic --noinput
 
 
 # Build Stage: Frontend
@@ -80,7 +81,7 @@ RUN echo "// Build time: $(date +'%Y-%m-%d %H:%M:%S %Z')" >> dist/assets/index-*
 
 
 # Production Stage: Integrate and Serve
-FROM python:${PYTHON_IMAGE_VERSION} as production
+FROM python:${PYTHON_IMAGE_VERSION} AS production
 
 # # Install utilities for investigation
 # RUN apt-get update && apt-get install -y \
