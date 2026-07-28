@@ -209,6 +209,16 @@ Keeping the split honest:
   no `tsserver`, no language server — so `node_modules/.bin/tsserver` is TS 6. Editors will
   therefore report TS 6 diagnostics while CI checks on TS 7. `bun run typecheck` is the source
   of truth when the two disagree.
+- **Do not swap the TS 6 alias for `@typescript/typescript6`.** That is Microsoft's transition
+  package — it exposes `tsc6` instead of `tsc`, so TS 7 can own the `tsc` name — and it is the
+  right endpoint, but it does not work under bun. It is a 10 KB shim whose `lib/typescript.js`
+  is `module.exports = require("@typescript/old")`, where `@typescript/old` is its own
+  `npm:typescript@^6` dependency. Alias the root `typescript` to it and bun 1.3.14 satisfies
+  that nested request with the shim itself, installing it at `node_modules/@typescript/old` —
+  the wrapper then requires itself, `require('typescript')` returns `{}`, and `bun run lint`
+  dies with `Cannot read properties of undefined (reading 'split')`. The identical manifest is
+  fine under npm. Measured 2026-07-28 on the PR 10 review; revisit if bun fixes alias dedup,
+  though typescript-eslint gaining TS 7 support retires the whole split first.
 
 ### Testing
 
