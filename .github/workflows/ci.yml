@@ -44,7 +44,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bunx biome ci .
+      # Scoped name, not bare `biome`: that resolves an unrelated package whose
+      # bin exits 0 silently, so this gate checked nothing. Pinned like ruff above.
+      - run: bunx @biomejs/biome@2.3.11 ci .
       # -b, not --noEmit: the root tsconfig is a solution file with "files": [],
       # so a plain `tsc` there checks nothing and passes unconditionally.
       - run: bunx tsc -b
