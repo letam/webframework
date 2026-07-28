@@ -48,8 +48,11 @@ jobs:
       # bin exits 0 silently, so this gate checked nothing. Pinned like ruff above.
       - run: bunx @biomejs/biome@2.3.11 ci .
       # -b, not --noEmit: the root tsconfig is a solution file with "files": [],
-      # so a plain `tsc` there checks nothing and passes unconditionally.
-      - run: bunx tsc -b
+      # so a plain `tsc` there checks nothing and passes unconditionally. The
+      # script spells out the TS 7 binary because `typescript` (TS 6, kept for
+      # typescript-eslint) also ships a `tsc`, and which one wins node_modules/.bin
+      # is install-order luck.
+      - run: bun run typecheck
       - run: bunx vitest run
       - run: bun run build
 

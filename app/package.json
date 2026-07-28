@@ -8,6 +8,7 @@
 		"build": "vite build",
 		"build:dev": "vite build --mode development",
 		"lint": "eslint .",
+		"typecheck": "./node_modules/@typescript/native/bin/tsc -b",
 		"preview": "vite preview",
 		"format": "biome format --write .",
 		"check": "biome check .",
