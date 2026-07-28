@@ -116,8 +116,11 @@ bun run build
 # Build for development (non-minified)
 bun run build:dev
 
+# Type checking (TypeScript 7) — never `bunx tsc`, see "Two TypeScript versions" below
+bun run typecheck
+
 # Linting and formatting
-bun run lint          # ESLint
+bun run lint          # ESLint (runs on TypeScript 6, see below)
 bun run check         # Biome check
 bun run format        # Biome format (write)
 bun run format:check  # Biome format (check only)
@@ -168,6 +171,44 @@ npx @biomejs/biome check .
 - **UI library**: shadcn/ui patterns - components in `app/src/components/ui/`
 - **Path alias**: `@` maps to `app/src/`
 - **TypeScript**: Strict mode is disabled; target ES2020
+
+#### Two TypeScript versions (TS 7 everywhere, TS 6 only for ESLint)
+
+`app/package.json` installs the `typescript` npm package twice, under two aliases:
+
+| Alias in `package.json` | Real version | Who uses it |
+| --- | --- | --- |
+| `@typescript/native` | `typescript@7.x` | **Everything.** The project's actual compiler. |
+| `typescript` | `typescript@6.x` | **ESLint only** — nothing else may use it. |
+
+TypeScript 7 is the compiler this project type-checks against. TS 6 is present for exactly
+one reason: typescript-eslint `import`s the module literally named `typescript`, and its peer
+range is `>=4.8.4 <6.1.0` — it cannot load TS 7. (Checked 2026-07-28: latest 8.65.0, and even
+that day's canary, still declare that range. When typescript-eslint accepts TS 7, collapse
+both aliases back to a single `typescript`, simplify the `typecheck` script, and delete this
+section and the note atop `app/eslint.config.js`.)
+
+Keeping the split honest:
+
+- **Type-check with `bun run typecheck`, never `bunx tsc` / `npx tsc`.** Both packages ship a
+  `tsc` binary, so which one wins `node_modules/.bin/tsc` is install-order luck — today it is
+  TS 7, but nothing guarantees that. The script names the TS 7 binary by path
+  (`./node_modules/@typescript/native/bin/tsc -b`) so it cannot silently check on TS 6. CI
+  calls the script for the same reason. Some older docs under `docs/plans/` predate this and
+  still say `bunx tsc`; prefer the script.
+- **`-b`, not `--noEmit`.** The app's root `tsconfig.json` is a solution file with `"files": []`
+  and three project references, so a plain `tsc --noEmit` there checks zero files and passes
+  unconditionally.
+- **ESLint binds to TS 6 by package name, not by binary**, so it resolves deterministically
+  and needs no special invocation. `bun run lint` is gated in CI — that gate is the only thing
+  that justifies TS 6 being installed at all.
+- **Vite, Vitest and Playwright use neither install** — they transpile via esbuild/SWC and
+  never load the `typescript` library. Nothing outside the typescript-eslint dependency chain
+  declares a dependency on `typescript`.
+- **Editor diagnostics come from TS 6, by necessity.** The TS 7 npm package ships only `tsc` —
+  no `tsserver`, no language server — so `node_modules/.bin/tsserver` is TS 6. Editors will
+  therefore report TS 6 diagnostics while CI checks on TS 7. `bun run typecheck` is the source
+  of truth when the two disagree.
 
 ### Testing
 

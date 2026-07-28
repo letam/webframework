@@ -53,6 +53,10 @@ jobs:
       # typescript-eslint) also ships a `tsc`, and which one wins node_modules/.bin
       # is install-order luck.
       - run: bun run typecheck
+      # ESLint is the sole reason the TS 6 alias is installed alongside TS 7
+      # (typescript-eslint can't load TS 7 yet). Gating it here is what keeps that
+      # second install justified. See CLAUDE.md, "Two TypeScript versions".
+      - run: bun run lint
       - run: bunx vitest run
       - run: bun run build
 
