@@ -274,22 +274,29 @@ See `app/.env.development.local.sample` for template:
 
 ### Fly.io
 
-- **Config**: `fly.toml` (main), `admin/configs/fly-sqlite.toml`, `admin/configs/fly-postgres.toml`
-- **Release command**: `python manage.py migrate --noinput`
+- **Config**: canonical configs are in `admin/configs/` — `fly-sqlite.toml` (production),
+  `fly-postgres.toml`, `fly-preview.toml` (preview apps, scales to zero). The root `fly.toml`
+  is a reference snapshot; do not deploy with it.
+- **Migrations**: run on boot via `server/start-prod.sh`, not via `release_command` (a release
+  VM has no access to the storage volume)
 - **Server**: Gunicorn on port 8000
 - **Static files**: Served by WhiteNoise at `/static/`
-- **VM**: 512MB RAM, 1 shared CPU, US East (iad)
+- **VM**: 512MB RAM, 1 shared CPU, Toronto (`yyz`)
+- **Runbook**: `docs/deploy-fly.md`
 
 ```bash
-# Deploy with SQLite
-just fly-deploy-app-sqlite
+# Deploy with SQLite (production)
+just fly-deploy-app-sqlite webframework
 
 # Deploy with PostgreSQL
-just fly-deploy-app-postgres
+just fly-deploy-app-postgres <app-name>
+
+# Deploy a preview app
+just fly-deploy-app-preview <app-name>
 
 # Launch new app
-just fly-launch-app-sqlite
-just fly-launch-app-postgres
+just fly-launch-app-sqlite <app-name>
+just fly-launch-app-postgres <app-name>
 ```
 
 ### Docker
