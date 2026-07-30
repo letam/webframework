@@ -6,8 +6,12 @@ import json
 from unittest import mock
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ImproperlyConfigured
+from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
+
+from apps.uploads.s3 import REQUIRED_S3_SETTINGS, generate_presigned_put_url, get_s3_client
 
 from ..models import Post
 from . import ViewTestCase
@@ -139,3 +143,44 @@ class AnonymousPostAuthorTests(ViewTestCase):
         response = client.post(reverse('post-list'), {'body': 'hello from nobody'})
         self.assertEqual(response.status_code, 201)
         self.assertEqual(response.data['author']['username'], 'anonymous')
+
+
+@override_settings(
+    AWS_ACCESS_KEY_ID='key',
+    AWS_SECRET_ACCESS_KEY='secret',
+    AWS_S3_ENDPOINT_URL='https://account.r2.example.com',
+    AWS_STORAGE_BUCKET_NAME='bucket',
+)
+class S3ConfigurationTests(SimpleTestCase):
+    """Half-configured object storage must fail, not silently address AWS.
+
+    boto3 reads ``endpoint_url=None`` as "use the real AWS endpoints" and
+    ``aws_access_key_id=None`` as "use the ambient credential chain", so a
+    deployment missing only R2_ACCOUNT_ID would sign perfectly valid URLs
+    against ``https://<bucket>.s3.amazonaws.com`` instead of Cloudflare.
+    """
+
+    def setUp(self):
+        """Drop the process-global client cache around every case."""
+        get_s3_client.cache_clear()
+        self.addCleanup(get_s3_client.cache_clear)
+
+    def test_fully_configured_client_targets_the_r2_endpoint(self):
+        """The happy path builds a client aimed at the configured endpoint."""
+        self.assertEqual(get_s3_client().meta.endpoint_url, 'https://account.r2.example.com')
+
+    def test_each_missing_setting_is_refused_and_named(self):
+        """Any missing setting raises, and the message says which one."""
+        for name in REQUIRED_S3_SETTINGS:
+            with self.subTest(missing=name), override_settings(**{name: None}):
+                get_s3_client.cache_clear()
+                with self.assertRaises(ImproperlyConfigured) as caught:
+                    get_s3_client()
+                self.assertIn(name, str(caught.exception))
+
+    def test_presigning_surfaces_the_error_rather_than_signing_for_aws(self):
+        """The guard fires through the call sites, not just the constructor."""
+        with override_settings(AWS_S3_ENDPOINT_URL=None):
+            get_s3_client.cache_clear()
+            with self.assertRaises(ImproperlyConfigured):
+                generate_presigned_put_url('post/audio/1/clip.mp3', 'audio/mpeg')

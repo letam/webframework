@@ -22,7 +22,7 @@ from csp.constants import SELF
 from django.utils.log import DEFAULT_LOGGING
 from environs import Env
 
-# Restore django.utils.cache.cc_delim_re for DRF 3.17.1 on Django 6.1 (beta).
+# Restore django.utils.cache.cc_delim_re for DRF 3.17.1 on Django 6.1rc1.
 # Must run before any DRF import; see the module docstring. Remove when DRF
 # ships a Django-6.1-compatible release.
 from config import drf_django61_compat  # noqa: F401
@@ -253,17 +253,31 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
 # LocMemCache is per process, so with multiple gunicorn workers these limits are
 # per worker and approximate. Point both at Redis/Memcached if a hard global
 # guarantee is ever needed.
-_LOCMEM_MAX_ENTRIES = env.int('CACHE_MAX_ENTRIES', default=50_000)
+#
+# The two ceilings differ because the entries cost wildly different amounts.
+# LocMemCache stores pickled values, and:
+#
+#   default   — DRF's SimpleRateThrottle stores a *list of request timestamps*
+#               per key, up to num_requests long (1000/hour for 'user',
+#               300/hour for 'anon'). That is ~2.7-9 kB per key, so 10k keys is
+#               ~27-90 MB per worker; start-prod.sh runs 2 workers on a 512 MB
+#               VM. Culling below that is the lesser evil, and reaching 10k
+#               distinct clients an hour is the point at which the honest fix is
+#               a shared cache backend rather than a bigger ceiling.
+#   ratelimit — apps.ratelimit stores a single int per key, tens of bytes, so a
+#               high ceiling is nearly free and buys real eviction headroom.
+_DEFAULT_CACHE_MAX_ENTRIES = env.int('CACHE_MAX_ENTRIES', default=10_000)
+_RATE_LIMIT_CACHE_MAX_ENTRIES = env.int('RATE_LIMIT_CACHE_MAX_ENTRIES', default=50_000)
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         'LOCATION': 'default',
-        'OPTIONS': {'MAX_ENTRIES': _LOCMEM_MAX_ENTRIES},
+        'OPTIONS': {'MAX_ENTRIES': _DEFAULT_CACHE_MAX_ENTRIES},
     },
     'ratelimit': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         'LOCATION': 'ratelimit',
-        'OPTIONS': {'MAX_ENTRIES': _LOCMEM_MAX_ENTRIES},
+        'OPTIONS': {'MAX_ENTRIES': _RATE_LIMIT_CACHE_MAX_ENTRIES},
     },
 }
 
@@ -492,8 +506,13 @@ AWS_ACCESS_KEY_ID = env.str('R2_ACCESS_KEY_ID', default=None)
 AWS_SECRET_ACCESS_KEY = env.str('R2_SECRET_ACCESS_KEY', default=None)
 R2_ACCOUNT_ID = env.str('R2_ACCOUNT_ID', default=None)
 R2_ENDPOINT_DOMAIN = env.str('R2_ENDPOINT_DOMAIN', default='r2.cloudflarestorage.com')
-# None when the account id is unset, rather than the string 'https://None.None' —
-# an unconfigured endpoint should fail as missing config, not as a bad hostname.
+# None when the account id is unset, rather than the string 'https://None.None'.
+# Note that None is *not* inert to boto3: it means "use the real AWS endpoints",
+# and a None access key means "use the ambient credential chain". So the check
+# that turns a half-configured deployment into an error rather than a request
+# signed against s3.amazonaws.com lives in apps/uploads/s3.py, at the point of
+# use — not here, where raising would break local dev and the CI test job, which
+# legitimately run with no R2 configuration at all.
 AWS_S3_ENDPOINT_URL = f'https://{R2_ACCOUNT_ID}.{R2_ENDPOINT_DOMAIN}' if R2_ACCOUNT_ID else None
 AWS_STORAGE_BUCKET_NAME = env.str('R2_BUCKET_NAME', default=None)
 AWS_S3_REGION_NAME = 'auto'  # R2 doesn't need a specific region

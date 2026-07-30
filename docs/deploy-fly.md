@@ -114,10 +114,20 @@ Expect the first request after an idle period to take ~17s (boot + migrate on a
 512MB shared VM); warm requests answer in ~30ms. A slow first load is the config
 working, not the app being broken.
 
+Background tasks run on the DB backend here (`TASKS_IMMEDIATE` defaults to `DEBUG`,
+which is off), drained by the `db_worker` that `start-prod.sh` starts inside the
+same machine. Two consequences worth knowing on a scale-to-zero app: task failures
+surface on the row rather than in the HTTP response, and the worker only makes
+progress while the machine is awake — Fly autostarts on an incoming HTTP request,
+not on a pending task row, so anything enqueued just before an idle suspend waits
+for the next visitor.
+
 Two things the deploy does not give you:
 
-- **`OPENAI_API_KEY`** is unset, so transcription returns 500. Set it yourself if
-  you need to exercise that path.
+- **`OPENAI_API_KEY`** is unset, so transcription fails. `POST /api/posts/<id>/transcribe/`
+  still returns 202 — the failure lands on the media row as `transcript_status='error'`,
+  not as a 500. (The 500 you'd see locally is the immediate task backend that `DEBUG`
+  turns on.) Set the key yourself if you need to exercise that path.
 - **No superuser.** `init_users` prompts for a username and password, so it fails
   with `EOFError` over `fly ssh console -C`. Run
   `fly ssh console -C 'python /code/manage.py createsuperuser' --app <name>`.

@@ -6,6 +6,7 @@ import os
 import re
 
 from django.conf import settings
+from django.test import SimpleTestCase
 
 from . import BaseTestCase
 
@@ -20,6 +21,53 @@ BUILT_SHELL = (
 # CI's e2e job builds the shell before running this module and sets this, so a
 # missing build there is a broken gate rather than a quietly skipped test.
 REQUIRE_BUILT_SHELL = os.environ.get('REQUIRE_BUILT_SHELL') == '1'
+
+
+def inline_blocks(html):
+    """Yield `(tag, body)` for every inline <style>/<script> block in `html`.
+
+    Inline means "has a body the browser hashes", which is decided by the absence
+    of ``src``, not by the absence of attributes: ``<script type="module">…</script>``
+    is inline and needs a hash, and this repo already writes them that way (see
+    apps/website/templates/website/index.html). Matching only bare ``<script>``
+    would skip those silently while the browser still enforced a hash. A tag
+    *with* src is an external reference, covered by the 'self' source instead.
+    """
+    for tag in ('style', 'script'):
+        for body in re.findall(rf'<{tag}(?![^>]*\ssrc=)[^>]*>(.*?)</{tag}>', html, re.S):
+            yield tag, body
+
+
+class InlineBlockDetectionTests(SimpleTestCase):
+    """Cover the detection itself, which decides what the hash tests can see.
+
+    A scan that silently matches nothing passes exactly as loudly as one that
+    matches everything — the failure mode this whole module exists to prevent.
+    """
+
+    def test_attributed_inline_script_is_found(self):
+        """`<script type="module">` has a body the browser hashes."""
+        found = list(inline_blocks('<script type="module">console.log(1)</script>'))
+        self.assertEqual(found, [('script', 'console.log(1)')])
+
+    def test_bare_inline_script_is_found(self):
+        """The original bare-tag case must keep working."""
+        self.assertEqual(
+            list(inline_blocks('<script>console.log(1)</script>')),
+            [('script', 'console.log(1)')],
+        )
+
+    def test_attributed_inline_style_is_found(self):
+        """Styles have no src, so attributes still leave them inline."""
+        self.assertEqual(
+            list(inline_blocks('<style media="screen">body{color:red}</style>')),
+            [('style', 'body{color:red}')],
+        )
+
+    def test_external_script_is_ignored(self):
+        """A src'd tag is covered by the 'self' source, not by a hash."""
+        html = '<script type="module" crossorigin src="/static/app/index.js"></script>'
+        self.assertEqual(list(inline_blocks(html)), [])
 
 
 class CspHashTests(BaseTestCase):
@@ -38,17 +86,13 @@ class CspHashTests(BaseTestCase):
         self.skipTest(message)
 
     def assert_inline_blocks_allowlisted(self, path):
-        """Assert every bare <style>/<script> block in `path` is hash allowlisted."""
-        html = path.read_text()
-        for tag in ('style', 'script'):
-            # Bare tags only: anything with attributes (`<script type="module" src=…>`)
-            # is an external reference, covered by the 'self' source, not a hash.
-            for block in re.findall(rf'<{tag}>(.*?)</{tag}>', html, re.S):
-                with self.subTest(template=path, tag=tag, block=block):
-                    self.assertNotIn('{{', block)
-                    self.assertNotIn('{%', block)
-                    digest = base64.b64encode(hashlib.sha256(block.encode()).digest()).decode()
-                    self.assertIn(f"'sha256-{digest}'", self.allowlisted_hashes)
+        """Assert every inline <style>/<script> block in `path` is hash allowlisted."""
+        for tag, block in inline_blocks(path.read_text()):
+            with self.subTest(template=path, tag=tag, block=block):
+                self.assertNotIn('{{', block)
+                self.assertNotIn('{%', block)
+                digest = base64.b64encode(hashlib.sha256(block.encode()).digest()).decode()
+                self.assertIn(f"'sha256-{digest}'", self.allowlisted_hashes)
 
     def test_inline_template_blocks_are_hash_allowlisted(self):
         """Every production inline style and script block should be hash allowlisted."""

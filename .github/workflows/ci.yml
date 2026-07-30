@@ -46,6 +46,9 @@ jobs:
       - run: bun install --frozen-lockfile
       # Scoped name, not bare `biome`: that resolves an unrelated package whose
       # bin exits 0 silently, so this gate checked nothing. Pinned like ruff above.
+      # Keep this version in step with the root package.json devDependency and
+      # biome.json's $schema — nothing enforces it, and a drifted pin means CI
+      # quietly enforces a different Biome than anyone runs locally.
       - run: bunx @biomejs/biome@2.3.11 ci .
       # -b, not --noEmit: the root tsconfig is a solution file with "files": [],
       # so a plain `tsc` there checks nothing and passes unconditionally. The

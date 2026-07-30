@@ -19,7 +19,10 @@ from django.conf import settings
 from django.core.cache import DEFAULT_CACHE_ALIAS, caches
 from django.http import JsonResponse
 
-logger = logging.getLogger(__name__)
+# Not __name__ ('apps.ratelimit'): LOGGING configures the 'server.apps' tree, so a
+# __name__ logger here has no handler and the warning below falls through to
+# logging.lastResort — unformatted, and the one message that most needs to be seen.
+logger = logging.getLogger('server.apps.ratelimit')
 
 RATE_LIMIT_CACHE_ALIAS = 'ratelimit'
 
