@@ -12,9 +12,8 @@ either half stops holding, the shim can go — and the failure says so.
 
 from pathlib import Path
 
+from django.test import SimpleTestCase
 from django.utils import cache as django_cache
-
-from . import BaseTestCase
 
 REMOVE_INSTRUCTIONS = (
     'Delete server/config/drf_django61_compat.py, its import in settings.py, '
@@ -22,8 +21,12 @@ REMOVE_INSTRUCTIONS = (
 )
 
 
-class DrfDjango61ShimTests(BaseTestCase):
-    """Fail loudly once the compatibility shim is dead weight."""
+class DrfDjango61ShimTests(SimpleTestCase):
+    """Fail loudly once the compatibility shim is dead weight.
+
+    Pure source inspection, so no database or media fixtures — hence
+    SimpleTestCase rather than the package's BaseTestCase.
+    """
 
     def test_django_still_lacks_cc_delim_re(self):
         """Django re-adding cc_delim_re would make the shim redundant."""
@@ -35,14 +38,23 @@ class DrfDjango61ShimTests(BaseTestCase):
         )
 
     def test_drf_still_imports_cc_delim_re(self):
-        """DRF dropping the import is the fix we are waiting on."""
-        import rest_framework.views
+        """DRF dropping the import is the fix we are waiting on.
 
-        source = Path(rest_framework.views.__file__).read_text()
-        self.assertIn(
-            'cc_delim_re',
-            source,
-            msg=f'DRF no longer imports cc_delim_re. {REMOVE_INSTRUCTIONS}',
+        Scanned package-wide, not just in `rest_framework/views.py`: DRF moving
+        the import to another module would otherwise read as "the fix shipped"
+        and get the still-needed shim deleted.
+        """
+        import rest_framework
+
+        package_root = Path(rest_framework.__file__).parent
+        users = [
+            path.relative_to(package_root)
+            for path in package_root.rglob('*.py')
+            if 'cc_delim_re' in path.read_text()
+        ]
+        self.assertTrue(
+            users,
+            msg=f'No module under rest_framework/ mentions cc_delim_re. {REMOVE_INSTRUCTIONS}',
         )
 
     def test_shim_is_applied(self):

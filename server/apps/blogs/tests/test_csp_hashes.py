@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import os
 import re
 
 from django.conf import settings
@@ -16,6 +17,10 @@ BUILT_SHELL = (
     settings.BASE_DIR / 'apps' / 'website' / 'templates' / 'website' / 'dist' / 'index.html'
 )
 
+# CI's e2e job builds the shell before running this module and sets this, so a
+# missing build there is a broken gate rather than a quietly skipped test.
+REQUIRE_BUILT_SHELL = os.environ.get('REQUIRE_BUILT_SHELL') == '1'
+
 
 class CspHashTests(BaseTestCase):
     """Verify inline styles and scripts have production CSP hashes."""
@@ -25,6 +30,12 @@ class CspHashTests(BaseTestCase):
         super().setUp()
         settings_source = (settings.BASE_DIR / 'config' / 'settings.py').read_text()
         self.allowlisted_hashes = set(re.findall(r"'sha256-[A-Za-z0-9+/=]+'", settings_source))
+
+    def no_build(self, message):
+        """Skip for want of a production build — unless CI promised to make one."""
+        if REQUIRE_BUILT_SHELL:
+            self.fail(f'REQUIRE_BUILT_SHELL is set but the build is unusable: {message}')
+        self.skipTest(message)
 
     def assert_inline_blocks_allowlisted(self, path):
         """Assert every bare <style>/<script> block in `path` is hash allowlisted."""
@@ -67,9 +78,10 @@ class CspHashTests(BaseTestCase):
         Skipped when there is no production build, or when the one on disk
         predates the source, so `manage.py test` stays green on a clean checkout
         and a stale local artifact does not report a break that isn't there.
+        With REQUIRE_BUILT_SHELL=1 (CI) those become failures instead.
         """
         if not BUILT_SHELL.is_file():
-            self.skipTest(f'No production build at {BUILT_SHELL}; run admin/prod/build-prod.sh')
-        if BUILT_SHELL.stat().st_mtime < SOURCE_SHELL.stat().st_mtime:
-            self.skipTest(f'{BUILT_SHELL} predates {SOURCE_SHELL}; rebuild to check it')
+            self.no_build(f'No production build at {BUILT_SHELL}; run admin/prod/build-prod.sh')
+        elif BUILT_SHELL.stat().st_mtime < SOURCE_SHELL.stat().st_mtime:
+            self.no_build(f'{BUILT_SHELL} predates {SOURCE_SHELL}; rebuild to check it')
         self.assert_inline_blocks_allowlisted(BUILT_SHELL)

@@ -154,7 +154,9 @@ class RateLimitTests(TestCase):
         """Freeze the rate-limit window and reset counters between tests."""
         self.client = Client()
         caches[RATE_LIMIT_CACHE_ALIAS].clear()
-        frozen_time = patch('apps.ratelimit.time.time', return_value=1_800_000_000.0)
+        # `apps.ratelimit._now`, not `apps.ratelimit.time.time`: the latter is the
+        # stdlib module's attribute, so patching it freezes the clock process-wide.
+        frozen_time = patch('apps.ratelimit._now', return_value=1_800_000_000.0)
         frozen_time.start()
         self.addCleanup(frozen_time.stop)
 

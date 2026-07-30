@@ -235,8 +235,14 @@ Keeping the split honest:
   - Component tests, hook tests, API client tests
   - Mock data in `__tests__/data/mockPosts.ts`
   - E2E tests with Playwright (`playwright.config.ts`)
-- **CI gates**: Ruff check/format, Biome, backend tests, frontend type/unit/build checks, and
-  Playwright e2e on pushes/PRs
+- **CI gates**: Ruff check/format, Biome, ESLint, backend tests, frontend type/unit/build checks,
+  and Playwright e2e on pushes/PRs
+  - `manage.py test` pins filesystem media storage and a temp `MEDIA_ROOT` via
+    `config/test_runner.py`, so a checkout whose `server/.env` points at R2 still runs the suite
+  - The e2e job builds the SPA shell and runs `test_csp_hashes` with `REQUIRE_BUILT_SHELL=1`: that
+    test hashes the *built* `website/dist/index.html` (what the browser enforces CSP against) and
+    otherwise skips itself, so the env var turns a missing build into a failure rather than a
+    silent pass. It is the only job with both toolchains — keep the check there.
 - Run tests before committing significant changes
 
 ## Project Structure
