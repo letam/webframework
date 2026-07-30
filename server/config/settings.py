@@ -415,6 +415,21 @@ def setup_save_errorlog_to_file(logging: dict):
                 'level': 'DEBUG',
                 'propagate': False,
             },
+            # Same config under the other prefix app modules actually log to.
+            # server/ is the import root, so a module at server/apps/blogs/views.py
+            # is imported as `apps.blogs.views` — `logging.getLogger(__name__)`
+            # there resolves to `apps`, not `server.apps`, and inherits root: no
+            # handlers and an effective level of WARNING. Its debug/info calls are
+            # dropped and its exceptions fall through to logging.lastResort, which
+            # writes bare stderr and never reaches file_errors. Configuring both
+            # prefixes means either convention lands in the error log; see
+            # apps/blogs/tests/test_logging.py, which fails if a logger stops
+            # resolving to a handler.
+            'apps': {
+                'handlers': ['console', 'file_errors'],
+                'level': 'DEBUG',
+                'propagate': False,
+            },
         }
     )
     return logging
