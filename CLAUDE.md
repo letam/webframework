@@ -120,7 +120,11 @@ bun run build:dev
 bun run typecheck
 
 # Linting and formatting
-bun run lint          # ESLint (runs on TypeScript 6, see below)
+bun run lint          # ESLint (runs on TypeScript 6, see below). `--max-warnings 8`
+                      # pins the current warning count: exhaustive-deps and
+                      # only-export-components are warnings, so without a ceiling
+                      # the CI gate would only ever catch errors. Fix warnings and
+                      # lower the number; do not raise it to land new ones.
 bun run check         # Biome check
 bun run format        # Biome format (write)
 bun run format:check  # Biome format (check only)
@@ -194,8 +198,10 @@ Keeping the split honest:
   `tsc` binary, so which one wins `node_modules/.bin/tsc` is install-order luck — today it is
   TS 7, but nothing guarantees that. The script names the TS 7 binary by path
   (`./node_modules/@typescript/native/bin/tsc -b`) so it cannot silently check on TS 6. CI
-  calls the script for the same reason. Some older docs under `docs/plans/` predate this and
-  still say `bunx tsc`; prefer the script.
+  calls the script for the same reason. The relative path is safe from anywhere: `bun run`
+  executes scripts with the cwd set to the `package.json` directory, so it resolves even when
+  invoked from `app/src/`. Some older docs under `docs/plans/` predate this and still say
+  `bunx tsc`; prefer the script.
 - **`-b`, not `--noEmit`.** The app's root `tsconfig.json` is a solution file with `"files": []`
   and three project references, so a plain `tsc --noEmit` there checks zero files and passes
   unconditionally.
@@ -261,8 +267,7 @@ webframework/
 │   │   ├── types/              # TypeScript type definitions
 │   │   ├── utils/              # Tag parsing utilities
 │   │   └── __tests__/          # Frontend tests
-│   ├── biome.json              # Biome config
-│   ├── eslint.config.js        # ESLint config
+│   ├── eslint.config.js        # ESLint config (no app/biome.json — see root)
 │   ├── index.html              # HTML entry point
 │   ├── package.json            # Frontend dependencies
 │   ├── playwright.config.ts    # E2E test config
@@ -290,7 +295,9 @@ webframework/
 ├── html/                       # Static HTML for production
 ├── sys/                        # System utility scripts
 ├── .github/                    # GitHub Actions (Fly.io deploy workflow)
-├── biome.json                  # Root Biome config
+├── biome.json                  # Biome config for the whole repo — there is no
+│                               # app/biome.json; Biome discovers this one by
+│                               # walking up, including when CI runs it from app/
 ├── Dockerfile                  # Multi-stage build (backend + frontend)
 ├── fly.toml                    # Fly.io deployment config
 ├── justfile                    # Task runner (imports from admin/justfiles/)

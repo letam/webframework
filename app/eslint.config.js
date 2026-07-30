@@ -14,6 +14,36 @@ import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
+// eslint-plugin-react-hooks v7's `recommended` preset bundles the React Compiler's
+// Rules-of-React static analysis alongside the two classic Hooks rules. This project
+// does not run the compiler, and in this codebase those rules only flag intentional
+// patterns (the latest-ref pattern in useFeedKeyboard, media-state resets on URL
+// change), vendored shadcn/ui internals, and compiler-only concerns — none are
+// runtime bugs here.
+//
+// Turn them off by name rather than dropping the preset: spreading `recommended`
+// keeps any *classic* rule a future release adds, and this deny-list makes the
+// compiler-specific opt-out explicit. If we adopt the React Compiler, delete this
+// list and address the findings.
+const REACT_COMPILER_RULES = Object.fromEntries(
+	[
+		'config',
+		'error-boundaries',
+		'gating',
+		'globals',
+		'immutability',
+		'incompatible-library',
+		'preserve-manual-memoization',
+		'purity',
+		'refs',
+		'set-state-in-effect',
+		'set-state-in-render',
+		'static-components',
+		'unsupported-syntax',
+		'use-memo',
+	].map((rule) => [`react-hooks/${rule}`, 'off'])
+)
+
 export default tseslint.config(
 	{ ignores: ['dist'] },
 	{
@@ -28,17 +58,10 @@ export default tseslint.config(
 			'react-refresh': reactRefresh,
 		},
 		rules: {
-			// This project does not use the React Compiler. eslint-plugin-react-hooks v7's
-			// `recommended` preset bundles the compiler's Rules-of-React static analysis
-			// (set-state-in-effect, refs, immutability, purity, preserve-manual-memoization,
-			// set-state-in-render, static-components, …) as errors. In this codebase those
-			// only flag intentional patterns (the latest-ref pattern in useFeedKeyboard,
-			// media-state resets on URL change), vendored shadcn/ui internals, and
-			// compiler-only concerns — none are runtime bugs here. Enable just the two
-			// classic Hooks rules. If we adopt the React Compiler later, switch back to
-			// `...reactHooks.configs.recommended.rules` and address the findings then.
-			'react-hooks/rules-of-hooks': 'error',
-			'react-hooks/exhaustive-deps': 'warn',
+			// See REACT_COMPILER_RULES above: the preset stays live, its compiler-only
+			// rules are switched off by name.
+			...reactHooks.configs.recommended.rules,
+			...REACT_COMPILER_RULES,
 			'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
 			// `let` is legitimate when a variable is read (in a closure) before its single
 			// assignment — e.g. Post.tsx's poll-interval id, whose stop/poll closures form a
