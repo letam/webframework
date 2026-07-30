@@ -508,11 +508,13 @@ R2_ACCOUNT_ID = env.str('R2_ACCOUNT_ID', default=None)
 R2_ENDPOINT_DOMAIN = env.str('R2_ENDPOINT_DOMAIN', default='r2.cloudflarestorage.com')
 # None when the account id is unset, rather than the string 'https://None.None'.
 # Note that None is *not* inert to boto3: it means "use the real AWS endpoints",
-# and a None access key means "use the ambient credential chain". So the check
-# that turns a half-configured deployment into an error rather than a request
-# signed against s3.amazonaws.com lives in apps/uploads/s3.py, at the point of
-# use — not here, where raising would break local dev and the CI test job, which
-# legitimately run with no R2 configuration at all.
+# and a None access key means "use the ambient credential chain". The check that
+# turns a half-configured deployment into an error rather than a request signed
+# against s3.amazonaws.com therefore lives at the point of use — not here, where
+# raising would break local dev and the CI test job, which legitimately run with
+# no R2 configuration at all. Both entry points are covered: apps/uploads/s3.py
+# for the presign/head/delete helpers, and S3_MEDIA_STORAGE_BACKEND below for
+# everything Django saves through its own storage API.
 AWS_S3_ENDPOINT_URL = f'https://{R2_ACCOUNT_ID}.{R2_ENDPOINT_DOMAIN}' if R2_ACCOUNT_ID else None
 AWS_STORAGE_BUCKET_NAME = env.str('R2_BUCKET_NAME', default=None)
 AWS_S3_REGION_NAME = 'auto'  # R2 doesn't need a specific region
@@ -527,6 +529,10 @@ MEDIA_ROOT = env.str('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'uploads'))
 MAX_MEDIA_UPLOAD_BYTES = 100 * 1024 * 1024
 
 # Storage backend configuration
+# Not plain S3Boto3Storage: the subclass adds the half-configured-R2 check that
+# django-storages skips by reading the AWS_* settings itself. Keep it that way —
+# swapping it back silently restores the AWS fallback for every Django-side save.
+S3_MEDIA_STORAGE_BACKEND = 'apps.uploads.storage.GuardedS3Boto3Storage'
 STORAGES = {
     # https://whitenoise.readthedocs.io/en/stable/django.html
     'staticfiles': {
@@ -536,7 +542,7 @@ STORAGES = {
         'BACKEND': (
             'django.core.files.storage.FileSystemStorage'
             if USE_LOCAL_FILE_STORAGE
-            else 'storages.backends.s3boto3.S3Boto3Storage'
+            else S3_MEDIA_STORAGE_BACKEND
         ),
     },
 }

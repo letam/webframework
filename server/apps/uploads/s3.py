@@ -31,6 +31,25 @@ REQUIRED_S3_SETTINGS = (
 ALLOWED_CONTENT_TYPE_RE = re.compile(r'^(audio|video|image)/[\w.+-]+(;\s*codecs=[\w.,+" -]+)?$')
 
 
+def require_s3_settings() -> None:
+    """Raise unless every setting an S3 call depends on is present.
+
+    Called from both object storage entry points: the helpers below, and the
+    Django storage backend in ``apps.uploads.storage`` — django-storages reads
+    these settings itself and never passes through ``get_s3_client``.
+
+    Raises:
+        ImproperlyConfigured: If any R2 setting is missing, naming which.
+    """
+    missing = [name for name in REQUIRED_S3_SETTINGS if not getattr(settings, name, None)]
+    if missing:
+        raise ImproperlyConfigured(
+            'Object storage is not configured: missing '
+            f'{", ".join(missing)}. Set the R2_* environment variables, or set '
+            'USE_LOCAL_FILE_STORAGE=True to keep media on the filesystem.'
+        )
+
+
 @lru_cache(maxsize=1)
 def get_s3_client():
     """Return a cached S3-compatible boto3 client.
@@ -40,13 +59,7 @@ def get_s3_client():
             cache exceptions, so this re-raises per call rather than poisoning
             the client for the life of the process.
     """
-    missing = [name for name in REQUIRED_S3_SETTINGS if not getattr(settings, name, None)]
-    if missing:
-        raise ImproperlyConfigured(
-            'Object storage is not configured: missing '
-            f'{", ".join(missing)}. Set the R2_* environment variables, or set '
-            'USE_LOCAL_FILE_STORAGE=True to keep media on the filesystem.'
-        )
+    require_s3_settings()
     return boto3.client(
         's3',
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,

@@ -5,13 +5,17 @@
 import json
 from unittest import mock
 
+from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured
+from django.core.files.base import ContentFile
 from django.test import SimpleTestCase, override_settings
 from django.urls import reverse
+from django.utils.module_loading import import_string
 from rest_framework.test import APIClient
 
 from apps.uploads.s3 import REQUIRED_S3_SETTINGS, generate_presigned_put_url, get_s3_client
+from apps.uploads.storage import GuardedS3Boto3Storage
 
 from ..models import Post
 from . import ViewTestCase
@@ -184,3 +188,33 @@ class S3ConfigurationTests(SimpleTestCase):
             get_s3_client.cache_clear()
             with self.assertRaises(ImproperlyConfigured):
                 generate_presigned_put_url('post/audio/1/clip.mp3', 'audio/mpeg')
+
+    def test_django_storage_saves_reach_the_r2_endpoint(self):
+        """The happy path builds a session aimed at the configured endpoint."""
+        connection = GuardedS3Boto3Storage().connection
+        self.assertEqual(
+            connection.meta.client.meta.endpoint_url, 'https://account.r2.example.com'
+        )
+
+    def test_django_storage_saves_are_refused_when_half_configured(self):
+        """Saving media through Django's storage API is guarded too.
+
+        django-storages reads the AWS_* settings itself rather than going
+        through get_s3_client, so this path needs its own check — a save is
+        what avatars, post media and link-preview images all do.
+        """
+        for name in REQUIRED_S3_SETTINGS:
+            with self.subTest(missing=name), override_settings(**{name: None}):
+                storage = GuardedS3Boto3Storage()
+                with self.assertRaises(ImproperlyConfigured) as caught:
+                    storage.save('avatars/whoever.jpg', ContentFile(b'not really a jpeg'))
+                self.assertIn(name, str(caught.exception))
+
+    def test_settings_point_object_storage_at_the_guarded_backend(self):
+        """S3 media must not be served by the unguarded upstream backend.
+
+        Asserted against the setting rather than STORAGES['default'], which the
+        test runner pins to filesystem storage for the whole suite.
+        """
+        backend = import_string(django_settings.S3_MEDIA_STORAGE_BACKEND)
+        self.assertTrue(issubclass(backend, GuardedS3Boto3Storage))
