@@ -268,6 +268,11 @@ CACHES = {
 }
 
 
+# Test runner: pins media storage to the filesystem so `manage.py test` behaves the
+# same whatever a developer's server/.env says about S3/R2. See config/test_runner.py.
+TEST_RUNNER = 'config.test_runner.LocalStorageTestRunner'
+
+
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 

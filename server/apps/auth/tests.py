@@ -3,6 +3,7 @@
 # pyright: reportAttributeAccessIssue=false
 
 import json
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import caches
@@ -136,17 +137,26 @@ class AuthViewsTestCase(TestCase):
 class RateLimitTests(TestCase):
     """Tests for per-IP rate limiting of the auth endpoints.
 
-    These used to flake in CI (`400 != 429`) because counters shared the default
-    LocMemCache with the rest of the suite: past MAX_ENTRIES (300) it culls keys,
-    which could evict a counter mid-test so the throttle never tripped. Counters
-    now live in their own `ratelimit` cache with a high ceiling — see the CACHES
-    block in settings.py, which fixes the same hazard in production.
+    These used to flake (`400 != 429`) for two reasons, both fixed:
+
+    - Counters shared the default LocMemCache with the rest of the suite, and past
+      MAX_ENTRIES (300) it culls keys — evicting a counter mid-test so the throttle
+      never tripped. They now live in their own `ratelimit` cache with a high
+      ceiling; see the CACHES block in settings.py, which fixes the same hazard in
+      production.
+    - The limiter buckets by `int(time.time() / window)`, so a run that straddles a
+      bucket boundary starts counting again and the 11th request sails through.
+      Time is frozen below, which is a test concern only: in production a client
+      that waits out the window is meant to get a fresh allowance.
     """
 
     def setUp(self):
-        """Reset rate-limit counters between tests."""
+        """Freeze the rate-limit window and reset counters between tests."""
         self.client = Client()
         caches[RATE_LIMIT_CACHE_ALIAS].clear()
+        frozen_time = patch('apps.ratelimit.time.time', return_value=1_800_000_000.0)
+        frozen_time.start()
+        self.addCleanup(frozen_time.stop)
 
     def test_login_is_rate_limited(self):
         """Repeated failed login attempts from one client get a 429."""

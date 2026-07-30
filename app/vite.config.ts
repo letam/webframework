@@ -47,6 +47,15 @@ export default defineConfig(() => ({
 
 	test: {
 		environment: 'jsdom',
+		// Pin the env the app reads, so a developer's own app/.env can't change what
+		// the suite asserts. `VITE_SERVER_HOST=//localhost:8000` (the documented local
+		// setting) otherwise prefixes every API URL and fails the posts API tests,
+		// which pass in CI only because CI has no app/.env. Tests that care about a
+		// value stub it per-test with `vi.stubEnv`.
+		env: {
+			VITE_SERVER_HOST: '',
+			VITE_UPLOAD_FILES_TO_S3: 'false',
+		},
 		setupFiles: ['./vitest.setup.ts'],
 		globals: true,
 		exclude: [...configDefaults.exclude, 'e2e/**'],
