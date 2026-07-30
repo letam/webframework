@@ -2,16 +2,22 @@
 
 DRF views get throttling from the REST_FRAMEWORK settings; this module covers
 the plain Django views (auth, uploads) that DRF throttles don't reach.
-Counters live in the default cache, so with the local-memory backend each
-process keeps its own window. That is good enough to stop credential stuffing
-and bulk abuse, but it is not a hard global guarantee.
+
+Counters live in the dedicated ``ratelimit`` cache, not ``default``: a
+LocMemCache culls a third of its keys once it exceeds MAX_ENTRIES, so sharing a
+cache with general-purpose data means unrelated writes can evict a counter
+mid-window and silently disable throttling. With the local-memory backend each
+process still keeps its own window. That is good enough to stop credential
+stuffing and bulk abuse, but it is not a hard global guarantee.
 """
 
 import time
 from functools import wraps
 
-from django.core.cache import cache
+from django.core.cache import caches
 from django.http import JsonResponse
+
+RATE_LIMIT_CACHE_ALIAS = 'ratelimit'
 
 
 def get_client_ip(request):
@@ -31,6 +37,9 @@ def rate_limit(scope, limit, window_seconds):
     def decorator(view_func):
         @wraps(view_func)
         def wrapper(request, *args, **kwargs):
+            # Resolve per call, not at import: `caches` is a lazy handler, and
+            # tests override CACHES.
+            cache = caches[RATE_LIMIT_CACHE_ALIAS]
             window = int(time.time() / window_seconds)
             key = f'rate-limit:{scope}:{get_client_ip(request)}:{window}'
             if cache.add(key, 1, timeout=window_seconds):

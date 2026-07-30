@@ -238,6 +238,36 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
     DATABASES['default']['CONN_HEALTH_CHECKS'] = True
 
 
+# Caches
+#
+# Django's implicit default is LocMemCache with MAX_ENTRIES=300: once a cache
+# holds more than 300 keys it culls a third of them at random. Throttle counters
+# live in a cache, so sharing one with general-purpose caching means a burst of
+# unrelated writes can evict a counter mid-window and silently disable rate
+# limiting exactly when traffic is highest. Hence two caches:
+#
+#   default   — general use, and DRF's throttles (SimpleRateThrottle is hardwired
+#               to this alias). Raised ceiling so throttle state is not culled.
+#   ratelimit — counters for apps.ratelimit, isolated from everything else.
+#
+# LocMemCache is per process, so with multiple gunicorn workers these limits are
+# per worker and approximate. Point both at Redis/Memcached if a hard global
+# guarantee is ever needed.
+_LOCMEM_MAX_ENTRIES = env.int('CACHE_MAX_ENTRIES', default=50_000)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'default',
+        'OPTIONS': {'MAX_ENTRIES': _LOCMEM_MAX_ENTRIES},
+    },
+    'ratelimit': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'ratelimit',
+        'OPTIONS': {'MAX_ENTRIES': _LOCMEM_MAX_ENTRIES},
+    },
+}
+
+
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
 
@@ -456,8 +486,10 @@ USE_LOCAL_FILE_STORAGE = env.bool('USE_LOCAL_FILE_STORAGE', False)
 AWS_ACCESS_KEY_ID = env.str('R2_ACCESS_KEY_ID', default=None)
 AWS_SECRET_ACCESS_KEY = env.str('R2_SECRET_ACCESS_KEY', default=None)
 R2_ACCOUNT_ID = env.str('R2_ACCOUNT_ID', default=None)
-R2_ENDPOINT_DOMAIN = env.str('R2_ENDPOINT_DOMAIN', default=None)
-AWS_S3_ENDPOINT_URL = f'https://{R2_ACCOUNT_ID}.{R2_ENDPOINT_DOMAIN}'
+R2_ENDPOINT_DOMAIN = env.str('R2_ENDPOINT_DOMAIN', default='r2.cloudflarestorage.com')
+# None when the account id is unset, rather than the string 'https://None.None' —
+# an unconfigured endpoint should fail as missing config, not as a bad hostname.
+AWS_S3_ENDPOINT_URL = f'https://{R2_ACCOUNT_ID}.{R2_ENDPOINT_DOMAIN}' if R2_ACCOUNT_ID else None
 AWS_STORAGE_BUCKET_NAME = env.str('R2_BUCKET_NAME', default=None)
 AWS_S3_REGION_NAME = 'auto'  # R2 doesn't need a specific region
 AWS_DEFAULT_ACL = 'public-read'

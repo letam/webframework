@@ -1,8 +1,12 @@
 """Management command for creating initial application users."""
 
-import os
 from getpass import getpass
 
+# The `env` built in settings, not os.environ: environs>=15 keeps values loaded
+# from server/.env on the Env instance instead of exporting them, so os.getenv
+# would miss a DJANGO_SUPERUSER_* set there and silently fall back to prompting.
+# `env` still reads real environment variables first, so CI and Fly are unaffected.
+from config.settings import env
 from django.core.management.base import BaseCommand, CommandError
 
 from ...models import User
@@ -20,10 +24,10 @@ class Command(BaseCommand):
 
     def create_superuser(self):
         """Create a superuser from DJANGO_SUPERUSER_* env vars or interactive prompts."""
-        username = os.environ.get('DJANGO_SUPERUSER_USERNAME') or input(
+        username = env.str('DJANGO_SUPERUSER_USERNAME', default=None) or input(
             'Enter a username for the superuser: '
         )
-        password = os.environ.get('DJANGO_SUPERUSER_PASSWORD') or getpass(
+        password = env.str('DJANGO_SUPERUSER_PASSWORD', default=None) or getpass(
             'Enter a password for the superuser: '
         )
         if not username or not password:

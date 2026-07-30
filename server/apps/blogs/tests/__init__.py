@@ -4,7 +4,7 @@ import os
 import tempfile
 
 from django.conf import settings
-from django.core.cache import cache
+from django.core.cache import caches
 from django.test import TestCase, override_settings
 
 
@@ -18,9 +18,11 @@ class BaseTestCase(TestCase):
     def setUp(self):
         """Reset shared state between tests."""
         super().setUp()
-        # Rate-limit counters live in the shared cache; clear it so requests
-        # made by earlier tests don't trip throttles in later ones.
-        cache.clear()
+        # Throttle counters live in process-global caches — DRF's in `default`,
+        # apps.ratelimit's in `ratelimit`. Clear every alias so requests made by
+        # earlier tests don't trip throttles in later ones.
+        for alias in settings.CACHES:
+            caches[alias].clear()
 
 
 class ViewTestCase(BaseTestCase):

@@ -5,8 +5,10 @@
 import json
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
+from django.core.cache import caches
 from django.test import Client, TestCase, override_settings
+
+from apps.ratelimit import RATE_LIMIT_CACHE_ALIAS
 
 User = get_user_model()
 
@@ -20,8 +22,8 @@ class AuthViewsTestCase(TestCase):
         self.signup_url = '/auth/signup/'
         self.login_url = '/auth/login/'
         self.status_url = '/auth/status/'
-        # Rate-limit counters live in the shared cache; reset them per test.
-        cache.clear()
+        # Rate-limit counters live in a process-global cache; reset them per test.
+        caches[RATE_LIMIT_CACHE_ALIAS].clear()
 
     def test_signup_success(self):
         """Test successful user registration."""
@@ -131,28 +133,20 @@ class AuthViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 405)
 
 
-# Give the rate-limit tests their own cache. The default LocMemCache is
-# process-global and shared with the rest of the suite; under the full test run
-# it accumulates entries and, once it passes MAX_ENTRIES (300), culls keys —
-# which can silently evict the counter mid-test and make the throttle never
-# trip (the CI-only `400 != 429` flake). A dedicated cache with a large
-# MAX_ENTRIES keeps these tests hermetic and deterministic.
-@override_settings(
-    CACHES={
-        'default': {
-            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'ratelimit-tests',
-            'OPTIONS': {'MAX_ENTRIES': 1_000_000},
-        }
-    }
-)
 class RateLimitTests(TestCase):
-    """Tests for per-IP rate limiting of the auth endpoints."""
+    """Tests for per-IP rate limiting of the auth endpoints.
+
+    These used to flake in CI (`400 != 429`) because counters shared the default
+    LocMemCache with the rest of the suite: past MAX_ENTRIES (300) it culls keys,
+    which could evict a counter mid-test so the throttle never tripped. Counters
+    now live in their own `ratelimit` cache with a high ceiling — see the CACHES
+    block in settings.py, which fixes the same hazard in production.
+    """
 
     def setUp(self):
         """Reset rate-limit counters between tests."""
         self.client = Client()
-        cache.clear()
+        caches[RATE_LIMIT_CACHE_ALIAS].clear()
 
     def test_login_is_rate_limited(self):
         """Repeated failed login attempts from one client get a 429."""
