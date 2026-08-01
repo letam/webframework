@@ -22,6 +22,11 @@ from csp.constants import SELF
 from django.utils.log import DEFAULT_LOGGING
 from environs import Env
 
+# Restore django.utils.cache.cc_delim_re for DRF 3.17.1 on Django 6.1rc1.
+# Must run before any DRF import; see the module docstring. Remove when DRF
+# ships a Django-6.1-compatible release.
+from config import drf_django61_compat  # noqa: F401
+
 # Configure logging
 LOGGING = {
     'version': 1,
@@ -231,6 +236,55 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
     # network hop away and per-request reconnects are expensive.
     DATABASES['default']['CONN_MAX_AGE'] = env.int('DB_CONN_MAX_AGE', default=60)
     DATABASES['default']['CONN_HEALTH_CHECKS'] = True
+
+
+# Caches
+#
+# Django's implicit default is LocMemCache with MAX_ENTRIES=300: once a cache
+# holds more than 300 keys it culls a third of them at random. Throttle counters
+# live in a cache, so sharing one with general-purpose caching means a burst of
+# unrelated writes can evict a counter mid-window and silently disable rate
+# limiting exactly when traffic is highest. Hence two caches:
+#
+#   default   — general use, and DRF's throttles (SimpleRateThrottle is hardwired
+#               to this alias). Raised ceiling so throttle state is not culled.
+#   ratelimit — counters for apps.ratelimit, isolated from everything else.
+#
+# LocMemCache is per process, so with multiple gunicorn workers these limits are
+# per worker and approximate. Point both at Redis/Memcached if a hard global
+# guarantee is ever needed.
+#
+# The two ceilings differ because the entries cost wildly different amounts.
+# LocMemCache stores pickled values, and:
+#
+#   default   — DRF's SimpleRateThrottle stores a *list of request timestamps*
+#               per key, up to num_requests long (1000/hour for 'user',
+#               300/hour for 'anon'). That is ~2.7-9 kB per key, so 10k keys is
+#               ~27-90 MB per worker; start-prod.sh runs 2 workers on a 512 MB
+#               VM. Culling below that is the lesser evil, and reaching 10k
+#               distinct clients an hour is the point at which the honest fix is
+#               a shared cache backend rather than a bigger ceiling.
+#   ratelimit — apps.ratelimit stores a single int per key, tens of bytes, so a
+#               high ceiling is nearly free and buys real eviction headroom.
+_DEFAULT_CACHE_MAX_ENTRIES = env.int('CACHE_MAX_ENTRIES', default=10_000)
+_RATE_LIMIT_CACHE_MAX_ENTRIES = env.int('RATE_LIMIT_CACHE_MAX_ENTRIES', default=50_000)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'default',
+        'OPTIONS': {'MAX_ENTRIES': _DEFAULT_CACHE_MAX_ENTRIES},
+    },
+    'ratelimit': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'ratelimit',
+        'OPTIONS': {'MAX_ENTRIES': _RATE_LIMIT_CACHE_MAX_ENTRIES},
+    },
+}
+
+
+# Test runner: pins media storage to the filesystem so `manage.py test` behaves the
+# same whatever a developer's server/.env says about S3/R2. See config/test_runner.py.
+TEST_RUNNER = 'config.test_runner.LocalStorageTestRunner'
 
 
 # Password validation
@@ -443,18 +497,31 @@ if DEBUG:
 
 
 # File storage configuration
-USE_LOCAL_FILE_STORAGE = os.getenv('USE_LOCAL_FILE_STORAGE', 'False').lower() == 'true'
+# Read via the environs `env` (not os.getenv): environs>=15 loads .env values
+# into the Env instance rather than os.environ, so os.getenv no longer sees them.
+USE_LOCAL_FILE_STORAGE = env.bool('USE_LOCAL_FILE_STORAGE', False)
 
 # S3-compatible object storage configuration
-AWS_ACCESS_KEY_ID = os.getenv('R2_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = os.getenv('R2_SECRET_ACCESS_KEY')
-AWS_S3_ENDPOINT_URL = f"https://{os.getenv('R2_ACCOUNT_ID')}.{os.getenv('R2_ENDPOINT_DOMAIN')}"
-AWS_STORAGE_BUCKET_NAME = os.getenv('R2_BUCKET_NAME')
+AWS_ACCESS_KEY_ID = env.str('R2_ACCESS_KEY_ID', default=None)
+AWS_SECRET_ACCESS_KEY = env.str('R2_SECRET_ACCESS_KEY', default=None)
+R2_ACCOUNT_ID = env.str('R2_ACCOUNT_ID', default=None)
+R2_ENDPOINT_DOMAIN = env.str('R2_ENDPOINT_DOMAIN', default='r2.cloudflarestorage.com')
+# None when the account id is unset, rather than the string 'https://None.None'.
+# Note that None is *not* inert to boto3: it means "use the real AWS endpoints",
+# and a None access key means "use the ambient credential chain". The check that
+# turns a half-configured deployment into an error rather than a request signed
+# against s3.amazonaws.com therefore lives at the point of use — not here, where
+# raising would break local dev and the CI test job, which legitimately run with
+# no R2 configuration at all. Both entry points are covered: apps/uploads/s3.py
+# for the presign/head/delete helpers, and S3_MEDIA_STORAGE_BACKEND below for
+# everything Django saves through its own storage API.
+AWS_S3_ENDPOINT_URL = f'https://{R2_ACCOUNT_ID}.{R2_ENDPOINT_DOMAIN}' if R2_ACCOUNT_ID else None
+AWS_STORAGE_BUCKET_NAME = env.str('R2_BUCKET_NAME', default=None)
 AWS_S3_REGION_NAME = 'auto'  # R2 doesn't need a specific region
 AWS_DEFAULT_ACL = 'public-read'
 AWS_QUERYSTRING_AUTH = False  # Don't add complex authentication-related query parameters to URLs
-AWS_S3_ENDPOINT_FOR_CSP = os.getenv('R2_ENDPOINT_DOMAIN_FOR_CSP')
-SENTRY_FRONTEND_INGEST_FOR_CSP = os.getenv('SENTRY_FRONTEND_INGEST_FOR_CSP')
+AWS_S3_ENDPOINT_FOR_CSP = env.str('R2_ENDPOINT_DOMAIN_FOR_CSP', default=None)
+SENTRY_FRONTEND_INGEST_FOR_CSP = env.str('SENTRY_FRONTEND_INGEST_FOR_CSP', default=None)
 
 # Media files configuration
 MEDIA_URL = env.str('MEDIA_URL', default='/media/')
@@ -462,6 +529,10 @@ MEDIA_ROOT = env.str('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'uploads'))
 MAX_MEDIA_UPLOAD_BYTES = 100 * 1024 * 1024
 
 # Storage backend configuration
+# Not plain S3Boto3Storage: the subclass adds the half-configured-R2 check that
+# django-storages skips by reading the AWS_* settings itself. Keep it that way —
+# swapping it back silently restores the AWS fallback for every Django-side save.
+S3_MEDIA_STORAGE_BACKEND = 'apps.uploads.storage.GuardedS3Boto3Storage'
 STORAGES = {
     # https://whitenoise.readthedocs.io/en/stable/django.html
     'staticfiles': {
@@ -471,7 +542,7 @@ STORAGES = {
         'BACKEND': (
             'django.core.files.storage.FileSystemStorage'
             if USE_LOCAL_FILE_STORAGE
-            else 'storages.backends.s3boto3.S3Boto3Storage'
+            else S3_MEDIA_STORAGE_BACKEND
         ),
     },
 }
@@ -489,7 +560,8 @@ CONTENT_SECURITY_POLICY_DIRECTIVES = {
     'frame-ancestors': [SELF],
     'frame-src': [SELF, 'https://www.youtube-nocookie.com'],
     'form-action': [SELF],
-    'report-uri': '/csp-report/',
+    # No 'report-uri': /csp-report/ had no view, so the SPA catch-all took the POST
+    # and CSRF rejected it. Re-add only with a real endpoint, or Sentry's ingest.
     #
     'media-src': [SELF, 'blob:'],
     'img-src': [SELF, 'blob:'],
@@ -530,7 +602,10 @@ else:
         {
             'script-src': [
                 SELF,
-                "'sha256-Ucm0AC6Vg7xQaBrSEjxBw5seBgXx38qp1ezaIVXWjWk='",
+                # Anti-FOUC theme script in app/index.html, which builds into the shell
+                # this branch serves (website/dist/index.html). Recompute when that
+                # script changes -- test_csp_hashes.py enforces it.
+                "'sha256-vX/WPm+OPB5oEGTIOc/PEDwUw1rNsn80bG2B5D8C9Fo='",
                 #
                 # Hashes for scripts in Django HTML templates
                 "'sha256-DjsUj0pC5ySPg95mtQ6lmWjVIWW5WZ6Kta+NTTdw6FM='",
@@ -588,10 +663,10 @@ CONTENT_SECURITY_POLICY = {
 
 
 # OpenAI API Key
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_API_KEY = env.str('OPENAI_API_KEY', default=None)
 
 # Error monitoring — a no-op unless a DSN is configured.
-SENTRY_DSN = os.getenv('SENTRY_DSN')
+SENTRY_DSN = env.str('SENTRY_DSN', default=None)
 if SENTRY_DSN:
     import sentry_sdk
 

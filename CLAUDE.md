@@ -116,8 +116,15 @@ bun run build
 # Build for development (non-minified)
 bun run build:dev
 
+# Type checking (TypeScript 7) — never `bunx tsc`, see "Two TypeScript versions" below
+bun run typecheck
+
 # Linting and formatting
-bun run lint          # ESLint
+bun run lint          # ESLint (runs on TypeScript 6, see below). `--max-warnings 8`
+                      # pins the current warning count: exhaustive-deps and
+                      # only-export-components are warnings, so without a ceiling
+                      # the CI gate would only ever catch errors. Fix warnings and
+                      # lower the number; do not raise it to land new ones.
 bun run check         # Biome check
 bun run format        # Biome format (write)
 bun run format:check  # Biome format (check only)
@@ -169,6 +176,56 @@ npx @biomejs/biome check .
 - **Path alias**: `@` maps to `app/src/`
 - **TypeScript**: Strict mode is disabled; target ES2020
 
+#### Two TypeScript versions (TS 7 everywhere, TS 6 only for ESLint)
+
+`app/package.json` installs the `typescript` npm package twice, under two aliases:
+
+| Alias in `package.json` | Real version | Who uses it |
+| --- | --- | --- |
+| `@typescript/native` | `typescript@7.x` | **Everything.** The project's actual compiler. |
+| `typescript` | `typescript@6.x` | **ESLint only** — nothing else may use it. |
+
+TypeScript 7 is the compiler this project type-checks against. TS 6 is present for exactly
+one reason: typescript-eslint `import`s the module literally named `typescript`, and its peer
+range is `>=4.8.4 <6.1.0` — it cannot load TS 7. (Checked 2026-07-28: latest 8.65.0, and even
+that day's canary, still declare that range. When typescript-eslint accepts TS 7, collapse
+both aliases back to a single `typescript`, simplify the `typecheck` script, and delete this
+section and the note atop `app/eslint.config.js`.)
+
+Keeping the split honest:
+
+- **Type-check with `bun run typecheck`, never `bunx tsc` / `npx tsc`.** Both packages ship a
+  `tsc` binary, so which one wins `node_modules/.bin/tsc` is install-order luck — today it is
+  TS 7, but nothing guarantees that. The script names the TS 7 binary by path
+  (`./node_modules/@typescript/native/bin/tsc -b`) so it cannot silently check on TS 6. CI
+  calls the script for the same reason. The relative path is safe from anywhere: `bun run`
+  executes scripts with the cwd set to the `package.json` directory, so it resolves even when
+  invoked from `app/src/`. Some older docs under `docs/plans/` predate this and still say
+  `bunx tsc`; prefer the script.
+- **`-b`, not `--noEmit`.** The app's root `tsconfig.json` is a solution file with `"files": []`
+  and three project references, so a plain `tsc --noEmit` there checks zero files and passes
+  unconditionally.
+- **ESLint binds to TS 6 by package name, not by binary**, so it resolves deterministically
+  and needs no special invocation. `bun run lint` is gated in CI — that gate is the only thing
+  that justifies TS 6 being installed at all.
+- **Vite, Vitest and Playwright use neither install** — they transpile via esbuild/SWC and
+  never load the `typescript` library. Nothing outside the typescript-eslint dependency chain
+  declares a dependency on `typescript`.
+- **Editor diagnostics come from TS 6, by necessity.** The TS 7 npm package ships only `tsc` —
+  no `tsserver`, no language server — so `node_modules/.bin/tsserver` is TS 6. Editors will
+  therefore report TS 6 diagnostics while CI checks on TS 7. `bun run typecheck` is the source
+  of truth when the two disagree.
+- **Do not swap the TS 6 alias for `@typescript/typescript6`.** That is Microsoft's transition
+  package — it exposes `tsc6` instead of `tsc`, so TS 7 can own the `tsc` name — and it is the
+  right endpoint, but it does not work under bun. It is a 10 KB shim whose `lib/typescript.js`
+  is `module.exports = require("@typescript/old")`, where `@typescript/old` is its own
+  `npm:typescript@^6` dependency. Alias the root `typescript` to it and bun 1.3.14 satisfies
+  that nested request with the shim itself, installing it at `node_modules/@typescript/old` —
+  the wrapper then requires itself, `require('typescript')` returns `{}`, and `bun run lint`
+  dies with `Cannot read properties of undefined (reading 'split')`. The identical manifest is
+  fine under npm. Measured 2026-07-28 on the PR 10 review; revisit if bun fixes alias dedup,
+  though typescript-eslint gaining TS 7 support retires the whole split first.
+
 ### Testing
 
 - **Backend**: Django's built-in test framework. Tests in `server/apps/blogs/tests/`
@@ -178,8 +235,14 @@ npx @biomejs/biome check .
   - Component tests, hook tests, API client tests
   - Mock data in `__tests__/data/mockPosts.ts`
   - E2E tests with Playwright (`playwright.config.ts`)
-- **CI gates**: Ruff check/format, Biome, backend tests, frontend type/unit/build checks, and
-  Playwright e2e on pushes/PRs
+- **CI gates**: Ruff check/format, Biome, ESLint, backend tests, frontend type/unit/build checks,
+  and Playwright e2e on pushes/PRs
+  - `manage.py test` pins filesystem media storage and a temp `MEDIA_ROOT` via
+    `config/test_runner.py`, so a checkout whose `server/.env` points at R2 still runs the suite
+  - The e2e job builds the SPA shell and runs `test_csp_hashes` with `REQUIRE_BUILT_SHELL=1`: that
+    test hashes the *built* `website/dist/index.html` (what the browser enforces CSP against) and
+    otherwise skips itself, so the env var turns a missing build into a failure rather than a
+    silent pass. It is the only job with both toolchains — keep the check there.
 - Run tests before committing significant changes
 
 ## Project Structure
@@ -210,8 +273,7 @@ webframework/
 │   │   ├── types/              # TypeScript type definitions
 │   │   ├── utils/              # Tag parsing utilities
 │   │   └── __tests__/          # Frontend tests
-│   ├── biome.json              # Biome config
-│   ├── eslint.config.js        # ESLint config
+│   ├── eslint.config.js        # ESLint config (no app/biome.json — see root)
 │   ├── index.html              # HTML entry point
 │   ├── package.json            # Frontend dependencies
 │   ├── playwright.config.ts    # E2E test config
@@ -239,7 +301,9 @@ webframework/
 ├── html/                       # Static HTML for production
 ├── sys/                        # System utility scripts
 ├── .github/                    # GitHub Actions (Fly.io deploy workflow)
-├── biome.json                  # Root Biome config
+├── biome.json                  # Biome config for the whole repo — there is no
+│                               # app/biome.json; Biome discovers this one by
+│                               # walking up, including when CI runs it from app/
 ├── Dockerfile                  # Multi-stage build (backend + frontend)
 ├── fly.toml                    # Fly.io deployment config
 ├── justfile                    # Task runner (imports from admin/justfiles/)
@@ -274,22 +338,29 @@ See `app/.env.development.local.sample` for template:
 
 ### Fly.io
 
-- **Config**: `fly.toml` (main), `admin/configs/fly-sqlite.toml`, `admin/configs/fly-postgres.toml`
-- **Release command**: `python manage.py migrate --noinput`
+- **Config**: canonical configs are in `admin/configs/` — `fly-sqlite.toml` (production),
+  `fly-postgres.toml`, `fly-preview.toml` (preview apps, scales to zero). The root `fly.toml`
+  is a reference snapshot; do not deploy with it.
+- **Migrations**: run on boot via `server/start-prod.sh`, not via `release_command` (a release
+  VM has no access to the storage volume)
 - **Server**: Gunicorn on port 8000
 - **Static files**: Served by WhiteNoise at `/static/`
-- **VM**: 512MB RAM, 1 shared CPU, US East (iad)
+- **VM**: 512MB RAM, 1 shared CPU, Toronto (`yyz`)
+- **Runbook**: `docs/deploy-fly.md`
 
 ```bash
-# Deploy with SQLite
-just fly-deploy-app-sqlite
+# Deploy with SQLite (production)
+just fly-deploy-app-sqlite webframework
 
 # Deploy with PostgreSQL
-just fly-deploy-app-postgres
+just fly-deploy-app-postgres <app-name>
+
+# Deploy a preview app
+just fly-deploy-app-preview <app-name>
 
 # Launch new app
-just fly-launch-app-sqlite
-just fly-launch-app-postgres
+just fly-launch-app-sqlite <app-name>
+just fly-launch-app-postgres <app-name>
 ```
 
 ### Docker

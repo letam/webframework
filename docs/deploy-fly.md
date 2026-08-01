@@ -21,6 +21,8 @@ The **canonical deploy configs** live in `admin/configs/`:
 
 - `fly-sqlite.toml` — production (SQLite on the mounted volume).
 - `fly-postgres.toml` — alternative (managed Postgres).
+- `fly-preview.toml` — preview apps. Same as `fly-sqlite.toml` but the machine
+  suspends when idle. See [Preview apps](#preview-apps).
 
 The root `fly.toml` is a **reference snapshot only** — a human-readable copy of
 the live SQLite setup. Do not deploy with it directly.
@@ -83,6 +85,60 @@ fly machine exec "$MACHINE" "python /code/manage.py migrate --noinput" -a webfra
 # 4. Redeploy the same image to restore start-prod.sh as the machine command.
 fly deploy --config admin/configs/fly-sqlite.toml --app webframework --image <registry.fly.io/webframework:deployment-...>
 ```
+
+## Preview apps
+
+A preview is a separate Fly app on the same image, scaled to zero when idle.
+Creating one from scratch:
+
+```bash
+fly apps create <name> --org personal
+fly volumes create myapp_data --app <name> --region yyz --size 1 --yes
+
+# SECRET_KEY has no default in settings.py, so the app cannot boot without it.
+# Generate a fresh one — do not reuse production's.
+fly secrets set --stage --app <name> \
+  SECRET_KEY="$(openssl rand -base64 48 | tr -d '\n')" \
+  DATABASE_URL='sqlite:////data/db.sqlite3' \
+  MEDIA_URL="https://<name>.fly.dev/media/" \
+  MEDIA_ROOT='/data/uploads' \
+  USE_LOCAL_FILE_STORAGE='True'
+
+just fly-deploy-app-preview <name>
+```
+
+`ALLOWED_HOSTS` and `CSRF_TRUSTED_ORIGINS` pick up `<name>.fly.dev` automatically —
+`settings.py` derives them from `FLY_APP_NAME`, which Fly injects into every machine.
+
+Expect the first request after an idle period to take ~17s (boot + migrate on a
+512MB shared VM); warm requests answer in ~30ms. A slow first load is the config
+working, not the app being broken.
+
+Background tasks run on the DB backend here (`TASKS_IMMEDIATE` defaults to `DEBUG`,
+which is off), drained by the `db_worker` that `start-prod.sh` starts inside the
+same machine. Two consequences worth knowing on a scale-to-zero app: task failures
+surface on the row rather than in the HTTP response, and the worker only makes
+progress while the machine is awake — Fly autostarts on an incoming HTTP request,
+not on a pending task row, so anything enqueued just before an idle suspend waits
+for the next visitor.
+
+Two things the deploy does not give you:
+
+- **`OPENAI_API_KEY`** is unset, so transcription fails. `POST /api/posts/<id>/transcribe/`
+  still returns 202 — the failure lands on the media row as `transcript_status='error'`,
+  not as a 500. (The 500 you'd see locally is the immediate task backend that `DEBUG`
+  turns on.) Set the key yourself if you need to exercise that path.
+- **No superuser.** `init_users` prompts for a username and password, so it fails
+  with `EOFError` over `fly ssh console -C`. Run
+  `fly ssh console -C 'python /code/manage.py createsuperuser' --app <name>`.
+  The `anonymous` user needs no action — migration
+  `users/0003_create_anonymous_user` creates it.
+
+Tear down with `fly apps destroy <name>`, which takes the volume with it.
+
+Prefer this sequence over `admin/deploy/launch-fly.io-sqlite.sh`: that script
+rewrites the root `fly.toml` in place (restoring it only if it succeeds), needs
+GNU `sed`, and never sets `SECRET_KEY`.
 
 ## Environment facts (production container)
 

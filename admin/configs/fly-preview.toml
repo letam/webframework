@@ -1,0 +1,58 @@
+# Preview/staging variant of fly-sqlite.toml. Identical except that the machine may
+# suspend when idle, so a preview app costs nothing while nobody is looking at it.
+#
+# Deploy: fly deploy --config admin/configs/fly-preview.toml --app <name>
+#   (or: just fly-deploy-app-preview <name>)
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'FLY_APP_NAME'
+primary_region = 'yyz'
+console_command = '/code/manage.py shell'
+
+[build]
+
+[deploy]
+# NOTE: Run database migrations manually after deploy if using volume storage, since release_command does not have access to fly.io storage volumes
+# Reference: https://community.fly.io/t/using-sqlite-from-persistent-volume-for-django-application/16206/3
+#  release_command = 'python manage.py migrate --noinput'
+
+[env]
+  PORT = '8000'
+
+[[mounts]]
+  source = 'myapp_data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+# Reference for autostop/autostart: https://fly.io/docs/launch/autostop-autostart/
+  auto_stop_machines = 'suspend' # the first request after an idle period pays a cold start
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[http_service.checks]]
+  interval = '30s'
+  timeout = '5s'
+  # Generous grace: start-prod.sh runs migrations on boot, and Django cold-start
+  # on a 512MB shared VM is slow. Too-short a grace flags a healthy-but-booting
+  # machine as failed.
+  grace_period = '40s'
+  method = 'GET'
+  path = '/healthz/'
+
+[[vm]]
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
+
+[[statics]]
+  guest_path = '/code/static'
+  url_prefix = '/static/'
+
+[[statics]]
+  guest_path = '/data/uploads'
+  url_prefix = '/media/'

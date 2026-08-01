@@ -108,6 +108,14 @@ The web app during development is served via http://localhost:8000
 		bun dev
 		```
 
+> **Type checking:** run `bun run typecheck`, not `bunx tsc`. The app installs TypeScript
+> twice — TS 7 (aliased `@typescript/native`) is the real compiler, and TS 6 (aliased
+> `typescript`) exists only because ESLint's typescript-eslint can't load TS 7 yet. Both ship
+> a `tsc` binary, so a bare `tsc` picks one by install-order luck; the script names the TS 7
+> binary explicitly. Note that editors run TS 6 for diagnostics — the TS 7 package ships no
+> language server — so `bun run typecheck` is the source of truth. See
+> [CLAUDE.md](CLAUDE.md) ("Two TypeScript versions") for the full story.
+
 #### Misc setup stuff
 
 - If you're on macOS and you didn't follow the quick setup, then ensure that [gsed](https://www.gnu.org/software/sed/) is installed, which can be done via `brew install gsed` or `admin/setup/setup-mac.sh`. We use `gsed` in shell scripts to manage configuration-deployment of project.

@@ -44,8 +44,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - run: bunx biome ci .
-      - run: bunx tsc --noEmit
+      # Scoped name, not bare `biome`: that resolves an unrelated package whose
+      # bin exits 0 silently, so this gate checked nothing. Pinned like ruff above.
+      # Keep this version in step with the root package.json devDependency and
+      # biome.json's $schema — nothing enforces it, and a drifted pin means CI
+      # quietly enforces a different Biome than anyone runs locally.
+      - run: bunx @biomejs/biome@2.3.11 ci .
+      # -b, not --noEmit: the root tsconfig is a solution file with "files": [],
+      # so a plain `tsc` there checks nothing and passes unconditionally. The
+      # script spells out the TS 7 binary because `typescript` (TS 6, kept for
+      # typescript-eslint) also ships a `tsc`, and which one wins node_modules/.bin
+      # is install-order luck.
+      - run: bun run typecheck
+      # ESLint is the sole reason the TS 6 alias is installed alongside TS 7
+      # (typescript-eslint can't load TS 7 yet). Gating it here is what keeps that
+      # second install justified. See CLAUDE.md, "Two TypeScript versions".
+      - run: bun run lint
       - run: bunx vitest run
       - run: bun run build
 
@@ -79,6 +93,27 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
         working-directory: app
+      # The CSP hash test for the built shell is skipped without a production
+      # build on disk, and this is the only job with both toolchains — the
+      # frontend job has no Python, the backend job no bun. Without this step
+      # nothing in CI checks the file the browser actually enforces hashes
+      # against — exactly the regression "fix(csp): allowlist the built SPA
+      # shell's theme script, not the DEBUG-only one" fixed. Named rather than
+      # cited by SHA: a squash-merge or rebase rewrites it. Mirrors the
+      # Dockerfile: copy the built index.html, then stamp the timestamp comment.
+      - name: Build the production SPA shell
+        run: bun run build
+        working-directory: app
+      - name: Check CSP hashes against the built shell
+        env:
+          REQUIRE_BUILT_SHELL: '1'
+        run: |
+          dist=server/apps/website/templates/website/dist
+          mkdir -p "$dist"
+          cp app/dist/index.html "$dist/index.html"
+          sed -i "s|<!-- TIMESTAMP -->|<!-- TIMESTAMP: $(date +'%Y-%m-%d %H:%M:%S %Z') -->|" \
+            "$dist/index.html"
+          uv run python server/manage.py test apps.blogs.tests.test_csp_hashes
       - run: bunx playwright install --with-deps chromium
         working-directory: app
       - name: Configure frontend dev env

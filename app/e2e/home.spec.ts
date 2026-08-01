@@ -33,9 +33,10 @@ test.describe('Home Page', () => {
 	test('should display the feed section', async ({ page }) => {
 		await page.goto('/')
 
-		// Wait for the page to load and check for feed container
-		// The feed area exists under the max-w-2xl mx-auto container
-		await expect(page.locator('.max-w-2xl.mx-auto').first()).toBeVisible({ timeout: 10000 })
+		// Wait for the page to load and check for the feed container. Target the
+		// stable data-testid rather than a Tailwind width class, which has churned
+		// with feed-layout redesigns.
+		await expect(page.getByTestId('feed')).toBeVisible({ timeout: 10000 })
 	})
 
 	test('should navigate to settings page', async ({ page }) => {

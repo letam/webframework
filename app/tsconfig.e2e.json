@@ -1,0 +1,10 @@
+{
+	"extends": "./tsconfig.app.json",
+	"compilerOptions": {
+		// Playwright specs and config run in Node, not the browser. The explicit
+		// types entry is required: automatic @types discovery does not pick up
+		// node here the way it does for tsconfig.node.json.
+		"types": ["node"]
+	},
+	"include": ["e2e", "playwright.config.ts"]
+}

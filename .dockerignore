@@ -2,6 +2,7 @@ fly.toml
 .git/
 *.sqlite3
 venv
+.venv
 .tmp/
 
 server/.env
@@ -9,7 +10,10 @@ server/static
 server/uploads
 
 app/.env
-app/node_modules
+
+# Never copied into an image (each stage installs its own), but still uploaded to
+# the remote builder on every deploy.
+**/node_modules
 
 **/__pycache__
 **/*.sqlite3

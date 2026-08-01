@@ -11,6 +11,11 @@ fly-deploy-app-postgres app_name:
     fly deploy --config admin/configs/fly-postgres.toml --app {{app_name}}
 
 
+# Deploy preview app (SQLite, scales to zero when idle)
+fly-deploy-app-preview app_name:
+    fly deploy --config admin/configs/fly-preview.toml --app {{app_name}}
+
+
 # Launch app with local SQLite database
 fly-launch-app-sqlite app_name:
     ./admin/deploy/launch-fly.io-sqlite.sh {{app_name}}

@@ -8,8 +8,21 @@ import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 
 logger = logging.getLogger(__name__)
+
+# Settings that must all be present before an S3 call can mean anything. Checked
+# together because a partial set is the dangerous case: boto3 reads a None
+# endpoint_url as "use real AWS" and a None access key as "use the ambient
+# credential chain", so a deployment missing only R2_ACCOUNT_ID would quietly
+# sign URLs against https://<bucket>.s3.amazonaws.com instead of failing.
+REQUIRED_S3_SETTINGS = (
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+    'AWS_S3_ENDPOINT_URL',
+    'AWS_STORAGE_BUCKET_NAME',
+)
 
 # Only media uploads are expected; this rejects types like text/html that
 # could be used to serve malicious content from the bucket. The optional
@@ -18,9 +31,35 @@ logger = logging.getLogger(__name__)
 ALLOWED_CONTENT_TYPE_RE = re.compile(r'^(audio|video|image)/[\w.+-]+(;\s*codecs=[\w.,+" -]+)?$')
 
 
+def require_s3_settings() -> None:
+    """Raise unless every setting an S3 call depends on is present.
+
+    Called from both object storage entry points: the helpers below, and the
+    Django storage backend in ``apps.uploads.storage`` — django-storages reads
+    these settings itself and never passes through ``get_s3_client``.
+
+    Raises:
+        ImproperlyConfigured: If any R2 setting is missing, naming which.
+    """
+    missing = [name for name in REQUIRED_S3_SETTINGS if not getattr(settings, name, None)]
+    if missing:
+        raise ImproperlyConfigured(
+            'Object storage is not configured: missing '
+            f'{", ".join(missing)}. Set the R2_* environment variables, or set '
+            'USE_LOCAL_FILE_STORAGE=True to keep media on the filesystem.'
+        )
+
+
 @lru_cache(maxsize=1)
 def get_s3_client():
-    """Return a cached S3-compatible boto3 client."""
+    """Return a cached S3-compatible boto3 client.
+
+    Raises:
+        ImproperlyConfigured: If any R2 setting is missing. lru_cache does not
+            cache exceptions, so this re-raises per call rather than poisoning
+            the client for the life of the process.
+    """
+    require_s3_settings()
     return boto3.client(
         's3',
         aws_access_key_id=settings.AWS_ACCESS_KEY_ID,

@@ -1,5 +1,5 @@
 import { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
-import { Video, Square, Play, Pause } from 'lucide-react'
+import { Video, Square } from 'lucide-react'
 // webm-duration-fix (and its Node polyfills) is only needed once a recording
 // stops, so it is imported dynamically to keep it out of the initial bundle.
 import { Button } from '@/components/ui/button'
@@ -57,7 +57,6 @@ const VideoRecorder = forwardRef<
 >(({ onVideoCaptured, disabled, autoStart = false }, ref) => {
 	const [isRecording, setIsRecording] = useState(false)
 	const [videoURL, setVideoURL] = useState<string | null>(null)
-	const [isPlaying, setIsPlaying] = useState(false)
 	const [recordingTime, setRecordingTime] = useState<number>(0)
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const videoChunksRef = useRef<Blob[]>([])
@@ -80,7 +79,6 @@ const VideoRecorder = forwardRef<
 			URL.revokeObjectURL(videoURL)
 			setVideoURL(null)
 		}
-		setIsPlaying(false)
 		videoChunksRef.current = []
 		if (mediaRecorderRef.current) {
 			mediaRecorderRef.current = null
@@ -229,21 +227,6 @@ const VideoRecorder = forwardRef<
 		}
 	}
 
-	const togglePlayback = () => {
-		if (videoRef.current && videoURL) {
-			if (isPlaying) {
-				videoRef.current.pause()
-			} else {
-				videoRef.current.play()
-			}
-			setIsPlaying(!isPlaying)
-		}
-	}
-
-	const handlePlaybackEnded = () => {
-		setIsPlaying(false)
-	}
-
 	return (
 		<div className="flex flex-col h-full">
 			<div className="flex-1 flex flex-col">
@@ -256,7 +239,6 @@ const VideoRecorder = forwardRef<
 						loop={false}
 						playsInline
 						src={videoURL || undefined}
-						onEnded={handlePlaybackEnded}
 						style={{ transform: 'scaleX(-1)' }} // Mirror the video for selfie view
 					/>
 					{!isRecording && !videoURL && (
