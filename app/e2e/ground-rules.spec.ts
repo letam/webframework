@@ -21,24 +21,23 @@ test.describe('Ground Rules Modal', () => {
 		await expect(acceptButton).toBeVisible()
 		await expect(acceptButton).toHaveAttribute('aria-disabled', 'true')
 
-		// Click accept without checking boxes (force: Playwright treats
-		// aria-disabled as non-actionable, but the button stays clickable so
-		// users get the "check all boxes" hint).
+		// Activate accept without checking boxes, to assert the "check all boxes" hint.
 		//
-		// hover() first: `force` skips the actionability checks wholesale, including
-		// the stability wait, so the click can fire at coordinates measured before
-		// Radix's dialog open-animation settles — landing on a rule's checkbox label
-		// instead of the button. handleAccept then never runs, hasAttemptedAccept stays
-		// false, and the hint never renders, so the assertion below fails with a
-		// stray checkbox ticked. hover() waits for the element to stop moving and does
-		// not assert enabled, so it settles the animation without tripping over
-		// aria-disabled.
+		// Keyboard, not a forced click. The button carries aria-disabled while staying
+		// activatable, so `click()` is rejected by the enabled actionability check and
+		// needs `force: true` — which skips the visible/enabled/stable and hit-target
+		// checks and clicks a point computed right before input. With the stability
+		// check gone the click can land at coordinates measured while Radix's dialog
+		// is still animating in, hitting a rule's checkbox label instead of the button:
+		// handleAccept never runs, hasAttemptedAccept stays false, the hint never
+		// renders, and the failure surfaces as a stray checkbox ticked in the snapshot.
 		//
-		// Only reproducible under load — a local run with default (per-core) workers,
-		// where the parallel suites saturate the Django dev server. CI pins workers to
-		// 1 and does not hit it. Cheap insurance rather than a fix for a live failure.
-		await acceptButton.hover()
-		await acceptButton.click({ force: true })
+		// press() needs no force here and targets the focused element rather than a
+		// coordinate, so the animation cannot misdirect it — and it covers keyboard
+		// activation of the hint for free. Measured over 10 runs at default workers,
+		// which is where this reproduces: 2/10 misclicks with the forced click, 0/10
+		// with press(). CI pins workers to 1 and never hit it.
+		await acceptButton.press('Enter')
 
 		// Modal should still be visible (can't close without checking all boxes)
 		await expect(page.getByRole('dialog')).toBeVisible()
