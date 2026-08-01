@@ -23,7 +23,21 @@ test.describe('Ground Rules Modal', () => {
 
 		// Click accept without checking boxes (force: Playwright treats
 		// aria-disabled as non-actionable, but the button stays clickable so
-		// users get the "check all boxes" hint)
+		// users get the "check all boxes" hint).
+		//
+		// hover() first: `force` skips the actionability checks wholesale, including
+		// the stability wait, so the click can fire at coordinates measured before
+		// Radix's dialog open-animation settles — landing on a rule's checkbox label
+		// instead of the button. handleAccept then never runs, hasAttemptedAccept stays
+		// false, and the hint never renders, so the assertion below fails with a
+		// stray checkbox ticked. hover() waits for the element to stop moving and does
+		// not assert enabled, so it settles the animation without tripping over
+		// aria-disabled.
+		//
+		// Only reproducible under load — a local run with default (per-core) workers,
+		// where the parallel suites saturate the Django dev server. CI pins workers to
+		// 1 and does not hit it. Cheap insurance rather than a fix for a live failure.
+		await acceptButton.hover()
 		await acceptButton.click({ force: true })
 
 		// Modal should still be visible (can't close without checking all boxes)
