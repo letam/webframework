@@ -385,16 +385,47 @@ def setup_save_errorlog_to_file(logging: dict):
     #     except FileNotFoundError as e:
     #         print(e)
 
+    logging['formatters'].update(
+        {
+            # DEFAULT_LOGGING only ships `django.server` ([time] message), which
+            # names neither the level nor the module — fine for request lines,
+            # too thin for an error log you read after the fact. `{name}` is the
+            # dotted logger name (apps.blogs.views), not `{module}`, which would
+            # render both blogs/views.py and users/views.py as bare `views`.
+            'app': {
+                'format': '{levelname} {asctime} {name} {message}',
+                'style': '{',
+            },
+        }
+    )
     logging['handlers'].update(
         {
             'file_errors': {
                 'level': 'ERROR',
                 'filters': ['require_debug_false'],
-                'formatter': 'django.server',
+                'formatter': 'app',
                 'class': 'logging.handlers.RotatingFileHandler',
                 'filename': errorlog_filepath,
                 'maxBytes': 10485760,  # 10MB
                 'backupCount': 5,
+            },
+            # DEFAULT_LOGGING's `console` carries a require_debug_true filter, so
+            # under DEBUG=False it drops every record — which would leave
+            # `file_errors` as the only destination in production, and that file
+            # lives on the container's ephemeral filesystem (BASE_DIR/../log,
+            # i.e. /log in the image), not on the mounted volume. It is wiped on
+            # every deploy and never reaches `fly logs`. This unfiltered twin
+            # keeps app errors on stderr in both modes, which is what Fly's log
+            # stream actually captures.
+            #
+            # Level INFO, matching `console`: the app loggers sit at DEBUG so a
+            # module *can* opt into debug output locally, but debug records must
+            # not reach production stderr — blogs/transcription.py logs whole
+            # transcripts at that level.
+            'app_console': {
+                'level': 'INFO',
+                'class': 'logging.StreamHandler',
+                'formatter': 'app',
             },
         }
     )
@@ -406,12 +437,12 @@ def setup_save_errorlog_to_file(logging: dict):
                 'propagate': True,
             },
             'server': {
-                'handlers': ['console', 'file_errors'],
+                'handlers': ['app_console', 'file_errors'],
                 'level': 'DEBUG',
                 'propagate': True,
             },
             'server.apps': {
-                'handlers': ['console', 'file_errors'],
+                'handlers': ['app_console', 'file_errors'],
                 'level': 'DEBUG',
                 'propagate': False,
             },
@@ -426,7 +457,7 @@ def setup_save_errorlog_to_file(logging: dict):
             # apps/blogs/tests/test_logging.py, which fails if a logger stops
             # resolving to a handler.
             'apps': {
-                'handlers': ['console', 'file_errors'],
+                'handlers': ['app_console', 'file_errors'],
                 'level': 'DEBUG',
                 'propagate': False,
             },
