@@ -152,6 +152,27 @@ class LoggerConfigurationTests(SimpleTestCase):
                     'stream. Wire it to `app_console`, not the filtered `console`.',
                 )
 
+    def test_django_errors_reach_the_process_output_stream(self):
+        """Django's own errors need the production log stream as much as ours do.
+
+        `django.request` carries the traceback for every unhandled 500 — the one
+        record you most want after a deploy goes wrong. It is not an app logger,
+        so the scan above never sees it, and it stayed on the require_debug_true
+        `console` deliberately: at INFO it would log a WARNING per 404. Only the
+        ERROR half is routed to stderr, and only that half is asserted here.
+        """
+        streams = [
+            handler
+            for handler in handlers_accepting_errors('django.request')
+            if isinstance(handler, logging.StreamHandler)
+            and not isinstance(handler, logging.FileHandler)
+        ]
+        self.assertTrue(
+            streams,
+            "Logger 'django.request' has no stderr handler that survives DEBUG=False, "
+            'so unhandled 500 tracebacks never reach the production log stream.',
+        )
+
     def test_errors_reach_the_error_log(self):
         """The rotating file is the point of setup_save_errorlog_to_file — use it."""
         for name, path in declared_loggers():

@@ -427,12 +427,29 @@ def setup_save_errorlog_to_file(logging: dict):
                 'class': 'logging.StreamHandler',
                 'formatter': 'app',
             },
+            # The stderr twin of `file_errors` — same level, same filter, so it
+            # fires exactly when that one does. Django's own errors (the
+            # `django.request` ERROR carrying an unhandled 500's traceback,
+            # django.security.*) otherwise share the fate the app loggers just
+            # escaped: filtered out of `console` under DEBUG=False and left only
+            # in the ephemeral log file. `django` cannot simply move to
+            # `app_console` the way the app loggers did — at INFO it would put a
+            # django.request WARNING on stderr for every 404, which on a public
+            # site is bot noise, not signal. Restricting this to ERROR takes the
+            # tracebacks and leaves the scan traffic behind. require_debug_false
+            # keeps development output identical: `console` alone, no duplicates.
+            'console_errors': {
+                'level': 'ERROR',
+                'filters': ['require_debug_false'],
+                'class': 'logging.StreamHandler',
+                'formatter': 'app',
+            },
         }
     )
     logging['loggers'].update(
         {
             'django': {
-                'handlers': ['console', 'file_errors'],
+                'handlers': ['console', 'console_errors', 'file_errors'],
                 'level': 'INFO',
                 'propagate': True,
             },
