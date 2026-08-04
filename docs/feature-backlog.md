@@ -21,6 +21,12 @@ Still shipped-but-not-yet-done at a glance: sharing with *selected users*, auto-
 draft composer, richer reactions, shorts / iPhone re-encode / volume normalization, and
 self-hosted Whisper — all called out below.
 
+**Update 2026-08-04.** Four more rows shipped since and are annotated in place: rich text,
+feed keyboard shortcuts, and two of the UX bugs. The ops half of this file grew a
+**Tech debt & pins to unwind** section — production now runs a Django *release candidate*,
+which is a dated pin rather than a permanent one — and the ops list is re-ordered so the
+one thing blocking error visibility (`SENTRY_DSN`) sits at the top.
+
 ---
 
 ## P1 — Post privacy  ✅ Shipped 2026-07-09 (da97de9)
@@ -171,13 +177,16 @@ ActivityPub only if the node idea gets serious.
   docs/plans/2026-07-10-share-page-link-previews.md) — that work also fixed a pre-existing prod
   bug (stale CSP style hash left the share page unstyled in production) and added a CSP hash
   regression test.
-- **Rich text** — bold/italic in the composer (was marked ASAP once); full rich-text
-  editor only if genuinely needed.
+- **Rich text** ✅ bold/italic shipped 2026-07-11 (0c0c247) — markdown-lite (`**bold**`,
+  `*italic*`) in the composer and post body. **Still open:** a full rich-text editor, and
+  only if genuinely needed.
 - **Magic-link sign-in**; registration via a shared signup code that refreshes daily;
   password-strength check when creating a superuser.
 - **Moderation** — content filtering ("censorship") pass; refresh community rules;
   ground-rules memo with countdown.
-- **Keyboard shortcuts** for composer and feed actions.
+- **Keyboard shortcuts** ✅ feed shortcuts shipped 2026-07-12 (887a45a) — j/k navigation,
+  l/o/n, `/` to search, `gg`, `?` for a help dialog, Esc, via a `useFeedKeyboard` hook.
+  **Still open:** composer shortcuts.
 - **Ephemeral mode** — optional auto-clearing of posts (hourly/daily/weekly, per user).
 - **Post folders / Things-clone mode** — tags + folders + export; save lists (plus a
   browser extension to add items).
@@ -190,8 +199,10 @@ ActivityPub only if the node idea gets serious.
 - Pull-to-refresh with a mouse; PWA "open post" should stay in the same view.
 - Feed feels heavy — profile with React Profiler.
 - Can't scroll when the gesture starts on the post dropdown; darken behind tags popover.
+  ✅ Shipped 2026-07-10 (11588d6).
 - Mobile: full-width posts without card chrome; match x.com/LinkedIn content widths
   (~600px container; detailed measurements in the vault note `web-framework.md`).
+  ✅ Shipped 2026-07-10 (c6f318a).
 - Dark mode as the default theme.
 - Recording: graceful mic/camera permission denial; behavior on incoming call;
   "Post" during recording should stop the recording and submit; iPhone audio preview;
@@ -199,10 +210,76 @@ ActivityPub only if the node idea gets serious.
 
 ## Ops backlog
 
-- **Periodic DB backups** — Litestream for SQLite-on-Fly was the noted choice.
+- **`SENTRY_DSN` is unset — the one remaining gap in error visibility.** As of 2026-08-03
+  stderr carries every error correctly, but Fly's log retention is short and
+  `/log/server-errors.log` lives on the *container* filesystem — wiped on every deploy. Until
+  Sentry is on, "what broke last Tuesday" has no answer. See
+  `docs/reports/2026-08-logging-and-deploy.md`; verify the wiring with `just fly-check-logging`.
+
+  The two halves are **not** equally easy, and there is no runbook for either — `docs/deploy-fly.md`
+  does not mention Sentry, and the variable names appear only in `server/.env.example`,
+  `app/.env.development.local.sample`, and one CLAUDE.md line. Write the runbook while doing it.
+
+  - **Backend: genuinely one secret, no code.** `fly secrets set SENTRY_DSN='...'`, read at
+    `server/config/settings.py` (`sentry_sdk.init`, PII off, `traces_sample_rate` from
+    `SENTRY_TRACES_SAMPLE_RATE`, default 0.0). `SENTRY_FRONTEND_INGEST_FOR_CSP` is also a
+    *backend* runtime variable — it extends CSP `connect-src` — so it is a normal secret too.
+  - **Frontend: needs a Dockerfile change first.** `VITE_SENTRY_DSN` is inlined by Vite at
+    *build* time, and the `build-frontend` stage passes no `VITE_*` through — no `ARG`/`ENV`
+    pair, and `.dockerignore` drops `app/.env`. Setting it as a Fly secret would silently do
+    nothing: Fly secrets are runtime env, and the bundle is already built by then. It needs an
+    `ARG VITE_SENTRY_DSN` + `ENV` in that stage and a `--build-arg` at deploy. A build arg is
+    the right mechanism rather than a build secret, because a frontend DSN is public by design —
+    it ships to every browser in the bundle either way.
+  - **Same root cause, checked and benign:** `app/.env.production.sample` sets
+    `VITE_UPLOAD_FILES_TO_S3=true`, but no `app/.env.production` exists and the build passes no
+    `VITE_*`, so prod builds with that flag unset. Not a bug — `UPLOAD_FILES_TO_S3`
+    (`app/src/lib/constants.ts`) only chooses *who* does the PUT: unset means the browser posts
+    multipart to Django, which then writes to R2 through the storage backend. Media still lands
+    in R2 either way, which is why this has never shown up as a failure. The tradeoff is that
+    every upload streams through a 512 MB VM instead of going browser→R2 direct. Revisit if
+    large-video uploads start timing out; turning it on means adding the `VITE_*` build plumbing
+    described above, so it rides along with frontend Sentry.
+- **Periodic DB backups** — Litestream for SQLite-on-Fly was the noted choice. Less urgent than
+  this row used to read: checked 2026-08-04, Fly is already taking **automatic daily snapshots**
+  of `myapp_data` (`fly volumes snapshots list vol_rnyo00280l69x504 -a webframework`), so there
+  is a real net. What it does not cover: retention is **5 days**, so corruption noticed a week
+  late is unrecoverable; the copies live at the same provider as the volume; and the restore
+  path has never been exercised. Litestream buys continuous replication off-provider — worth it
+  before the data matters more than it does today, not urgent while it doesn't.
 - Serve compressed media by default; check staticfiles cache-control on Fly.
 - Scheduled jobs on Fly (cron) — e.g. orphaned-media cleanup (a known gap: presigned
   PUTs rejected at post-create are never deleted from R2). Link preview refresh is ready to
   schedule with `uv run python server/manage.py refresh_link_previews`.
 - External uptime monitoring (beyond `/healthz/`).
+- **Postgres** — not a task, a standing option. SQLite-on-volume is fine at this scale, but it
+  pins the app to the single machine that owns the volume, so it is what a second machine (or
+  managed backups) would have to trade away first. `admin/configs/fly-postgres.toml` is ready.
 - Email: `tam@wut.sh`, `tam@webframework.dev`.
+
+## Tech debt & pins to unwind
+
+Each of these is waiting on someone else to ship; the work is a few lines once it lands.
+Recorded because the cost of forgetting is silent.
+
+- **Django `6.1rc1` → `6.1` final** (`pyproject.toml`). Production runs a release candidate.
+  6.1 final is due this month; PyPI's newest stable is 6.0.8.
+  **Security note (checked 2026-08-04):** 6.0.8 is a security release — CVE-2026-15307 (high),
+  CVE-2026-15830 and CVE-2026-15920 (moderate), CVE-2026-15337 (low) — published *after*
+  6.1rc1 was cut, so the pinned build predates those fixes and no patched 6.1 artifact exists
+  yet. None of the four reach this app: two are GeoDjango-only (no `contrib.gis` anywhere), the
+  `check_for_language()` DoS needs `set_language()` routed (it is not), and the admin
+  `URLField` XSS needs a `URLField` rendered by the admin — the only one is `LinkPreview.url`,
+  and `LinkPreview` is not registered in `server/apps/blogs/admin.py`. That last one is one
+  `@admin.register` away from mattering, and the URL is user-supplied from post text. Repin on
+  6.1 final rather than re-running this audit per advisory.
+- **`server/config/drf_django61_compat.py`** — delete once DRF supports Django 6.1 natively.
+  `test_drf_django61_shim` (372c5da) already fails loudly the moment the shim is dead weight,
+  so this one announces itself.
+- **TS 6 / TS 7 alias split** in `app/package.json` — collapse back to a single `typescript`,
+  simplify the `typecheck` script, and delete the CLAUDE.md section once typescript-eslint
+  accepts TS 7. See CLAUDE.md, "Two TypeScript versions".
+- **`/log/server-errors.log` is ephemeral on Fly, and staying that way.** Making it persistent
+  was considered and declined 2026-08-03: it would need conditional dev/prod path logic for a
+  file that now duplicates stderr and still would not give durable history. Sentry is the
+  answer to what that change was reaching for.

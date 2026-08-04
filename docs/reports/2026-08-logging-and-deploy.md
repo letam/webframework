@@ -140,6 +140,9 @@ claim demonstrated rather than argued (the local copy of the same file is 205 KB
 
 ## Still open
 
+Carried into `docs/feature-backlog.md` (Ops backlog / Tech debt & pins to unwind), which is
+the durable home — this report is a snapshot and will not be updated as these close.
+
 - **`SENTRY_DSN` is unset.** Now the only gap in error visibility: stderr is correct, but Fly's
   log retention is short and the error file resets each deploy, so "what broke last Tuesday" is
   still unanswerable. Already env-gated in `settings.py` — one variable, no code.
