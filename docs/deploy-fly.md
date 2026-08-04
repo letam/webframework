@@ -153,4 +153,14 @@ GNU `sed`, and never sets `SECRET_KEY`.
 curl -s https://webframework.fly.dev/healthz/        # {"status": "ok"}
 curl -s https://webframework.fly.dev/api/posts/ | head
 fly machine status "$MACHINE" -a webframework         # check: passing [1/1], no recent exit_code=1
+
+just fly-check-logging                                # RESULT: PASS
 ```
+
+`just fly-check-logging` (script: `admin/prod/check-logging.sh`) asks the running
+process which handlers an ERROR and a WARNING actually survive, for both an app
+logger and `django.request`. Worth running after any deploy that touches
+`LOGGING` or `DEBUG`: the failure mode it guards is silent in every other check —
+the app serves fine, health passes, and stack traces simply stop arriving. It
+also catches the reverse regression, where `django.request` WARNINGs reach
+stderr and every bot scanning for `/wp-login.php` fills the log stream.

@@ -16,6 +16,11 @@ fly-deploy-app-preview app_name:
     fly deploy --config admin/configs/fly-preview.toml --app {{app_name}}
 
 
+# Check that a deployed app's errors reach stderr and the error log (read-only)
+fly-check-logging app_name='webframework':
+    ./admin/prod/check-logging.sh {{app_name}}
+
+
 # Launch app with local SQLite database
 fly-launch-app-sqlite app_name:
     ./admin/deploy/launch-fly.io-sqlite.sh {{app_name}}
