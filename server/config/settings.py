@@ -385,33 +385,96 @@ def setup_save_errorlog_to_file(logging: dict):
     #     except FileNotFoundError as e:
     #         print(e)
 
+    logging['formatters'].update(
+        {
+            # DEFAULT_LOGGING only ships `django.server` ([time] message), which
+            # names neither the level nor the module — fine for request lines,
+            # too thin for an error log you read after the fact. `{name}` is the
+            # dotted logger name (apps.blogs.views), not `{module}`, which would
+            # render both blogs/views.py and users/views.py as bare `views`.
+            'app': {
+                'format': '{levelname} {asctime} {name} {message}',
+                'style': '{',
+            },
+        }
+    )
     logging['handlers'].update(
         {
             'file_errors': {
                 'level': 'ERROR',
                 'filters': ['require_debug_false'],
-                'formatter': 'django.server',
+                'formatter': 'app',
                 'class': 'logging.handlers.RotatingFileHandler',
                 'filename': errorlog_filepath,
                 'maxBytes': 10485760,  # 10MB
                 'backupCount': 5,
+            },
+            # DEFAULT_LOGGING's `console` carries a require_debug_true filter, so
+            # under DEBUG=False it drops every record — which would leave
+            # `file_errors` as the only destination in production, and that file
+            # lives on the container's ephemeral filesystem (BASE_DIR/../log,
+            # i.e. /log in the image), not on the mounted volume. It is wiped on
+            # every deploy and never reaches `fly logs`. This unfiltered twin
+            # keeps app errors on stderr in both modes, which is what Fly's log
+            # stream actually captures.
+            #
+            # Level INFO, matching `console`: the app loggers sit at DEBUG so a
+            # module *can* opt into debug output locally, but debug records must
+            # not reach production stderr — blogs/transcription.py logs whole
+            # transcripts at that level.
+            'app_console': {
+                'level': 'INFO',
+                'class': 'logging.StreamHandler',
+                'formatter': 'app',
+            },
+            # The stderr twin of `file_errors` — same level, same filter, so it
+            # fires exactly when that one does. Django's own errors (the
+            # `django.request` ERROR carrying an unhandled 500's traceback,
+            # django.security.*) otherwise share the fate the app loggers just
+            # escaped: filtered out of `console` under DEBUG=False and left only
+            # in the ephemeral log file. `django` cannot simply move to
+            # `app_console` the way the app loggers did — at INFO it would put a
+            # django.request WARNING on stderr for every 404, which on a public
+            # site is bot noise, not signal. Restricting this to ERROR takes the
+            # tracebacks and leaves the scan traffic behind. require_debug_false
+            # keeps development output identical: `console` alone, no duplicates.
+            'console_errors': {
+                'level': 'ERROR',
+                'filters': ['require_debug_false'],
+                'class': 'logging.StreamHandler',
+                'formatter': 'app',
             },
         }
     )
     logging['loggers'].update(
         {
             'django': {
-                'handlers': ['console', 'file_errors'],
+                'handlers': ['console', 'console_errors', 'file_errors'],
                 'level': 'INFO',
                 'propagate': True,
             },
             'server': {
-                'handlers': ['console', 'file_errors'],
+                'handlers': ['app_console', 'file_errors'],
                 'level': 'DEBUG',
                 'propagate': True,
             },
             'server.apps': {
-                'handlers': ['console', 'file_errors'],
+                'handlers': ['app_console', 'file_errors'],
+                'level': 'DEBUG',
+                'propagate': False,
+            },
+            # Same config under the other prefix app modules actually log to.
+            # server/ is the import root, so a module at server/apps/blogs/views.py
+            # is imported as `apps.blogs.views` — `logging.getLogger(__name__)`
+            # there resolves to `apps`, not `server.apps`, and inherits root: no
+            # handlers and an effective level of WARNING. Its debug/info calls are
+            # dropped and its exceptions fall through to logging.lastResort, which
+            # writes bare stderr and never reaches file_errors. Configuring both
+            # prefixes means either convention lands in the error log; see
+            # apps/blogs/tests/test_logging.py, which fails if a logger stops
+            # resolving to a handler.
+            'apps': {
+                'handlers': ['app_console', 'file_errors'],
                 'level': 'DEBUG',
                 'propagate': False,
             },
