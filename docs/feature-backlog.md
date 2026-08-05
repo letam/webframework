@@ -17,9 +17,9 @@ sub-items that were deliberately deferred are called out under each section. Not
 removed here — shipped rows are *annotated, not deleted*, so the original request text
 stays traceable. P3 and the UX / ops lists near the bottom are untouched.
 
-Still shipped-but-not-yet-done at a glance: sharing with *selected users*, auto-save
-draft composer, richer reactions, shorts / iPhone re-encode / volume normalization, and
-self-hosted Whisper — all called out below.
+Still shipped-but-not-yet-done at a glance: sharing with *selected users*, richer
+reactions, shorts / iPhone re-encode / volume normalization, and self-hosted Whisper — all
+called out below. (Auto-save draft composer was on this list until 2026-08-04.)
 
 **Update 2026-08-04.** Four more rows shipped since and are annotated in place: rich text,
 feed keyboard shortcuts, and two of the UX bugs. The ops half of this file grew a
@@ -64,8 +64,16 @@ multiple to publish", "on iPhone automatically post as draft"). Minimum shape:
 > **✅ Shipped 2026-07-09 (da97de9).** `is_draft` + a publish action (author-only;
 > publishing bumps `created` so cursor pagination is unchanged), a Draft button in the
 > composer, and a Profile **Drafts** tab with publish-all. Built together with privacy as
-> planned. **Still open:** the optional auto-save-composer-as-draft toggle (the iPhone
-> "don't lose a recording on refresh" note).
+> planned.
+>
+> **✅ Auto-save shipped 2026-08-04 (b785a68)** — the iPhone "don't lose a recording on
+> refresh" note. The composer persists its text, visibility and attachment to IndexedDB
+> (localStorage cannot hold a Blob) and restores them on the next mount behind a
+> "Restored your unsaved draft" strip with Discard / Keep; a Settings toggle turns it off,
+> default on. Keyed per user, so a shared device never hands over someone's unposted words.
+> Media saves immediately and text debounces, because the tab may not survive another
+> 600ms. Note this saves *locally* rather than creating a server-side draft row — the note
+> was about not losing work, and real draft posts would fill the Drafts tab with fragments.
 
 ## P2 — Views and richer reactions  ✅ View counts shipped 2026-07-09 (56f0380)
 
