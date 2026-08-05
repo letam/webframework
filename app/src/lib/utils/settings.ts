@@ -8,6 +8,7 @@ export interface AppSettings {
 	autoTranscribe: boolean
 	linkPreviews: boolean
 	showLinkPreviews: boolean
+	saveComposerDrafts: boolean
 }
 
 // Determine if audio normalization should be enabled by default
@@ -22,6 +23,9 @@ const defaultSettings: AppSettings = {
 	autoTranscribe: false,
 	linkPreviews: true,
 	showLinkPreviews: true,
+	// On by default: the cost of an unwanted restore is one click, the cost of a
+	// lost recording is the recording.
+	saveComposerDrafts: true,
 }
 
 export const getSettings = (): AppSettings => {

@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useState, useRef } from 'react'
+import { useCallback, useState, useRef } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
@@ -21,6 +21,8 @@ import { getSettings } from '@/lib/utils/settings'
 import { applyMarkdownShortcut, toggleMarker } from '@/lib/utils/richText'
 import { modifierKeyLabel } from '@/lib/utils/browser'
 import { useAuth } from '@/hooks/useAuth'
+import { useComposerDraft } from '@/hooks/useComposerDraft'
+import type { ComposerDraft } from '@/lib/utils/composerDraft'
 
 interface CreatePostProps {
 	onPostCreated: (post: CreatePostRequest) => void
@@ -69,7 +71,7 @@ const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): stri
 }
 
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
-	const { isAuthenticated } = useAuth()
+	const { isAuthenticated, userId } = useAuth()
 	const [postText, setPostText] = useState('')
 	const [mediaType, setMediaType] = useState<'text' | 'audio' | 'video' | 'image'>('text')
 	const [visibility, setVisibility] = useState<PostVisibility>('public')
@@ -94,6 +96,66 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const VisibilityIcon =
 		VISIBILITY_OPTIONS.find((option) => option.value === visibility)?.icon ?? Globe
 	const modKey = modifierKeyLabel()
+
+	// Read once on mount: autosave should not start or stop mid-compose because
+	// another tab toggled the setting.
+	const [draftsEnabled] = useState(() => getSettings().saveComposerDrafts)
+
+	// The composer keeps a slot per media kind; only the one matching mediaType
+	// holds anything, and only that one is worth persisting.
+	const activeMedia =
+		mediaType === 'audio'
+			? (audioFile ?? audioBlob)
+			: mediaType === 'video'
+				? (videoFile ?? videoBlob)
+				: mediaType === 'image'
+					? imageFile
+					: null
+
+	const restoreDraft = useCallback((stored: ComposerDraft) => {
+		setPostText(stored.text)
+		setVisibility(stored.visibility)
+
+		const media = stored.media
+		if (!media) {
+			// Either there was never any media, or the quota rejected it and only
+			// the words were kept. Do not leave the composer claiming a media type
+			// it has no bytes for.
+			setMediaType('text')
+			return
+		}
+
+		setMediaType(stored.mediaType)
+		// Rebuild a File when the original was one: submitPost renames bare
+		// recordings but passes real uploads through untouched.
+		const asFile = new File([media], stored.mediaName ?? 'restored', { type: media.type })
+
+		if (stored.mediaType === 'audio') {
+			if (stored.mediaIsFile) setAudioFile(asFile)
+			else setAudioBlob(media)
+		} else if (stored.mediaType === 'video') {
+			if (stored.mediaIsFile) setVideoFile(asFile)
+			else setVideoBlob(media)
+		} else if (stored.mediaType === 'image') {
+			// The image slot is File-only — no recorder produces one.
+			setImageFile(asFile)
+		}
+	}, [])
+
+	const {
+		restored,
+		clear: clearStoredDraft,
+		acknowledgeRestore,
+	} = useComposerDraft({
+		enabled: draftsEnabled,
+		userId,
+		text: postText,
+		visibility,
+		mediaType,
+		media: activeMedia,
+		isEmpty: !canPost,
+		onRestore: restoreDraft,
+	})
 
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
 		// Cmd/Ctrl+Enter posts; Cmd/Ctrl+B and Cmd/Ctrl+I format the selection.
@@ -191,6 +253,14 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		setMediaType('text')
 	}
 
+	// Throw away a restored draft the user did not want back.
+	const discardRestoredDraft = () => {
+		setPostText('')
+		setVisibility('public')
+		clearMedia()
+		clearStoredDraft()
+	}
+
 	const submitPost = async (isDraft: boolean, e?: React.FormEvent) => {
 		e?.preventDefault()
 
@@ -259,6 +329,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			setPostText('')
 			setVisibility('public')
 			clearMedia()
+			// The draft has become a post; there is nothing left to rescue.
+			clearStoredDraft()
 			toast.success(isDraft ? 'Saved to drafts.' : 'Post created successfully!')
 			// Focus back on text area
 			textareaRef.current?.focus()
@@ -313,6 +385,36 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						onClearMedia={clearMedia}
 					/>
 				</div>
+
+				{restored && !submitStatus && (
+					<div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-md bg-muted/60 px-2.5 py-1.5 text-xs text-muted-foreground">
+						<span>
+							{restored.mediaOmitted
+								? 'Restored your unsaved text. The attachment was too large to save.'
+								: 'Restored your unsaved draft.'}
+						</span>
+						<div className="flex items-center gap-0.5">
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								className="h-6 px-2 text-xs"
+								onClick={discardRestoredDraft}
+							>
+								Discard
+							</Button>
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								className="h-6 px-2 text-xs"
+								onClick={acknowledgeRestore}
+							>
+								Keep
+							</Button>
+						</div>
+					</div>
+				)}
 
 				<div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
 					<TooltipProvider delayDuration={300}>

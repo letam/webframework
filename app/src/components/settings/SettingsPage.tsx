@@ -50,11 +50,26 @@ const SettingsPage = () => {
 	const [linkPreviews, setLinkPreviews] = useState(initialSettings.linkPreviews)
 	const [showLinkPreviews, setShowLinkPreviews] = useState(initialSettings.showLinkPreviews)
 	const [videoQuality, setVideoQuality] = useState(initialSettings.videoQuality)
+	const [saveComposerDrafts, setSaveComposerDrafts] = useState(initialSettings.saveComposerDrafts)
 	const [isExporting, setIsExporting] = useState(false)
 
 	useEffect(() => {
-		updateSettings({ normalizeAudio, autoTranscribe, linkPreviews, showLinkPreviews, videoQuality })
-	}, [normalizeAudio, autoTranscribe, linkPreviews, showLinkPreviews, videoQuality])
+		updateSettings({
+			normalizeAudio,
+			autoTranscribe,
+			linkPreviews,
+			showLinkPreviews,
+			videoQuality,
+			saveComposerDrafts,
+		})
+	}, [
+		normalizeAudio,
+		autoTranscribe,
+		linkPreviews,
+		showLinkPreviews,
+		videoQuality,
+		saveComposerDrafts,
+	])
 
 	const handleExportPosts = async () => {
 		if (!isAuthenticated || userId == null) {
@@ -164,6 +179,21 @@ const SettingsPage = () => {
 										id="show-link-previews"
 										checked={showLinkPreviews}
 										onCheckedChange={setShowLinkPreviews}
+									/>
+								</div>
+
+								<div className="flex items-center justify-between">
+									<div className="space-y-0.5">
+										<Label htmlFor="save-composer-drafts">Save unfinished posts</Label>
+										<p className="text-sm text-muted-foreground">
+											Keep what you are writing, and any recording you have not posted yet, on this
+											device so a refresh does not lose it
+										</p>
+									</div>
+									<Switch
+										id="save-composer-drafts"
+										checked={saveComposerDrafts}
+										onCheckedChange={setSaveComposerDrafts}
 									/>
 								</div>
 							</div>
