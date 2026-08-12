@@ -22,11 +22,6 @@ from csp.constants import SELF
 from django.utils.log import DEFAULT_LOGGING
 from environs import Env
 
-# Restore django.utils.cache.cc_delim_re for DRF 3.17.1 on Django 6.1rc1.
-# Must run before any DRF import; see the module docstring. Remove when DRF
-# ships a Django-6.1-compatible release.
-from config import drf_django61_compat  # noqa: F401
-
 # Configure logging
 LOGGING = {
     'version': 1,

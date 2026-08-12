@@ -14,8 +14,7 @@ suite runs with DEBUG=False (Django forces it), which is exactly the production
 configuration those two tests need.
 
 Config-level, but housed here because `apps/blogs/tests/` is the discoverable
-tests package (`apps/uploads/` has no `__init__.py`), matching test_csp_hashes
-and test_drf_compat.
+tests package (`apps/uploads/` has no `__init__.py`), matching test_csp_hashes.
 """
 
 import ast

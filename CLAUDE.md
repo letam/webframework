@@ -11,7 +11,7 @@ A Django + React web framework for rapid development of web applications. The pr
 ### Backend (Django)
 
 - **Location**: `server/`
-- **Framework**: Django 5.2.5 with Django REST Framework 3.15.2
+- **Framework**: Django 6.1 with Django REST Framework 3.18.0
 - **Python**: 3.13+ (managed by `uv`)
 - **Config**: `server/config/settings.py`, `server/config/urls.py`
 - **Database**: SQLite for development (`server/db.sqlite3`), PostgreSQL for production

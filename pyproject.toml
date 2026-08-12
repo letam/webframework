@@ -15,11 +15,9 @@ dependencies = [
     "django-storages==1.14.6",
     "django-tasks-db==0.12.0",
     "django-tasks==0.12.0",
-    # Release candidate. Carries the 2026-07-07 security fixes (CVE-2026-48588,
-    # CVE-2026-53877, CVE-2026-53878). Repin to 6.1 final once it ships.
-    "django==6.1rc1",
+    "django==6.1",
     "djangorestframework-stubs[compatible-mypy]>=3.17.0",
-    "djangorestframework==3.17.1",
+    "djangorestframework==3.18.0",
     "environs[django]>=15.0.1",
     "gunicorn==26.0.0",
     "httpx>=0.28.1",
@@ -36,7 +34,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "black==26.5.1",
-    "django-stubs==6.0.7",
+    "django-stubs==6.1.0",
     "ipython==9.15.0",
     "isort==8.0.1",
     "neovim==0.3.1",

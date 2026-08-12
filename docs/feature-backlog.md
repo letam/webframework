@@ -270,20 +270,6 @@ ActivityPub only if the node idea gets serious.
 Each of these is waiting on someone else to ship; the work is a few lines once it lands.
 Recorded because the cost of forgetting is silent.
 
-- **Django `6.1rc1` → `6.1` final** (`pyproject.toml`). Production runs a release candidate.
-  6.1 final is due this month; PyPI's newest stable is 6.0.8.
-  **Security note (checked 2026-08-04):** 6.0.8 is a security release — CVE-2026-15307 (high),
-  CVE-2026-15830 and CVE-2026-15920 (moderate), CVE-2026-15337 (low) — published *after*
-  6.1rc1 was cut, so the pinned build predates those fixes and no patched 6.1 artifact exists
-  yet. None of the four reach this app: two are GeoDjango-only (no `contrib.gis` anywhere), the
-  `check_for_language()` DoS needs `set_language()` routed (it is not), and the admin
-  `URLField` XSS needs a `URLField` rendered by the admin — the only one is `LinkPreview.url`,
-  and `LinkPreview` is not registered in `server/apps/blogs/admin.py`. That last one is one
-  `@admin.register` away from mattering, and the URL is user-supplied from post text. Repin on
-  6.1 final rather than re-running this audit per advisory.
-- **`server/config/drf_django61_compat.py`** — delete once DRF supports Django 6.1 natively.
-  `test_drf_django61_shim` (372c5da) already fails loudly the moment the shim is dead weight,
-  so this one announces itself.
 - **TS 6 / TS 7 alias split** in `app/package.json` — collapse back to a single `typescript`,
   simplify the `typecheck` script, and delete the CLAUDE.md section once typescript-eslint
   accepts TS 7. See CLAUDE.md, "Two TypeScript versions".
