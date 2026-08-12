@@ -273,6 +273,16 @@ Recorded because the cost of forgetting is silent.
 - **TS 6 / TS 7 alias split** in `app/package.json` — collapse back to a single `typescript`,
   simplify the `typecheck` script, and delete the CLAUDE.md section once typescript-eslint
   accepts TS 7. See CLAUDE.md, "Two TypeScript versions".
+
+  Nothing automated watches for that upstream release, and the one alarm this repo did have
+  failed silently. The deleted `test_drf_compat` scanned `rest_framework/**.py` for the bare
+  string `cc_delim_re`, so it matched DRF 3.18's *comment* explaining the symbol's
+  replacement and stayed green long after the shim was dead — the shim was found dead by
+  reading release notes instead (23d45ef). **Write an expiry alarm to assert on a real
+  import or call — parse with `ast`, the way `server/apps/blogs/tests/test_logging.py`
+  does — never on a substring.** Its docstring had hardened against a false *alarm* while
+  leaving the false *negative* open, which is the worse direction: a silent alarm means the
+  dead code survives and nobody looks again.
 - **`/log/server-errors.log` is ephemeral on Fly, and staying that way.** Making it persistent
   was considered and declined 2026-08-03: it would need conditional dev/prod path logic for a
   file that now duplicates stderr and still would not give durable history. Sentry is the

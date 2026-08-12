@@ -78,8 +78,9 @@ uv run python server/manage.py migrate
 uv run python server/manage.py shell_plus
 # Or: just shell
 
-# Run backend tests
-uv run python server/manage.py test
+# Run backend tests. The `apps` label is mandatory: `server/` has no `__init__.py`, so
+# discovery from the repo root walks past it and reports "Ran 0 tests" with exit code 0.
+uv run python server/manage.py test apps
 # Or: just test
 
 # Create superuser
