@@ -34,13 +34,21 @@ export const getCsrfToken = async () => {
 	return data.token
 }
 
-// Helper function to get fetch options with credentials and CSRF token
+// Helper function to build fetch options (credentials mode + CSRF token).
+//
+// `same-origin` is the fetch default; we state it so the contract is explicit.
+// Production serves the SPA from Django (VITE_SERVER_HOST=''), so every API call
+// is same-origin and the session cookie rides along. Pointing the app at a
+// different-origin API would need `credentials: 'include'` here *and* server-side
+// `CORS_ALLOW_CREDENTIALS = True` with `SameSite=None; Secure` cookies and matching
+// CSRF trusted origins — a deliberate cross-origin posture, not a one-liner.
 export const getFetchOptions = async (
 	method: string,
 	body?: Record<string, unknown> | FormData | null
 ) => {
 	const options: RequestInit = {
 		method,
+		credentials: 'same-origin',
 		headers: {},
 	}
 
