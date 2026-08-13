@@ -1,7 +1,8 @@
 """Django storage backend for S3-compatible object storage (Cloudflare R2)."""
 
-from apps.uploads.s3 import require_s3_settings
 from storages.backends.s3boto3 import S3Boto3Storage
+
+from apps.uploads.s3 import require_s3_settings
 
 
 class GuardedS3Boto3Storage(S3Boto3Storage):

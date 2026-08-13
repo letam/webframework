@@ -349,6 +349,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Logging
 # https://docs.djangoproject.com/en/5.1/topics/logging/
+#
+# LOGGING is deliberately assigned twice. The dict near the top of this module is
+# applied immediately via logging.config.dictConfig() so the `server` / `server.apps`
+# console loggers exist during settings import. This second value is what Django
+# reads at startup and applies itself; DEFAULT_LOGGING sets disable_existing_loggers
+# to False, so the `server` loggers configured above survive. Removing the earlier
+# block would drop that console logging — the two are not redundant.
 
 LOGGING = copy.deepcopy(DEFAULT_LOGGING)
 

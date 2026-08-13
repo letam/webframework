@@ -184,7 +184,7 @@ class LinkPreviewSerializer(serializers.ModelSerializer):
         return url
 
 
-class PostSerializer(serializers.HyperlinkedModelSerializer):
+class PostSerializer(serializers.ModelSerializer):
     """Serializer for post read responses."""
 
     author = UserNameSerializer(read_only=True)
@@ -278,10 +278,13 @@ class PostCreateSerializer(serializers.ModelSerializer):
         """Serializer metadata."""
 
         model = Post
+        # `media` is intentionally omitted: the create view builds the Media row
+        # itself and pops the incoming media payload (a rich dict, not a pk)
+        # before validation. Declaring it here would generate a writable pk field
+        # that rejects that payload the moment the pop was ever removed.
         fields = [
             'head',
             'body',
-            'media',
             'visibility',
             'is_draft',
             'link_previews_enabled',
