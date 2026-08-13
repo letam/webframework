@@ -79,10 +79,44 @@ class PresignUploadTests(ViewTestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_missing_fields_return_400(self):
-        """Requests without content_type or file_name should be a 400, not a 500."""
+        """Requests without content_type, file_name or content_length are a 400, not a 500."""
         self.assertEqual(self._presign({}).status_code, 400)
         self.assertEqual(self._presign({'content_type': 'audio/mpeg'}).status_code, 400)
         self.assertEqual(self._presign({'file_name': 'a.mp3'}).status_code, 400)
+        self.assertEqual(
+            self._presign({'content_type': 'audio/mpeg', 'file_name': 'a.mp3'}).status_code,
+            400,
+        )
+
+    def test_non_integer_content_length_is_rejected(self):
+        """A non-integer (or boolean) size is a malformed request, not a 1-byte upload."""
+        for bad in ('1024', 12.5, True, None, [1024]):
+            with self.subTest(content_length=bad):
+                response = self._presign(
+                    {'content_type': 'audio/mpeg', 'file_name': 'clip.mp3', 'content_length': bad}
+                )
+                self.assertEqual(response.status_code, 400)
+
+    def test_zero_or_oversized_content_length_is_rejected(self):
+        """Sizes must be positive and within the media ceiling; the edge enforces it too."""
+        for bad in (0, -1, django_settings.MAX_MEDIA_UPLOAD_BYTES + 1):
+            with self.subTest(content_length=bad):
+                response = self._presign(
+                    {'content_type': 'audio/mpeg', 'file_name': 'clip.mp3', 'content_length': bad}
+                )
+                self.assertEqual(response.status_code, 400)
+
+    @mock.patch('apps.uploads.views.generate_presigned_put_url')
+    def test_content_length_at_the_ceiling_is_signed_into_the_url(self, mock_presign):
+        """The exact byte count reaches the signer so R2 can enforce it at the edge."""
+        mock_presign.return_value = 'https://example.com/signed'
+        size = django_settings.MAX_MEDIA_UPLOAD_BYTES
+        response = self._presign(
+            {'content_type': 'audio/mpeg', 'file_name': 'clip.mp3', 'content_length': size}
+        )
+        self.assertEqual(response.status_code, 200)
+        # (file_path, content_type, content_length) — the size is passed through.
+        self.assertEqual(mock_presign.call_args.args[2], size)
 
     def test_non_media_content_type_is_rejected(self):
         """Only audio, video and image content types may be uploaded."""
@@ -94,7 +128,11 @@ class PresignUploadTests(ViewTestCase):
         """Browser-recorded types like 'audio/webm;codecs=opus' are valid."""
         mock_presign.return_value = 'https://example.com/signed'
         response = self._presign(
-            {'content_type': 'audio/webm;codecs=opus', 'file_name': 'recording.webm'}
+            {
+                'content_type': 'audio/webm;codecs=opus',
+                'file_name': 'recording.webm',
+                'content_length': 1024,
+            }
         )
         self.assertEqual(response.status_code, 200)
 
@@ -103,7 +141,11 @@ class PresignUploadTests(ViewTestCase):
         """Client-supplied directories must not leak into the S3 key."""
         mock_presign.return_value = 'https://example.com/signed'
         response = self._presign(
-            {'content_type': 'audio/mpeg', 'file_name': '../../../etc/passwd.mp3'}
+            {
+                'content_type': 'audio/mpeg',
+                'file_name': '../../../etc/passwd.mp3',
+                'content_length': 1024,
+            }
         )
         self.assertEqual(response.status_code, 200)
         file_path = response.json()['file_path']
@@ -120,7 +162,9 @@ class PresignUploadTests(ViewTestCase):
     def test_anonymous_upload_is_keyed_to_anonymous_user(self, mock_presign):
         """Unauthenticated uploads go under the dedicated anonymous user's prefix."""
         mock_presign.return_value = 'https://example.com/signed'
-        response = self._presign({'content_type': 'audio/mpeg', 'file_name': 'clip.mp3'})
+        response = self._presign(
+            {'content_type': 'audio/mpeg', 'file_name': 'clip.mp3', 'content_length': 1024}
+        )
         self.assertEqual(response.status_code, 200)
 
         anonymous = User.objects.get(username='anonymous')
@@ -130,7 +174,7 @@ class PresignUploadTests(ViewTestCase):
     def test_presign_is_rate_limited(self, mock_presign):
         """Presign requests beyond the per-IP limit get a 429."""
         mock_presign.return_value = 'https://example.com/signed'
-        payload = {'content_type': 'audio/mpeg', 'file_name': 'clip.mp3'}
+        payload = {'content_type': 'audio/mpeg', 'file_name': 'clip.mp3', 'content_length': 1024}
         for _ in range(30):
             self._presign(payload)
 

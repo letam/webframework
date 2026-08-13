@@ -6,6 +6,7 @@ from datetime import datetime
 
 from apps.blogs.models import Post
 from apps.ratelimit import rate_limit
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
@@ -49,6 +50,17 @@ def get_presigned_url(request):
     if not file_name:
         return JsonResponse({'error': 'file_name is missing or invalid'}, status=400)
 
+    content_length = data.get('content_length')
+    # Reject bool explicitly: `isinstance(True, int)` is True, and a boolean here
+    # is a malformed request, not a 1-byte upload.
+    if not isinstance(content_length, int) or isinstance(content_length, bool):
+        return JsonResponse({'error': 'content_length must be an integer'}, status=400)
+    if not 0 < content_length <= settings.MAX_MEDIA_UPLOAD_BYTES:
+        return JsonResponse(
+            {'error': f'content_length must be between 1 and {settings.MAX_MEDIA_UPLOAD_BYTES}'},
+            status=400,
+        )
+
     if request.user.is_authenticated:
         user_id = request.user.id
     else:
@@ -65,6 +77,6 @@ def get_presigned_url(request):
         file_name = f'{stem}-{timestamp}.{extension}' if dot else f'{file_name}-{timestamp}'
         file_path = f'post/audio/{user_id}/{file_name}'
 
-    presigned_url = generate_presigned_put_url(file_path, content_type)
+    presigned_url = generate_presigned_put_url(file_path, content_type, content_length)
 
     return JsonResponse({'url': presigned_url, 'file_path': file_path})

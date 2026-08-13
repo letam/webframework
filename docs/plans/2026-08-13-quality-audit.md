@@ -83,7 +83,7 @@ login/signup/presign limiters (including login brute-force protection).
   `TRUSTED_PROXY` setting). `transcribe` is unaffected — it's `UserRateThrottle`, keyed on the
   authenticated user.
 
-### P1-a · Presign endpoint requires no auth and sets no size condition 🔑 · M
+### P1-a · Presign endpoint requires no auth and sets no size condition 🔑 · M · ✅ (size condition) · ⚠ FLAG (auth policy)
 `server/apps/uploads/views.py:33-70` is `@require_POST` + `@rate_limit(...)` with no auth
 check; anonymous callers get a key under `post/audio/<anon-id>/`. `generate_presigned_put_url`
 passes only Bucket/Key/ContentType — no `ContentLength` — so `MAX_MEDIA_UPLOAD_BYTES` is only
@@ -611,3 +611,24 @@ _(updated as items land)_
   second hop without connecting to it, a `MAX_REDIRECTS` cap, and an oversized-body drop — plus the
   anti-rebinding assertion that the connection targets the resolved IP, not the name. 238 backend
   tests pass; ruff clean.
+
+- **2026-08-13 · P1-a size condition ✅ · auth policy ⚠ FLAGGED** — The presign now signs the exact
+  upload size so R2 rejects an oversized body at the edge, instead of `MAX_MEDIA_UPLOAD_BYTES` being
+  checked only *after* the bytes land (via `head_object` at post-create) — and never at all when no
+  post follows. `generate_presigned_put_url` gained an optional `content_length`; when present it is
+  added to `Params['ContentLength']`, which boto3 signs into `X-Amz-SignedHeaders`, so R2 edge-enforces
+  the exact byte count. `get_presigned_url` now requires `content_length` in the JSON body and validates
+  it (a real `int`, not a bool; `0 < n <= MAX_MEDIA_UPLOAD_BYTES`) before signing, returning 400
+  otherwise. The frontend sends `content_length: data.media.size`; the browser sets the matching
+  `Content-Length` from the Blob body automatically, so the signed value and the actual PUT agree. Tests
+  added to `PresignUploadTests`: non-integer/boolean size, zero/negative/over-ceiling size, a
+  ceiling-exact size signed through to the signer, plus the missing-`content_length` 400 and
+  `content_length` threaded into every 200-path payload. 241 backend tests pass; ruff clean; frontend
+  typecheck clean.
+  - ⚠ **FLAGGED, left for the user — the auth-policy half is a product decision.** The endpoint is still
+    `@require_POST` + `@rate_limit` with no auth check: anonymous callers get a key under
+    `post/audio/<anonymous-id>/`. Requiring `request.user.is_authenticated` would harden it but **break
+    documented anonymous posting** (CLAUDE.md: anonymous user, `AnonymousPostAuthorTests`). Keeping
+    anonymous posting means a short-lived server-issued composer token instead — a real feature, not a
+    reversible tweak. Not deciding this autonomously. The size condition above is orthogonal and lands
+    regardless of which way the auth call goes.
