@@ -39,12 +39,20 @@ export const AudioRecorderModal: React.FC<AudioRecorderModalProps> = ({
 	)
 }
 
-type RecordingStatus = 'idle' | 'loading' | 'recording' | 'paused' | 'normalizing' | 'ready'
+type RecordingStatus =
+	| 'idle'
+	| 'loading'
+	| 'recording'
+	| 'paused'
+	| 'normalizing'
+	| 'ready'
+	| 'error'
 
 interface StatusMessageProps {
 	status: RecordingStatus
 	showNormalizingMessage: boolean
 	recordingTime?: number
+	errorMessage?: string | null
 }
 
 const formatTime = (seconds: number): string => {
@@ -53,7 +61,37 @@ const formatTime = (seconds: number): string => {
 	return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
-const StatusMessage = ({ status, showNormalizingMessage, recordingTime }: StatusMessageProps) => {
+// Map a getUserMedia rejection to a message that tells the user what to fix.
+const micErrorMessage = (error: unknown): string => {
+	if (error instanceof DOMException) {
+		if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
+			return 'Microphone access was blocked. Allow it in your browser settings, then try again.'
+		}
+		if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+			return 'No microphone was found. Connect one and try again.'
+		}
+		if (error.name === 'NotReadableError') {
+			return 'Your microphone is in use by another app. Close it and try again.'
+		}
+	}
+	return 'Unable to access microphone. Please check permissions and try again.'
+}
+
+const StatusMessage = ({
+	status,
+	showNormalizingMessage,
+	recordingTime,
+	errorMessage,
+}: StatusMessageProps) => {
+	if (status === 'error') {
+		return (
+			<div className="flex items-center justify-center px-4 text-center text-base">
+				<span className="text-muted-foreground">
+					{errorMessage ?? 'Unable to access microphone. Please check permissions and try again.'}
+				</span>
+			</div>
+		)
+	}
 	if (status === 'loading') {
 		return (
 			<div className="flex items-center justify-center gap-2 text-base">
@@ -200,6 +238,11 @@ const AudioRecorder = ({
 	const [showNormalizingMessage, setShowNormalizingMessage] = useState(false)
 	const [audioURL, setAudioURL] = useState<string | null>(null)
 	const [recordingTime, setRecordingTime] = useState<number>(0)
+	const [errorMessage, setErrorMessage] = useState<string | null>(null)
+	// Guards the auto-start effect so a denied getUserMedia can't spin an infinite
+	// retry loop: startRecording sends status back through 'error', but even a
+	// bounce through 'idle' must not re-fire auto-start after the first attempt.
+	const hasAutoStartedRef = useRef(false)
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const audioChunksRef = useRef<Blob[]>([])
 	const normalizingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -254,7 +297,8 @@ const AudioRecorder = ({
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: auto-start should only respond to the external trigger and current status
 	useEffect(() => {
-		if (autoStart && status === 'idle') {
+		if (autoStart && status === 'idle' && !hasAutoStartedRef.current) {
+			hasAutoStartedRef.current = true
 			startRecording()
 		}
 	}, [autoStart, status])
@@ -263,12 +307,26 @@ const AudioRecorder = ({
 		setStatus('idle')
 		setShowNormalizingMessage(false)
 		setRecordingTime(0)
+		setErrorMessage(null)
 		if (audioURL) {
 			URL.revokeObjectURL(audioURL)
 			setAudioURL(null)
 		}
 		audioChunksRef.current = []
-		if (mediaRecorderRef.current) {
+		const recorder = mediaRecorderRef.current
+		if (recorder) {
+			// Detach handlers first so stopping the tracks below can't fire an onstop
+			// that normalizes and calls back after we've torn down (e.g. on unmount).
+			recorder.ondataavailable = null
+			recorder.onstop = null
+			if (recorder.state !== 'inactive') {
+				recorder.stop()
+			}
+			// Release the mic: without this, closing the modal mid-record leaves the
+			// browser's recording indicator on and the microphone hot.
+			for (const track of recorder.stream.getTracks()) {
+				track.stop()
+			}
 			mediaRecorderRef.current = null
 		}
 		if (normalizingTimeoutRef.current) {
@@ -305,6 +363,7 @@ const AudioRecorder = ({
 
 		try {
 			setStatus('loading')
+			setErrorMessage(null)
 			// Clean up previous audio state
 			if (audioURL) {
 				URL.revokeObjectURL(audioURL)
@@ -385,9 +444,13 @@ const AudioRecorder = ({
 				setStatus('recording')
 			}
 		} catch (error) {
+			const message = micErrorMessage(error)
 			console.error('Error accessing microphone:', error)
-			toast.error('Unable to access microphone. Please check permissions.')
-			setStatus('idle')
+			toast.error(message)
+			setErrorMessage(message)
+			// Terminal 'error' (not 'idle') so the auto-start effect can't retry in a
+			// loop; the user retries explicitly via the button below.
+			setStatus('error')
 		}
 	}
 
@@ -456,10 +519,24 @@ const AudioRecorder = ({
 					status={status}
 					showNormalizingMessage={showNormalizingMessage}
 					recordingTime={recordingTime}
+					errorMessage={errorMessage}
 				/>
 			</div>
 
 			<div className="flex justify-center gap-4 mt-auto">
+				{status === 'error' && (
+					<Button
+						type="button"
+						variant="outline"
+						size="lg"
+						onClick={startRecording}
+						disabled={isProcessing || !!submitStatus}
+						className="flex items-center gap-2 px-8"
+					>
+						<Mic className="h-5 w-5" />
+						<span>Try again</span>
+					</Button>
+				)}
 				{(status === 'recording' || status === 'paused') && (
 					<>
 						<Button

@@ -414,3 +414,15 @@ _(updated as items land)_
   `start-prod.sh` to drain the accumulated backlog. Rewrote the anon view-count test into two
   (cookieless-fingerprint + existing-session), asserting no `Session` row is created. 229 tests
   pass. The IP-keyed throttles from P0-c are what bound this now that the session mint is gone.
+- **2026-08-13 · P0-e + P1-d ✅** — Both recorders now release the capture devices on unmount.
+  `AudioRecorder.reset` (already run by its unmount effect) now detaches the recorder handlers,
+  stops an active recorder, and `track.stop()`s every stream track — previously only the manual
+  Stop button did, so closing the dialog mid-record left the mic hot. `VideoRecorder` had **no**
+  unmount effect at all; added one, and gave its `reset` the same handler-detach + explicit-stop
+  treatment (it already stopped tracks). For the retry loop, both auto-start effects now take a
+  `hasAutoStartedRef` guard so a denied/absent device can't re-fire `getUserMedia`; `AudioRecorder`
+  additionally lands in a terminal `'error'` status (not `'idle'`, which the effect would retry).
+  Both recorders now map the `getUserMedia` rejection to a per-kind message (blocked / not-found /
+  in-use) and render a "Try again" affordance instead of a dead, empty dialog. Typecheck clean,
+  lint 8/8 (a new `eslint-disable` on the video cleanup effect's dep-array line keeps the budget),
+  Biome clean, 164 frontend tests pass.

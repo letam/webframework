@@ -47,6 +47,22 @@ const formatTime = (seconds: number): string => {
 	return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
+// Map a getUserMedia rejection to a message that tells the user what to fix.
+const cameraErrorMessage = (error: unknown): string => {
+	if (error instanceof DOMException) {
+		if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
+			return 'Camera access was blocked. Allow it in your browser settings, then try again.'
+		}
+		if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+			return 'No camera was found. Connect one and try again.'
+		}
+		if (error.name === 'NotReadableError') {
+			return 'Your camera is in use by another app. Close it and try again.'
+		}
+	}
+	return 'Unable to access camera or microphone. Please check permissions and try again.'
+}
+
 const VideoRecorder = forwardRef<
 	VideoRecorderRef,
 	{
@@ -58,32 +74,55 @@ const VideoRecorder = forwardRef<
 	const [isRecording, setIsRecording] = useState(false)
 	const [videoURL, setVideoURL] = useState<string | null>(null)
 	const [recordingTime, setRecordingTime] = useState<number>(0)
+	const [errorMessage, setErrorMessage] = useState<string | null>(null)
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const videoChunksRef = useRef<Blob[]>([])
 	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const streamRef = useRef<MediaStream | null>(null)
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+	// Auto-start at most once per mount so a failed getUserMedia can't retry in a loop.
+	const hasAutoStartedRef = useRef(false)
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: auto-start should only respond to the external trigger and current recording state
 	useEffect(() => {
-		if (autoStart && !isRecording && !videoURL) {
+		if (autoStart && !isRecording && !videoURL && !hasAutoStartedRef.current) {
+			hasAutoStartedRef.current = true
 			startRecording()
 		}
 	}, [autoStart, isRecording, videoURL])
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: cleanup should only run when this recorder unmounts
+	useEffect(() => {
+		return () => {
+			reset()
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [])
+
 	const reset = () => {
 		setIsRecording(false)
 		setRecordingTime(0)
+		setErrorMessage(null)
 		if (videoURL) {
 			URL.revokeObjectURL(videoURL)
 			setVideoURL(null)
 		}
 		videoChunksRef.current = []
-		if (mediaRecorderRef.current) {
+		const recorder = mediaRecorderRef.current
+		if (recorder) {
+			// Detach handlers first so stopping below can't fire an onstop that calls
+			// back after we've torn down (e.g. on unmount).
+			recorder.ondataavailable = null
+			recorder.onstop = null
+			if (recorder.state !== 'inactive') {
+				recorder.stop()
+			}
 			mediaRecorderRef.current = null
 		}
 		if (streamRef.current) {
+			// Release the camera + mic: without this, closing the modal mid-record
+			// leaves the browser's recording indicator on and the devices hot.
 			for (const track of streamRef.current.getTracks()) {
 				track.stop()
 			}
@@ -144,6 +183,7 @@ const VideoRecorder = forwardRef<
 		}
 
 		try {
+			setErrorMessage(null)
 			const settings = getSettings()
 			const videoConstraints = {
 				facingMode: 'user',
@@ -209,8 +249,10 @@ const VideoRecorder = forwardRef<
 			startTimer({ reset: true })
 			setIsRecording(true)
 		} catch (error) {
+			const message = cameraErrorMessage(error)
 			console.error('Error accessing camera/microphone:', error)
-			toast.error('Unable to access camera or microphone. Please check permissions.')
+			toast.error(message)
+			setErrorMessage(message)
 		}
 	}
 
@@ -241,9 +283,18 @@ const VideoRecorder = forwardRef<
 						src={videoURL || undefined}
 						style={{ transform: 'scaleX(-1)' }} // Mirror the video for selfie view
 					/>
-					{!isRecording && !videoURL && (
+					{!isRecording && !videoURL && !errorMessage && (
 						<div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
 							<Video className="h-12 w-12 opacity-50" />
+						</div>
+					)}
+					{!isRecording && !videoURL && errorMessage && (
+						<div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4 text-center">
+							<span className="text-sm text-white/80">{errorMessage}</span>
+							<Button type="button" variant="secondary" size="sm" onClick={startRecording}>
+								<Video className="h-4 w-4" />
+								<span>Try again</span>
+							</Button>
 						</div>
 					)}
 				</div>
