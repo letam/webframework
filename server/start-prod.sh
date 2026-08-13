@@ -14,6 +14,12 @@ set -euo pipefail
 echo 'start-prod.sh: applying migrations…' >&2
 python manage.py migrate --noinput
 
+# Purge expired sessions on boot. Nothing else prunes the session table, and on a
+# small SQLite-on-a-volume VM an unbounded table is a slow disk-fill. Cheap and
+# idempotent — it only deletes rows already past their expiry.
+echo 'start-prod.sh: clearing expired sessions…' >&2
+python manage.py clearsessions || true
+
 # Supervise the background-task worker: if it exits, restart it rather than
 # taking the whole machine (and a healthy web server) down with it. A short
 # backoff keeps a genuinely-broken worker from hot-looping.

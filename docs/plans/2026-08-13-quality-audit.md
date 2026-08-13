@@ -395,3 +395,11 @@ _(updated as items land)_
   throttle at the IP-keyed classes; set `NUM_PROXIES=1` as defense in depth. Dropped the
   spoofable `X-Forwarded-For` branch from `get_client_ip` (also fixes the plain-Django
   login/signup/presign limiters). All 228 backend tests pass.
+- **2026-08-13 · P0-b ✅** — `_viewer_key_for_request` no longer calls `request.session.save()`:
+  authenticated → `u:<id>`, anon-with-cookie → session-hash, cookieless → a per-day
+  `(client-ip, user-agent)` fingerprint hash. Cookieless crawlers therefore dedupe instead of
+  minting a session + view row per hit. Added a `@rate_limit('post_detail', 120/60s)` guard to
+  the HTML detail view (each GET records a view), and a `clearsessions` step on boot in
+  `start-prod.sh` to drain the accumulated backlog. Rewrote the anon view-count test into two
+  (cookieless-fingerprint + existing-session), asserting no `Session` row is created. 229 tests
+  pass. The IP-keyed throttles from P0-c are what bound this now that the session mint is gone.

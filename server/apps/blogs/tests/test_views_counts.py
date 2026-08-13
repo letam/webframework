@@ -2,8 +2,11 @@
 
 # pyright: reportAttributeAccessIssue=false
 
+import hashlib
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.contrib.sessions.models import Session
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -74,17 +77,41 @@ class PostViewCountTests(ViewTestCase):
 
         self.assertEqual(PostView.objects.count(), 0)
 
-    def test_anonymous_session_viewer_counts_once_and_is_hashed(self):
-        """Anonymous views dedupe by a SECRET_KEY-hashed session key."""
+    def test_anonymous_cookieless_viewer_counts_once_without_minting_a_session(self):
+        """Cookieless anon views dedupe by an IP+UA fingerprint and mint no session.
+
+        This is the P0-b guarantee: an Open Graph crawler (or any client that
+        drops the cookie) must not create a fresh session — and a fresh dedupe
+        key — on every request, which would both inflate counts and fill the
+        session table.
+        """
         self._record_views(self.anon_client, [self.public.id])
         self._record_views(self.anon_client, [self.public.id])
 
         view = PostView.objects.get(post=self.public)
-        session_key = self.anon_client.cookies[settings.SESSION_COOKIE_NAME].value
         self.assertEqual(PostView.objects.filter(post=self.public).count(), 1)
         self.assertTrue(view.viewer_key.startswith('s:'))
         self.assertEqual(len(view.viewer_key), 42)
-        self.assertNotIn(session_key, view.viewer_key)
+        # No session was minted just to count the view.
+        self.assertNotIn(settings.SESSION_COOKIE_NAME, self.anon_client.cookies)
+        self.assertEqual(Session.objects.count(), 0)
+
+    def test_anonymous_with_existing_session_dedupes_by_session_key(self):
+        """A client that already has a session keys the view off that session."""
+        session = self.client.session
+        session.save()
+        self.anon_client.cookies[settings.SESSION_COOKIE_NAME] = session.session_key
+
+        self._record_views(self.anon_client, [self.public.id])
+
+        view = PostView.objects.get(post=self.public)
+        expected = (
+            's:'
+            + hashlib.sha256(f'{settings.SECRET_KEY}:{session.session_key}'.encode()).hexdigest()[
+                :40
+            ]
+        )
+        self.assertEqual(view.viewer_key, expected)
 
     def test_invisible_and_draft_ids_are_silently_skipped(self):
         """The endpoint records only published posts visible to the requester."""

@@ -31,9 +31,10 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from apps.throttling import IpScopedRateThrottle, IpUserRateThrottle
 from werkzeug.http import parse_range_header
 
+from apps.ratelimit import get_client_ip, rate_limit
+from apps.throttling import IpScopedRateThrottle, IpUserRateThrottle
 from apps.uploads.s3 import (
     ALLOWED_CONTENT_TYPE_RE,
     delete_object,
@@ -131,15 +132,29 @@ def _shallow_request_data(data):
 
 
 def _viewer_key_for_request(request):
-    """Return the stable, non-credential viewer key for the request."""
+    """Return a stable, non-credential viewer key without minting a session.
+
+    Authenticated users key on their id. Anonymous requests reuse an *existing*
+    session key when the browser already has one; otherwise they fall back to a
+    coarse per-day fingerprint of client IP + user agent. We deliberately never
+    call ``request.session.save()`` here: cookieless clients (Open Graph
+    crawlers, curl, anything that drops the Set-Cookie) would otherwise mint a
+    fresh session — and therefore a fresh dedupe key — on every request, both
+    inflating view counts and filling the session table on a small SQLite VM.
+    """
     if request.user.is_authenticated:
         return f'u:{request.user.id}'
 
-    if not request.session.session_key:
-        request.session.save()
-
     session_key = request.session.session_key
-    digest = hashlib.sha256(f'{settings.SECRET_KEY}:{session_key}'.encode()).hexdigest()[:40]
+    if session_key:
+        raw = f'{settings.SECRET_KEY}:{session_key}'
+    else:
+        client_ip = get_client_ip(request)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        day = timezone.now().strftime('%Y-%m-%d')
+        raw = f'{settings.SECRET_KEY}:{client_ip}:{user_agent}:{day}'
+
+    digest = hashlib.sha256(raw.encode()).hexdigest()[:40]
     return f's:{digest}'
 
 
@@ -983,10 +998,14 @@ def _link_preview_meta(preview):
     return ' · '.join(part for part in parts if part)
 
 
+@rate_limit('post_detail', limit=120, window_seconds=60)
 def post_detail(request, post_id):
     """View for individual post detail pages.
 
     Returns JSON if Accept header contains application/json, otherwise renders HTML.
+
+    Rate-limited per client IP: each HTML GET records a view, so without a cap a
+    single client could inflate counts and grow the view/session tables at will.
     """
     post = get_object_or_404(Post.objects.select_related('author', 'media'), id=post_id)
     if not post.is_visible_to(request.user, token=request.GET.get('token')):
