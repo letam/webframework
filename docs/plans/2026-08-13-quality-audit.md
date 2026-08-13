@@ -388,3 +388,10 @@ on this branch.
 ## Status log
 
 _(updated as items land)_
+
+- **2026-08-13 · P0-c ✅** (`a131a5c`) — Added `apps/throttling.py` with a `FlyClientIpMixin`
+  that keys DRF throttles on `apps.ratelimit.get_client_ip` (Fly-Client-IP → REMOTE_ADDR).
+  Pointed the default anon/user throttles, `TranscribeRateThrottle`, and the post-views scoped
+  throttle at the IP-keyed classes; set `NUM_PROXIES=1` as defense in depth. Dropped the
+  spoofable `X-Forwarded-For` branch from `get_client_ip` (also fixes the plain-Django
+  login/signup/presign limiters). All 228 backend tests pass.
