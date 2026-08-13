@@ -69,9 +69,10 @@ export const useComposerDraft = ({
 	const storageKey = draftKeyForUser(userId)
 	const restoredKeys = useRef(new Set<string>())
 
-	// Restore. Keyed on the user, because auth resolves after mount: the first
-	// pass reads the anonymous slot, and a second runs once a real user id
-	// arrives.
+	// Restore. Keyed on the user. `enabled` stays false until auth resolves (the
+	// consumer gates it on `!isAuthLoading`), so this reads the correct per-user
+	// slot on its first run rather than racing the anonymous slot; it re-runs if
+	// the user id later changes (a login mid-compose).
 	useEffect(() => {
 		if (!enabled || restoredKeys.current.has(storageKey)) return
 		restoredKeys.current.add(storageKey)
@@ -90,9 +91,44 @@ export const useComposerDraft = ({
 		}
 	}, [enabled, storageKey, userId])
 
-	// Save.
+	// Save. Also the single place that erases the stored draft, so a clear and a
+	// write can never race one another.
+	const previousIsEmpty = useRef(isEmpty)
+	const previousUserId = useRef(userId)
+	// Set when a logout (signed-in id → anonymous) is seen with content still in
+	// the composer, so neither the debounce nor the on-hide flush copies the
+	// signed-out user's words into the shared anonymous slot. Cleared once the
+	// composer returns to empty — a genuinely anonymous compose then saves.
+	const anonWriteBlocked = useRef(false)
 	useEffect(() => {
-		if (!enabled || isEmpty) return
+		if (!enabled) return
+
+		const wasEmpty = previousIsEmpty.current
+		const previousId = previousUserId.current
+		previousIsEmpty.current = isEmpty
+		previousUserId.current = userId
+
+		// Logout: never let the signed-out user's words land in the shared
+		// anonymous slot. Erase it, drop the restore notice, and block further
+		// writes until the composer is cleared.
+		if (previousId !== null && userId === null) {
+			anonWriteBlocked.current = true
+			setRestored(null)
+			void clearComposerDraft(null)
+			return
+		}
+
+		// Clearing the composer to empty must erase the stored draft, or deleting
+		// all text/media would resurrect the last non-empty draft on the next
+		// mount. Act only on a real non-empty→empty transition, never the initial
+		// empty mount (which would race the restore read).
+		if (isEmpty) {
+			anonWriteBlocked.current = false
+			if (!wasEmpty) void clearComposerDraft(userId)
+			return
+		}
+
+		if (anonWriteBlocked.current) return
 
 		const write = () => void saveComposerDraft(userId, toRecord(text, visibility, mediaType, media))
 
@@ -114,6 +150,9 @@ export const useComposerDraft = ({
 
 		const flush = () => {
 			if (document.visibilityState !== 'hidden') return
+			// Same logout guard as the save effect: don't let an on-hide flush copy a
+			// signed-out user's words into the shared anonymous slot.
+			if (anonWriteBlocked.current) return
 			const current = latest.current
 			if (current.isEmpty) return
 			void saveComposerDraft(

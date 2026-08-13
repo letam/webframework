@@ -6,6 +6,10 @@ import { POSTS_QUERY_KEY } from './usePosts'
 
 interface AuthState {
 	isAuthenticated: boolean
+	/** True until the first /auth/status/ resolves. Consumers that key storage on
+	 * the user id (e.g. composer drafts) must wait this out, or they act on the
+	 * pre-resolve `userId === null` and mistake a signed-in user for anonymous. */
+	isAuthLoading: boolean
 	userId: number | null
 	username: string | null
 	avatar: string | null
@@ -24,6 +28,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 	const hasCheckedAuth = useRef(false)
 	const [authState, setAuthState] = useState<AuthState>({
 		isAuthenticated: false,
+		isAuthLoading: true,
 		userId: null,
 		username: null,
 		avatar: null,
@@ -38,6 +43,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 				const data = await response.json()
 				const newAuthState = {
 					isAuthenticated: data.is_authenticated,
+					isAuthLoading: false,
 					userId: data.user_id,
 					username: data.username,
 					avatar: data.avatar ?? null,
@@ -61,6 +67,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 			}
 		} catch (error) {
 			console.error('Error checking auth status:', error)
+		} finally {
+			// Resolve the loading gate after the first attempt, whatever the
+			// outcome (ok, non-2xx, or thrown) — otherwise a failed initial check
+			// would leave consumers waiting forever. Only touch state if still
+			// loading, to avoid a redundant re-render on the happy path.
+			setAuthState((prev) => (prev.isAuthLoading ? { ...prev, isAuthLoading: false } : prev))
 		}
 	}, [authState.userId, queryClient])
 

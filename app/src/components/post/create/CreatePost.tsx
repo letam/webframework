@@ -71,7 +71,7 @@ const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): stri
 }
 
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
-	const { isAuthenticated, userId } = useAuth()
+	const { isAuthenticated, isAuthLoading, userId } = useAuth()
 	const [postText, setPostText] = useState('')
 	const [mediaType, setMediaType] = useState<'text' | 'audio' | 'video' | 'image'>('text')
 	const [visibility, setVisibility] = useState<PostVisibility>('public')
@@ -147,7 +147,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		clear: clearStoredDraft,
 		acknowledgeRestore,
 	} = useComposerDraft({
-		enabled: draftsEnabled,
+		// Hold off until auth resolves: before that, userId is null (indistinguishable
+		// from a real anonymous user), so saving would route a signed-in user's words
+		// to the shared anonymous slot.
+		enabled: draftsEnabled && !isAuthLoading,
 		userId,
 		text: postText,
 		visibility,
