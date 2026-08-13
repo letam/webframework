@@ -31,7 +31,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
+from apps.throttling import IpScopedRateThrottle, IpUserRateThrottle
 from werkzeug.http import parse_range_header
 
 from apps.uploads.s3 import (
@@ -99,7 +99,7 @@ def _related_count(model):
     )
 
 
-class TranscribeRateThrottle(UserRateThrottle):
+class TranscribeRateThrottle(IpUserRateThrottle):
     """Throttle for the transcribe action, which calls a paid external API."""
 
     scope = 'transcribe'
@@ -628,7 +628,7 @@ class PostViewSet(viewsets.ModelViewSet):
         detail=False,
         methods=['post'],
         url_path='views',
-        throttle_classes=[ScopedRateThrottle],
+        throttle_classes=[IpScopedRateThrottle],
         throttle_scope='views',
     )
     def views(self, request):

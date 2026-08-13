@@ -496,10 +496,12 @@ REST_FRAMEWORK = {
     ],
     # Baseline abuse protection. Counters live in the default (local-memory)
     # cache, so rates are per process and approximate — good enough to blunt
-    # bulk abuse, not a hard global guarantee.
+    # bulk abuse, not a hard global guarantee. The IP-keyed throttles identify a
+    # client by Fly's trusted `Fly-Client-IP` header (see apps/throttling.py), so
+    # a rotated `X-Forwarded-For` can no longer mint a fresh bucket per request.
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
+        'apps.throttling.IpAnonRateThrottle',
+        'apps.throttling.IpUserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '300/hour',
@@ -507,6 +509,9 @@ REST_FRAMEWORK = {
         'transcribe': '10/hour',
         'views': '120/min',
     },
+    # Defense in depth for any throttle that still uses DRF's default get_ident:
+    # Fly is the single proxy hop, so trust exactly one X-Forwarded-For entry.
+    'NUM_PROXIES': 1,
 }
 
 # Background tasks (django-tasks, a backport of Django 6's django.tasks).

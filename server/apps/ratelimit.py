@@ -51,13 +51,18 @@ def _now():
 
 
 def get_client_ip(request):
-    """Best-effort client IP: Fly's header first, then X-Forwarded-For, then REMOTE_ADDR."""
+    """Client IP for rate limiting: Fly's proxy header, else REMOTE_ADDR.
+
+    ``Fly-Client-IP`` is set by Fly's edge proxy and cannot be forged by the
+    client. ``X-Forwarded-For`` deliberately is *not* consulted: the client
+    controls its left-hand entries, so keying a limiter on it lets an attacker
+    mint a fresh bucket per request and slip every fixed-window cap. Off Fly
+    (local dev, tests) there is no proxy header and ``REMOTE_ADDR`` is the real
+    peer.
+    """
     fly_client_ip = request.META.get('HTTP_FLY_CLIENT_IP')
     if fly_client_ip:
         return fly_client_ip
-    forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if forwarded_for:
-        return forwarded_for.split(',')[0].strip()
     return request.META.get('REMOTE_ADDR', 'unknown')
 
 
