@@ -93,7 +93,7 @@ post is created. Ceiling is 30 keys/hour/IP, and the IP is spoofable (P0-c).
   server-issued composer token). Add a size condition to the presign so R2 rejects oversized
   bodies at the edge. Decide the anonymous-posting policy first — this may be a product call.
 
-### P1-b · Link-preview SSRF guard is validate-then-connect (DNS-rebinding) · M
+### P1-b · Link-preview SSRF guard is validate-then-connect (DNS-rebinding) · M ✅
 `server/apps/blogs/link_previews.py:215-310` resolves + validates the host, then lets `httpx`
 resolve it **again** at connect time. A 0-TTL name that alternates public IP ↔
 `169.254.169.254`/`127.0.0.1` passes the check and connects internal. Reachable
@@ -593,3 +593,21 @@ _(updated as items land)_
     the guard fix so they exercise fixed code, not the current broken shape (the fake httpx client
     can't even express `follow_redirects`). This closes the P1 build/CI-integrity cluster
     (P1-n/o/p ✅, P1-q backend ✅; e2e flagged, SSRF tests tracked under P1-b).
+
+- **2026-08-13 · P1-b ✅** — The link-preview SSRF guard no longer validates a hostname and then lets
+  httpx re-resolve it at connect time (DNS rebinding). `_url_is_safe` became `_resolve_pinned_target`,
+  which resolves the name once, fails closed if *any* resolved address is non-public, and returns the
+  concrete IP to connect to plus the original hostname. `_safe_get` now connects to that pinned IP
+  literal (`httpx.URL(url).copy_with(host=ip)`) while carrying the hostname as the `Host` header and
+  the `sni_hostname` request extension — so vhost routing and TLS certificate verification still use
+  the real name (verified end-to-end against a live host: pinned-IP + SNI → 200, IP without the SNI
+  override → cert failure, confirming verification binds to the hostname). Each redirect hop is
+  re-resolved and re-pinned, and relative `Location`/`og:image` links resolve against the logical URL,
+  not the IP. The httpx mechanics were checked against the pinned versions (httpx 0.28.1 / httpcore
+  1.0.9): `_prepare` only auto-fills `Host` when absent so the explicit header wins, and
+  `connection.py` uses `sni_hostname or origin.host` as the TLS `server_hostname`. Rewrote the test
+  fake to record the connect URL + `Host` + `sni_hostname` and to drive redirect chains, and added the
+  three tests the plan named (now against the fixed guard): a 302-to-link-local that must refuse the
+  second hop without connecting to it, a `MAX_REDIRECTS` cap, and an oversized-body drop — plus the
+  anti-rebinding assertion that the connection targets the resolved IP, not the name. 238 backend
+  tests pass; ruff clean.
