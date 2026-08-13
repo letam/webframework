@@ -246,7 +246,14 @@ class Post(models.Model):
     class Meta:
         """Model options for posts."""
 
-        ordering = ['-created']
+        # `-id` is a stable tiebreaker: `created` (auto_now_add) can repeat across
+        # rows written in the same instant (bulk inserts, tests), and without it
+        # keyset/offset pagination of the feed can drop or repeat those rows. The
+        # matching ('-created', '-id') index below serves this default sort.
+        ordering = ['-created', '-id']
+        indexes = [
+            models.Index(fields=['-created', '-id'], name='blogs_post_feed_idx'),
+        ]
 
     def __str__(self):
         """Return the post headline."""
