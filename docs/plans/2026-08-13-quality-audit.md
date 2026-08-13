@@ -171,7 +171,7 @@ modal is open reverts in-progress typing.
   visibility/publish/delete too; key the seed effect on `[post.id]` (or `key={post.id}` +
   drop the effect).
 
-### P1-f · Composer autosave correctness — empty doesn't clear, and the `'anon'` key races · S/M
+### P1-f · Composer autosave correctness — empty doesn't clear, and the `'anon'` key races · S/M ✅
 `useComposerDraft.ts:95` returns early when `isEmpty`, so deleting all text/media never clears
 the stored draft — the last non-empty draft is resurrected on next mount behind "Restored your
 unsaved draft". And `draftKeyForUser(null)` is the shared `'anon'` slot; `useAuth` has no
@@ -181,7 +181,7 @@ to another" is violated on a shared device.
 - Fix: clear the draft on the non-empty→empty transition; add `isAuthLoading` to `useAuth` and
   `enabled: !isAuthLoading`; on `userId → null`, clear rather than rewrite.
 
-### P1-g · `MediaRecorder` evaluated at module scope crashes the whole app · S
+### P1-g · `MediaRecorder` evaluated at module scope crashes the whole app · S ✅
 `app/src/lib/utils/media.ts:25-46` calls `MediaRecorder.isTypeSupported(...)` in two top-level
 `const`s, and `Post.tsx` imports `parseDurationString` from the same module — so every feed
 render pulls it in. On a browser/webview without `MediaRecorder`, module eval throws before
@@ -209,7 +209,7 @@ writes no status, so a dropped enqueue leaves media without poster/waveform fore
   transcribe action; add `status='pending'` (with an age filter) to `refresh_link_previews`;
   consider a `reprocess_media` command for rows missing `duration`/`thumbnail`.
 
-### P1-j · Filtered feed yanks the viewport to the top on every loaded page · S
+### P1-j · Filtered feed yanks the viewport to the top on every loaded page · S ✅
 `FilterControls.tsx:47-61` smooth-scrolls to the filter label whenever `filteredPostCount`
 changes while a filter exists; infinite scroll changes that count continuously, so scrolling
 filtered results repeatedly throws you back to the top.
@@ -462,3 +462,23 @@ _(updated as items land)_
   **User action:** confirm a `SECRET_KEY` Fly secret is set (`fly secrets list`) and rotate it —
   the previously image-baked key should be considered compromised. Rotation and deploy are user
   steps.
+- **2026-08-13 · P1-g + P1-j ✅** (`f865097`) — `media.ts` no longer evaluates `MediaRecorder`
+  at module scope: both `getSupported*MimeTypes()` return `[]` when `MediaRecorder` is undefined,
+  so a webview without it can render the feed (which imports `parseDurationString` from the same
+  module) instead of throwing before React mounts. Deleted the two stray `console.log`s. For P1-j,
+  `FilterControls` now scrolls to the filter label on a change to the filter *set* — a
+  `JSON.stringify({ matchMode, filters })` signature compared against a ref — rather than on
+  `filteredPostCount`, so infinite-scroll page loads no longer yank a filtered view back to the
+  top. Dropped the now-unused `filteredPostCount` prop from `FilterControls` and `Feed`. (Biome's
+  `useExhaustiveDependencies` forbids trigger-only deps, so the signature is read inside the effect
+  body, not just listed.) Typecheck/lint/Biome/164 tests green.
+- **2026-08-13 · P1-f ✅** (`e3e5dcf`) — Closed all three cross-user autosave leaks. `useAuth` now
+  exposes `isAuthLoading` (true until the first `/auth/status/` resolves, cleared in a `finally` so
+  a failed check can't hang it), and the composer gates autosave on `!isAuthLoading` so a signed-in
+  user's words are never written to the shared `'anon'` slot during the pre-resolve window where
+  `userId` reads `null`. The save effect now (a) erases the stored draft on a real non-empty→empty
+  transition so clearing the composer no longer resurrects the last draft, and (b) detects a
+  logout (`userId` non-null → null) with content still present, clears the anon slot, and blocks
+  further writes (via an `anonWriteBlocked` ref honoured by both the save and the on-hide flush
+  effects) until the composer is emptied. Clear and write share the one save effect so they cannot
+  race. Typecheck/lint (8/8)/Biome/164 tests green.
