@@ -295,7 +295,7 @@ export const Post: React.FC<PostProps> = ({
 								<button type="button" className="block w-full" aria-label="Open image preview">
 									<img
 										src={imageDisplayUrl}
-										alt={mediaAltText}
+										alt={mediaAltText ?? ''}
 										className="h-auto w-full cursor-zoom-in rounded-md"
 									/>
 								</button>
@@ -308,7 +308,7 @@ export const Post: React.FC<PostProps> = ({
 								<div className="flex max-h-[85vh] flex-col items-center gap-3">
 									<img
 										src={imageDisplayUrl}
-										alt={mediaAltText}
+										alt={mediaAltText ?? ''}
 										className="max-h-[78vh] max-w-full rounded-md object-contain"
 									/>
 									<div className="flex w-full items-center gap-3 px-1 text-sm text-white">

@@ -26,6 +26,10 @@ const AuthContext = createContext<AuthContextType | null>(null)
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const queryClient = useQueryClient()
 	const hasCheckedAuth = useRef(false)
+	// Last user id we resolved, held in a ref so checkAuthStatus can compare against
+	// it without depending on authState.userId — depending on it would churn the
+	// callback identity and re-fire the mount effect, double-fetching /auth/status/.
+	const lastUserIdRef = useRef<number | null>(null)
 	const [authState, setAuthState] = useState<AuthState>({
 		isAuthenticated: false,
 		isAuthLoading: true,
@@ -55,15 +59,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 				// refetch posts so per-user fields (e.g. liked) are up to date.
 				// Skip on the initial check: the first posts fetch already ran
 				// with the session cookie, so its data is correct.
-				if (newAuthState.userId !== authState.userId) {
+				if (newAuthState.userId !== lastUserIdRef.current) {
 					clearCsrfTokenCache()
 					if (hasCheckedAuth.current) {
 						queryClient.invalidateQueries({ queryKey: POSTS_QUERY_KEY })
 					}
 				}
+				lastUserIdRef.current = newAuthState.userId
 				hasCheckedAuth.current = true
 
 				setAuthState(newAuthState)
+			} else {
+				// A non-2xx (e.g. a 500 from the auth endpoint) is not an auth answer;
+				// don't swallow it silently. The finally still resolves the loading gate.
+				console.error('Auth status check returned HTTP', response.status)
 			}
 		} catch (error) {
 			console.error('Error checking auth status:', error)
@@ -74,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 			// loading, to avoid a redundant re-render on the happy path.
 			setAuthState((prev) => (prev.isAuthLoading ? { ...prev, isAuthLoading: false } : prev))
 		}
-	}, [authState.userId, queryClient])
+	}, [queryClient])
 
 	useEffect(() => {
 		checkAuthStatus()

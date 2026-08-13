@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -56,12 +56,15 @@ export const TagFilterPopover: React.FC<TagFilterPopoverProps> = ({
 		[pendingTags]
 	)
 
+	// Seed the pending selection from the applied tags only as the popover opens.
+	// Re-seeding on later selectedTags changes while it is open would wipe the edits
+	// the user is making before they submit.
+	const wasOpenRef = useRef(false)
 	useEffect(() => {
-		if (!isOpen) {
-			return
+		if (isOpen && !wasOpenRef.current) {
+			setPendingTags(normalizedSelectedTags)
 		}
-
-		setPendingTags(normalizedSelectedTags)
+		wasOpenRef.current = isOpen
 	}, [isOpen, normalizedSelectedTags])
 
 	const hasChanges = useMemo(() => {

@@ -221,17 +221,24 @@ const VideoRecorder = ({ onVideoCaptured, disabled, autoStart = false }: VideoRe
 			mediaRecorder.onstop = () => {
 				stopTimer()
 				;(async () => {
-					const { default: fixWebmDuration } = await import('webm-duration-fix')
-					const videoBlob = await fixWebmDuration(
-						new Blob(videoChunksRef.current, { type: videoChunksRef.current[0]?.type })
-					)
-					const videoUrl = URL.createObjectURL(videoBlob)
-					setVideoURL(videoUrl)
-					onVideoCaptured(videoBlob)
-
-					// Remove preview
-					if (videoRef.current) {
-						videoRef.current.srcObject = null
+					try {
+						const { default: fixWebmDuration } = await import('webm-duration-fix')
+						const videoBlob = await fixWebmDuration(
+							new Blob(videoChunksRef.current, { type: videoChunksRef.current[0]?.type })
+						)
+						const videoUrl = URL.createObjectURL(videoBlob)
+						setVideoURL(videoUrl)
+						onVideoCaptured(videoBlob)
+					} catch (error) {
+						// Without this, a failed duration-fix or dynamic import rejects unhandled
+						// and the recording vanishes with no feedback (mirrors AudioRecorder.onstop).
+						console.error('Error processing video recording:', error)
+						toast.error('Error processing video recording')
+					} finally {
+						// Remove preview on success or failure so a dead live stream isn't left attached.
+						if (videoRef.current) {
+							videoRef.current.srcObject = null
+						}
 					}
 				})()
 			}

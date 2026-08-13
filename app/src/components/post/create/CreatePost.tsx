@@ -200,6 +200,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	const handleAudioFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
+		// Reset the input so picking the same file again (e.g. after clearing) re-fires onChange.
+		e.target.value = ''
 		if (file?.type.startsWith('audio/')) {
 			setAudioFile(file)
 			setAudioBlob(null)
@@ -211,6 +213,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	const handleUploadFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
+		// Reset the input so picking the same file again (e.g. after clearing) re-fires onChange.
+		e.target.value = ''
 		if (!file) {
 			toast.error('Please select a valid file')
 			return
@@ -239,6 +243,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
+		// Reset the input so picking the same file again (e.g. after clearing) re-fires onChange.
+		e.target.value = ''
 		if (file?.type.startsWith('image/')) {
 			setImageFile(file)
 			setMediaType('image')
