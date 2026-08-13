@@ -5,15 +5,17 @@ import subprocess
 import tempfile
 from array import array
 from datetime import timedelta
-from io import BytesIO
+from io import BytesIO, StringIO
 from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APIClient
 
@@ -751,6 +753,36 @@ class MediaPipelineTests(ViewTestCase):
         self.assertEqual(response.status_code, 202)
         mock_transcribe.assert_not_called()
 
+    def test_transcribe_reenqueues_a_stranded_pending(self):
+        """A transcription stuck 'pending' past the staleness window is retried.
+
+        Without this, a worker that died mid-transcription leaves the media at
+        'pending' forever and the idempotency guard makes every retry a no-op, so
+        the UI spins with no way out.
+        """
+        from apps.blogs.views import STALE_TRANSCRIPT_PENDING
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(
+                    file=self._audio_file(), media_type='audio', transcript_status='pending'
+                )
+                post = Post.objects.create(author=self.user, head='Voice note', media=media)
+                # Backdate past the staleness window; update() bypasses auto_now.
+                stranded = timezone.now() - STALE_TRANSCRIPT_PENDING - timedelta(seconds=1)
+                Media.objects.filter(pk=media.pk).update(modified=stranded)
+
+                with mock.patch(
+                    'apps.blogs.tasks.transcribe_audio', return_value='recovered'
+                ) as mock_transcribe:
+                    response = self.client.post(reverse('post-transcribe', args=[post.id]))
+
+        self.assertEqual(response.status_code, 202)
+        mock_transcribe.assert_called_once()
+        media.refresh_from_db()
+        self.assertEqual(media.transcript_status, 'done')
+        self.assertEqual(media.transcript, 'recovered')
+
     def test_post_detail_returns_json_when_requested(self):
         """The post detail page should serve JSON to Accept: application/json."""
         post = Post.objects.create(author=self.user, head='Hello', body='World')
@@ -839,3 +871,44 @@ class StreamPostMediaRangeTests(ViewTestCase):
         self.assertEqual(response.status_code, 206)
         self.assertTrue(response.streaming)
         self.assertEqual(b''.join(response.streaming_content), self.CONTENT)
+
+
+class ReprocessMediaCommandTests(ViewTestCase):
+    """Tests for the reprocess_media recovery command.
+
+    process_post_media writes no status, so a dropped enqueue leaves media
+    without its derived asset forever; this command is the only path back.
+    """
+
+    def _audio(self):
+        return SimpleUploadedFile('clip.mp3', b'not real audio', content_type='audio/mpeg')
+
+    def _settle(self, *media, minutes=30):
+        """Backdate `modified` (auto_now) so the age gate treats rows as settled."""
+        Media.objects.filter(pk__in=[m.pk for m in media]).update(
+            modified=timezone.now() - timedelta(minutes=minutes)
+        )
+
+    def test_only_settled_media_missing_its_asset_is_reenqueued(self):
+        """Audio without a waveform and video without a poster are swept; in-flight isn't."""
+        needs_waveform = Media.objects.create(file=self._audio(), media_type='audio')
+        has_waveform = Media.objects.create(
+            file=self._audio(), media_type='audio', waveform=[0, 1, 2]
+        )
+        needs_poster = Media.objects.create(file=self._audio(), media_type='video')
+        in_flight = Media.objects.create(file=self._audio(), media_type='audio')
+        # Everything but in_flight has settled; in_flight keeps its fresh
+        # `modified`, standing in for a job still running.
+        self._settle(needs_waveform, has_waveform, needs_poster)
+        output = StringIO()
+
+        with mock.patch(
+            'apps.blogs.management.commands.reprocess_media.process_post_media'
+        ) as mock_task:
+            call_command('reprocess_media', stdout=output)
+
+        enqueued = {call.args[0] for call in mock_task.enqueue.call_args_list}
+        self.assertEqual(enqueued, {needs_waveform.pk, needs_poster.pk})
+        self.assertNotIn(has_waveform.pk, enqueued)
+        self.assertNotIn(in_flight.pk, enqueued)
+        self.assertEqual(output.getvalue().strip(), 'reprocessing 2 media')

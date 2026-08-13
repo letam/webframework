@@ -197,7 +197,7 @@ downward drag inside any dialog (record, image preview, tag popover) is read as 
   `target.closest('[role="dialog"], [data-radix-popper-content-wrapper]')`; pass an `onRefresh`
   that invalidates the posts query instead of reloading.
 
-### P1-i · Transcription/enqueue failures are unrecoverable · S–M
+### P1-i · Transcription/enqueue failures are unrecoverable · S–M ✅
 A post whose transcription worker dies is stranded at `transcript_status='pending'`
 (`views.py:810-814`) — the transcribe action reads `pending` as "in flight" and no-ops, so the
 UI spins forever and nothing can move it. The deploy runbook says the worker only runs while
@@ -632,3 +632,27 @@ _(updated as items land)_
     anonymous posting means a short-lived server-issued composer token instead — a real feature, not a
     reversible tweak. Not deciding this autonomously. The size condition above is orthogonal and lands
     regardless of which way the auth call goes.
+
+- **2026-08-13 · P1-i ✅** — Transcription and media-processing failures are no longer dead ends. Three
+  recovery paths, one per stranded state the audit named:
+  - **Transcribe retry.** The action read *any* `pending` as "in flight" and no-oped, so a worker that
+    died left the media pending forever and the UI spun with no way out (the runbook says the prod
+    worker only runs while the machine is awake, so this is expected, not hypothetical). It now treats a
+    `pending` whose `media.modified` is older than `STALE_TRANSCRIPT_PENDING` (15 min) as stranded and
+    re-enqueues; re-saving bumps `modified` (auto_now, included in `update_fields` on Django 6.1) so
+    rapid retries don't pile on jobs. A fresh pending still no-ops (`test_transcribe_is_idempotent_while_pending`
+    unchanged), and a new test drives the stranded-retry path.
+  - **Link-preview pending sweep.** `refresh_link_previews` swept `failed`/`ok` but never `pending`, so a
+    preview whose `fetch_link_previews` task never ran stayed pending forever with nothing rendered. Added
+    a stuck-pending query (`status='pending'`, `created` older than `--stuck-pending-minutes` default 15,
+    `fetch_attempts__lt=max_attempts`, previews-enabled post) that fetches like the failed retries;
+    `fetch_preview_for` increments attempts and always leaves the pending state, so it's self-limiting.
+    Summary line gains a `recovered N stuck (M now ok)` prefix (existing assertions updated; a new test
+    covers age/attempt-cap/disabled-post exclusion).
+  - **`reprocess_media` command (new).** `process_post_media` writes no status, so a dropped enqueue
+    leaves audio without a waveform and video/image without a thumbnail forever. The command re-enqueues
+    settled media (`--min-age-minutes` default 15, via `modified`, to skip in-flight rows) that lacks its
+    type's derived asset. Documented as a *manual* tool, not a tight cron: media whose asset genuinely
+    can't be produced has no attempt counter and would be reprocessed every run. New test class covers the
+    missing-asset/settled selection.
+  - 244 backend tests pass (3 new); ruff clean.

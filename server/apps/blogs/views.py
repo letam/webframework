@@ -5,6 +5,7 @@ import logging
 import mimetypes
 import os
 import tempfile
+from datetime import timedelta
 from urllib.parse import urlsplit
 
 from django.conf import settings
@@ -80,6 +81,13 @@ logger = logging.getLogger(__name__)
 
 VALID_MEDIA_TYPES = {choice[0] for choice in MEDIA_TYPE_CHOICES}
 POSTER_UPLOAD_LIMIT_BYTES = 5 * 1024 * 1024
+
+# A transcription left at 'pending' this long is treated as stranded — its worker
+# almost certainly died (in production the worker only runs while the machine is
+# awake) — so a repeat transcribe request re-enqueues it instead of no-oping. The
+# transcribe action is the only path that clears a stuck spinner, so this is the
+# ceiling on how long the UI can spin before the author can retry.
+STALE_TRANSCRIPT_PENDING = timedelta(minutes=15)
 
 
 class MediaValidationError(ValueError):
@@ -828,12 +836,22 @@ class PostViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # A 'pending' status normally means a transcription is already in flight,
+        # so a repeat request no-ops. But a worker that died leaves it pending
+        # forever and the UI spins with no way out; once it's been pending past
+        # the staleness window, re-enqueue instead. Re-saving bumps `modified`
+        # (auto_now), which resets the window so rapid retries don't pile on jobs.
+        media = post.media
+        is_stranded_pending = (
+            media.transcript_status == 'pending'
+            and media.modified < timezone.now() - STALE_TRANSCRIPT_PENDING
+        )
         try:
-            if post.media.transcript_status != 'pending':
-                post.media.transcript_status = 'pending'
-                post.media.save(update_fields=['transcript_status'])
-                transcribe_post_media.enqueue(post.media.pk)
-                post.media.refresh_from_db()
+            if media.transcript_status != 'pending' or is_stranded_pending:
+                media.transcript_status = 'pending'
+                media.save(update_fields=['transcript_status'])
+                transcribe_post_media.enqueue(media.pk)
+                media.refresh_from_db()
         except Exception:
             logger.exception('Error transcribing audio for post %s', post.id)
             return Response(

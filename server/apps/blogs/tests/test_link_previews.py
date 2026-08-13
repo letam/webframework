@@ -1252,7 +1252,7 @@ class RefreshLinkPreviewsCommandTests(BaseTestCase):
 
         self.assertEqual(
             output.getvalue().strip(),
-            'retried 1 (1 now ok), refreshed 1 (1 updated)',
+            'recovered 0 stuck (0 now ok), retried 1 (1 now ok), refreshed 1 (1 updated)',
         )
         self.assertEqual(
             [call.args[0].pk for call in mock_fetch.call_args_list],
@@ -1305,8 +1305,63 @@ class RefreshLinkPreviewsCommandTests(BaseTestCase):
 
         self.assertEqual(
             output.getvalue().strip(),
-            'retried 0 (0 now ok), refreshed 1 (0 updated)',
+            'recovered 0 stuck (0 now ok), retried 0 (0 now ok), refreshed 1 (0 updated)',
         )
+
+    def test_command_recovers_stranded_pending_rows(self):
+        """A preview stuck at 'pending' past the window is swept; a fresh one waits.
+
+        A pending preview means its fetch task was enqueued but never ran (a
+        worker that died between sync and fetch). Nothing else advances it, so the
+        sweep is its only recovery — bounded by age, the attempt cap, and the
+        post's previews-enabled flag.
+        """
+        stranded = LinkPreview.objects.create(
+            post=self.post, url='https://stranded.example.com', status='pending'
+        )
+        fresh_pending = LinkPreview.objects.create(
+            post=self.post, url='https://fresh-pending.example.com', status='pending'
+        )
+        capped_pending = LinkPreview.objects.create(
+            post=self.post,
+            url='https://capped-pending.example.com',
+            status='pending',
+            fetch_attempts=4,
+        )
+        disabled_pending = LinkPreview.objects.create(
+            post=self.disabled_post, url='https://disabled-pending.example.com', status='pending'
+        )
+        # Backdate created past the stuck window; auto_now_add can't be set on create.
+        LinkPreview.objects.filter(
+            pk__in=[stranded.pk, capped_pending.pk, disabled_pending.pk]
+        ).update(created=self.now - timedelta(minutes=20))
+        output = StringIO()
+
+        def fake_fetch(preview, *, keep_existing_on_failure=False):
+            """Mark the preview fetched without making network requests."""
+            preview.fetch_attempts += 1
+            preview.fetched_at = timezone.now()
+            preview.status = 'ok'
+            preview.save(update_fields=['fetch_attempts', 'fetched_at', 'status'])
+            return True
+
+        with mock.patch(
+            'apps.blogs.management.commands.refresh_link_previews.fetch_preview_for',
+            side_effect=fake_fetch,
+        ) as mock_fetch:
+            call_command('refresh_link_previews', stdout=output)
+
+        # Only the stranded pending is swept: fresh is within the window, capped is
+        # at max attempts, disabled belongs to a previews-disabled post.
+        self.assertEqual([call.args[0].pk for call in mock_fetch.call_args_list], [stranded.pk])
+        self.assertTrue(
+            output.getvalue().strip().startswith('recovered 1 stuck (1 now ok)'),
+            output.getvalue(),
+        )
+        stranded.refresh_from_db()
+        self.assertEqual(stranded.status, 'ok')
+        fresh_pending.refresh_from_db()
+        self.assertEqual(fresh_pending.status, 'pending')
 
 
 class LinkPreviewImageEndpointTests(ViewTestCase):
