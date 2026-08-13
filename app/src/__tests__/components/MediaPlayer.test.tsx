@@ -1,4 +1,4 @@
-import { createEvent, fireEvent, render, screen } from '@testing-library/react'
+import { act, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AudioPlayer, VideoPlayer, getWaveformSeekTime } from '@/components/post/MediaPlayer'
 
@@ -7,6 +7,7 @@ describe('MediaPlayer', () => {
 		prototype: typeof HTMLMediaElement.prototype
 		load: typeof HTMLMediaElement.prototype.load
 		pause: typeof HTMLMediaElement.prototype.pause
+		play: typeof HTMLMediaElement.prototype.play
 	}>
 
 	beforeAll(() => {
@@ -18,6 +19,7 @@ describe('MediaPlayer', () => {
 			prototype,
 			load: prototype.load,
 			pause: prototype.pause,
+			play: prototype.play,
 		}))
 		for (const { prototype } of originalMethods) {
 			Object.defineProperty(prototype, 'load', {
@@ -28,6 +30,11 @@ describe('MediaPlayer', () => {
 				configurable: true,
 				value: vi.fn(),
 			})
+			// jsdom does not implement play(); resolve it so togglePlayback runs.
+			Object.defineProperty(prototype, 'play', {
+				configurable: true,
+				value: vi.fn(() => Promise.resolve()),
+			})
 		}
 	})
 
@@ -36,7 +43,7 @@ describe('MediaPlayer', () => {
 	})
 
 	afterAll(() => {
-		for (const { prototype, load, pause } of originalMethods) {
+		for (const { prototype, load, pause, play } of originalMethods) {
 			Object.defineProperty(prototype, 'load', {
 				configurable: true,
 				value: load,
@@ -44,6 +51,10 @@ describe('MediaPlayer', () => {
 			Object.defineProperty(prototype, 'pause', {
 				configurable: true,
 				value: pause,
+			})
+			Object.defineProperty(prototype, 'play', {
+				configurable: true,
+				value: play,
 			})
 		}
 	})
@@ -90,6 +101,24 @@ describe('MediaPlayer', () => {
 		fireEvent(slider, event)
 
 		expect(slider).toHaveAttribute('aria-valuenow', '50')
+	})
+
+	it('streams audio from the URL on play without fetching a blob', async () => {
+		const { container } = render(<AudioPlayer audioUrl="/api/posts/1/media/" duration={100} />)
+
+		const audio = container.querySelector('audio') as HTMLAudioElement
+		// Controls render SkipBack / Play-Pause / SkipForward; the middle one plays.
+		const playButton = container.querySelectorAll('button')[1]
+
+		// play() resolves asynchronously; flush its .then state update inside act.
+		await act(async () => {
+			fireEvent.click(playButton)
+		})
+
+		// Streams from the endpoint — not a downloaded blob: URL — and never fetches.
+		expect(audio.src).toContain('/api/posts/1/media/')
+		expect(audio.src.startsWith('blob:')).toBe(false)
+		expect(globalThis.fetch).not.toHaveBeenCalled()
 	})
 
 	it('passes poster and lazy preload attributes to video', () => {
