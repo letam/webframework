@@ -1097,10 +1097,14 @@ class LinkPreviewApiTests(ViewTestCase):
                 preview.image.save('toggle.jpg', ContentFile(b'image bytes'), save=True)
                 image_path = preview.image.path
 
-                response = self.client.patch(
-                    reverse('post-detail', args=[post.id]),
-                    {'link_previews_enabled': 'false'},
-                )
+                # sync_link_previews now frees the stored images via
+                # transaction.on_commit, so run those callbacks to observe the
+                # deletion.
+                with self.captureOnCommitCallbacks(execute=True):
+                    response = self.client.patch(
+                        reverse('post-detail', args=[post.id]),
+                        {'link_previews_enabled': 'false'},
+                    )
 
                 self.assertEqual(response.status_code, 200)
                 self.assertFalse(response.data['link_previews_enabled'])

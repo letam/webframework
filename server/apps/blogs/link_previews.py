@@ -12,10 +12,12 @@ from urllib.parse import parse_qs, quote, urljoin, urlparse
 
 import httpx
 from django.core.files.base import ContentFile
+from django.db import transaction
 from django.utils import timezone
 from PIL import Image
 
 from .models import LinkPreview
+from .utils import flatten_to_rgb
 
 logger = logging.getLogger(__name__)
 
@@ -760,14 +762,7 @@ def download_preview_image(preview: LinkPreview, image_url: str) -> None:
     try:
         with Image.open(BytesIO(response.content)) as source_image:
             source_image.thumbnail((640, 640))
-            if source_image.mode in {'RGBA', 'LA'} or (
-                source_image.mode == 'P' and 'transparency' in source_image.info
-            ):
-                rgba_image = source_image.convert('RGBA')
-                normalized = Image.new('RGB', rgba_image.size, 'white')
-                normalized.paste(rgba_image, mask=rgba_image.getchannel('A'))
-            else:
-                normalized = source_image.convert('RGB')
+            normalized = flatten_to_rgb(source_image)
 
             output = BytesIO()
             normalized.save(output, format='JPEG', quality=80)
@@ -853,19 +848,44 @@ def fetch_preview_for(preview: LinkPreview, *, keep_existing_on_failure=False) -
     return True
 
 
+def _delete_stored_images(storage, image_names) -> None:
+    for name in image_names:
+        try:
+            storage.delete(name)
+        except Exception:
+            logger.error('Error deleting link preview image %s', name, exc_info=True)
+
+
+def _delete_previews_deferring_images(previews) -> None:
+    """Delete LinkPreview rows now, freeing their stored images on commit.
+
+    ``LinkPreview.delete()`` removes the storage object synchronously, so calling
+    it inside the viewset's atomic block (both callers do) means a rollback would
+    resurrect the row while its image is already gone. Deleting the rows through
+    the queryset keeps the removal inside the transaction and skips the per-row
+    storage delete; the files are freed from ``on_commit``, so they survive a
+    rollback and vanish only once the delete is durable. ``on_commit`` runs
+    immediately when there is no open transaction, so this is correct outside
+    ``atomic()`` too.
+    """
+    image_names = [name for name in previews.values_list('image', flat=True) if name]
+    previews.delete()
+    if image_names:
+        storage = LinkPreview._meta.get_field('image').storage
+        transaction.on_commit(lambda: _delete_stored_images(storage, image_names))
+
+
 def sync_link_previews(post) -> bool:
     """Synchronize a post's LinkPreview rows with the URLs in its text."""
     if not post.link_previews_enabled:
-        for preview in post.link_previews.all():
-            preview.delete()
+        _delete_previews_deferring_images(post.link_previews.all())
         return False
 
     urls = extract_urls(f'{post.head}\n{post.body}')
     stale_previews = post.link_previews.all()
     if urls:
         stale_previews = stale_previews.exclude(url__in=urls)
-    for preview in stale_previews:
-        preview.delete()
+    _delete_previews_deferring_images(stale_previews)
 
     existing_previews = {preview.url: preview for preview in post.link_previews.all()}
     for position, url in enumerate(urls):

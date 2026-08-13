@@ -341,6 +341,11 @@ class PostViewSet(viewsets.ModelViewSet):
             post = serializer.instance
 
             if media_payload:
+                # Pin the Media pk to the Post pk so a direct-upload file lands
+                # under post/<post.id>/media/... on first save (media_file_path
+                # reads instance.id). This intentionally couples the two pks and
+                # lets Media.save() skip its insert-twice fallback; see the note
+                # in Media.save() for the mechanism.
                 media_kwargs = {
                     'id': post.id,  # pyright: ignore [reportOptionalMemberAccess]
                     'media_type': media_payload['media_type'],
