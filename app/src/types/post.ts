@@ -11,10 +11,13 @@ export type PostVisibility = 'public' | 'unlisted' | 'private'
 export interface Media {
 	id: number
 	media_type: 'audio' | 'video' | 'image'
-	file: string
-	s3_file_key?: string
+	// MIME type and download extension are derived server-side. Raw storage paths
+	// (file / mp3_file / s3_file_key) are no longer serialized — they resolved to
+	// /media/ URLs that bypassed the visibility gate. Playback uses signed_url or
+	// the gated stream endpoint (see getMediaUrl).
+	mime_type: string
+	extension: string
 	signed_url?: string | null
-	mp3_file?: string
 	duration?: string
 	thumbnail?: string | null
 	waveform?: number[] | null

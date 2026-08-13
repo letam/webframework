@@ -954,6 +954,27 @@ def link_preview_image(request, preview_id):
     return response
 
 
+@require_GET
+def serve_media_thumbnail(request, post_id):
+    """Serve a post's media thumbnail through the visibility gate.
+
+    Thumbnails (video posters and image renditions) are always JPEG. Serving them
+    here rather than statically keeps private/unlisted media behind
+    ``Post.is_visible_to`` instead of the Fly proxy.
+    """
+    post = get_object_or_404(Post.objects.select_related('media'), id=post_id)
+    if not post.is_visible_to(request.user, token=request.GET.get('token')):
+        raise Http404
+
+    media = post.media
+    if not media or not media.thumbnail:
+        raise Http404
+
+    response = FileResponse(media.thumbnail.open('rb'), content_type='image/jpeg')
+    response['Cache-Control'] = 'private, max-age=86400'
+    return response
+
+
 def _get_usable_media_file_path(media):
     if not media.file:
         return None

@@ -37,7 +37,7 @@ lands on this branch; the operational step is the user's.
 
 ## Tier 0 — Security & privacy
 
-### P0-a · Media is served around the visibility gate 🔑 · M
+### P0-a · Media is served around the visibility gate 🔑 · M ✅
 `admin/configs/fly-sqlite.toml:52-54` (and `fly-preview.toml:56-58`) map `guest_path =
 '/data/uploads'` to `url_prefix = '/media/'`. Prod runs `USE_LOCAL_FILE_STORAGE=True` with
 media on that volume, so **Fly's proxy serves every media byte directly — Django, and
@@ -426,3 +426,22 @@ _(updated as items land)_
   in-use) and render a "Try again" affordance instead of a dead, empty dialog. Typecheck clean,
   lint 8/8 (a new `eslint-disable` on the video cleanup effect's dep-array line keeps the budget),
   Biome clean, 164 frontend tests pass.
+- **2026-08-13 · P0-a ✅** 🔑 — Media no longer serves around the visibility gate. New gated
+  `serve_media_thumbnail` view (`/api/posts/<id>/media/thumbnail/`, mirrors `link_preview_image`:
+  `is_visible_to` + token, `private, max-age=86400`, JPEG); `MediaSerializer.get_thumbnail` now
+  returns that endpoint's absolute URL (token appended for unlisted) instead of a raw
+  `storage.url()`. Dropped `file`/`mp3_file`/`s3_file_key` from the serializer output entirely —
+  they resolved to `/media/` URLs the proxy served past the gate — and replaced them with derived
+  `mime_type`/`extension` fields (module helpers `_media_mime_type`/`_media_extension` mirror the
+  SPA's `getMimeTypeFromPath`). SPA rewired: `Post.tsx` reads `media.mime_type` for its render gate,
+  `PostMenu.tsx` builds the download filename from `media.extension`, and the `Media` type drops the
+  raw paths. **Refinement vs. the plan's "delete the `/media/` block":** deleting it outright would
+  404 avatars (public, ungated, served from `/media/avatars/`) — so instead the `[[statics]]` block
+  is *narrowed* to `guest_path='/data/uploads/avatars'` / `url_prefix='/media/avatars/'` in
+  `fly-sqlite.toml`, `fly-preview.toml`, **and** the reference `fly.toml`. Everything else under
+  `/media/` now falls through to Django. Runtime-verified with `DEBUG=False`: `/media/post/...` and
+  `/media/link_previews/...` resolve to the SPA `index` shell (never file bytes), only
+  `/api/posts/<id>/media/thumbnail/` reaches the gated view; the extended
+  `test_media_stream_and_mime_type_are_gated` proves the thumbnail endpoint 404s without a token and
+  streams the bytes with one. Full backend suite (229) green, typecheck/lint 8-8/Biome/164 frontend
+  tests green, Ruff clean. **Deploy is a user step** and must ship the config change with the code.

@@ -91,8 +91,12 @@ class MediaPipelineTests(ViewTestCase):
         self.assertEqual(post.media.s3_file_key, self.key)
         self.assertEqual(post.media.duration, expected_duration)
         self.assertEqual(response.data['media']['signed_url'], 'https://example.com/signed-get')
-        # The frontend derives MIME type and download extension from the key.
-        self.assertEqual(response.data['media']['s3_file_key'], self.key)
+        # Raw storage paths are no longer serialized; the server derives the MIME
+        # type and download extension the frontend needs from the stored key.
+        self.assertNotIn('s3_file_key', response.data['media'])
+        self.assertNotIn('file', response.data['media'])
+        self.assertEqual(response.data['media']['mime_type'], 'audio/mpeg')
+        self.assertEqual(response.data['media']['extension'], 'mp3')
 
     def test_media_and_s3_file_key_are_mutually_exclusive(self):
         """A create request cannot include both upload styles."""
@@ -358,7 +362,10 @@ class MediaPipelineTests(ViewTestCase):
                 data = PostSerializer(post).data
 
         self.assertEqual(data['media']['waveform'], [0, 50, 100])
-        self.assertTrue(data['media']['thumbnail'].startswith('/media/post/'))
+        # The thumbnail is served through the gated endpoint, not a raw /media/ URL.
+        self.assertEqual(data['media']['thumbnail'], reverse('media_thumbnail', args=[post.id]))
+        self.assertEqual(data['media']['mime_type'], 'audio/mpeg')
+        self.assertEqual(data['media']['extension'], 'mp3')
 
     def test_process_post_media_routes_by_media_type(self):
         """The media processing task should dispatch to the matching media handler."""

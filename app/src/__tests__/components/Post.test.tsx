@@ -72,8 +72,8 @@ describe('Post', () => {
 			id: 33,
 			media: makeMedia({
 				media_type: 'image',
-				file: 'original.jpg',
-				s3_file_key: undefined,
+				mime_type: 'image/jpeg',
+				extension: 'jpg',
 				signed_url: 'https://signed.example.com/original.jpg',
 				thumbnail: '/media/post/33/media/rendition.jpg',
 				alt_text: 'Gallery image',
@@ -99,8 +99,8 @@ describe('Post', () => {
 			id: 44,
 			media: makeMedia({
 				media_type: 'image',
-				file: 'original.jpg',
-				s3_file_key: undefined,
+				mime_type: 'image/jpeg',
+				extension: 'jpg',
 				signed_url: 'https://signed.example.com/original.jpg',
 				thumbnail: '/media/post/44/media/rendition.jpg',
 				alt_text: 'Post image',

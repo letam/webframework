@@ -103,6 +103,10 @@ class PostPrivacyTests(ViewTestCase):
                     file=SimpleUploadedFile('clip.txt', b'hello media', content_type='text/plain'),
                     media_type='audio',
                 )
+                media.thumbnail.save(
+                    'poster.jpg',
+                    SimpleUploadedFile('poster.jpg', b'thumb bytes', content_type='image/jpeg'),
+                )
                 post = Post.objects.create(
                     author=self.author,
                     head='Media',
@@ -112,18 +116,26 @@ class PostPrivacyTests(ViewTestCase):
 
                 stream_url = reverse('stream_post_media', args=[post.id])
                 mime_url = reverse('get_post_media_mime_type', args=[post.id])
+                thumbnail_url = reverse('media_thumbnail', args=[post.id])
 
                 self.assertEqual(self.other_client.get(stream_url).status_code, 404)
                 self.assertEqual(self.other_client.get(mime_url).status_code, 404)
+                self.assertEqual(self.other_client.get(thumbnail_url).status_code, 404)
 
                 stream_response = self.other_client.get(stream_url, {'token': post.share_token})
                 mime_response = self.other_client.get(mime_url, {'token': post.share_token})
+                thumbnail_response = self.other_client.get(
+                    thumbnail_url, {'token': post.share_token}
+                )
                 stream_content = b''.join(stream_response.streaming_content)
+                thumbnail_content = b''.join(thumbnail_response.streaming_content)
 
         self.assertEqual(stream_response.status_code, 200)
         self.assertEqual(stream_content, b'hello media')
         self.assertEqual(mime_response.status_code, 200)
         self.assertTrue(mime_response.content)
+        self.assertEqual(thumbnail_response.status_code, 200)
+        self.assertEqual(thumbnail_content, b'thumb bytes')
 
     def test_plain_post_detail_gating_json_and_noindex(self):
         """The plain post page and JSON branch hide invisible posts and noindex non-public ones."""

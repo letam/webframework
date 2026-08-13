@@ -94,11 +94,11 @@ describe('MediaPlayer', () => {
 
 	it('passes poster and lazy preload attributes to video', () => {
 		const { container } = render(
-			<VideoPlayer videoUrl="/api/posts/2/media/" thumbnail="/media/post/2/media/poster.jpg" />
+			<VideoPlayer videoUrl="/api/posts/2/media/" thumbnail="/api/posts/2/media/thumbnail/" />
 		)
 
 		const video = container.querySelector('video')
-		expect(video).toHaveAttribute('poster', '/media/post/2/media/poster.jpg')
+		expect(video).toHaveAttribute('poster', '/api/posts/2/media/thumbnail/')
 		expect(video).toHaveAttribute('preload', 'none')
 	})
 })

@@ -15,7 +15,6 @@ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/
 import { toast } from '@/components/ui/sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { getMediaUrl, getPost, transcribePost } from '@/lib/api/posts'
-import { getMimeTypeFromPath } from '@/lib/utils/file'
 import { getSettings } from '@/lib/utils/settings'
 import { renderInlineMarkdown } from '@/lib/utils/richText'
 import { parseDurationString } from '@/lib/utils/media'
@@ -108,9 +107,7 @@ export const Post: React.FC<PostProps> = ({
 	const mediaAltText = post.media ? post.media.alt_text : undefined
 	const imageDisplayUrl =
 		post.media?.media_type === 'image' && post.media.thumbnail ? post.media.thumbnail : mediaUrl
-	const mimeType = post.media
-		? getMimeTypeFromPath(post.media.file || post.media.s3_file_key)
-		: undefined
+	const mimeType = post.media?.mime_type
 	const mediaDuration = post.media ? parseDurationString(post.media.duration) : undefined
 
 	const handleTranscribe = async (id: number) => {

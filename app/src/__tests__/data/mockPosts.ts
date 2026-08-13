@@ -13,8 +13,8 @@ export const makeAuthor = (overrides: Partial<Author> = {}): Author => ({
 export const makeMedia = (overrides: Partial<Media> = {}): Media => ({
 	id: 10,
 	media_type: 'audio',
-	file: '',
-	s3_file_key: 'uploads/audio.webm',
+	mime_type: 'audio/webm',
+	extension: 'webm',
 	signed_url: 'https://signed.example.com/audio.webm',
 	duration: '00:01:23',
 	thumbnail: '',
@@ -78,8 +78,6 @@ export const s3AudioPost = makePost({
 	media: makeMedia({
 		id: 20,
 		media_type: 'audio',
-		file: '',
-		s3_file_key: 'uploads/s3-audio.webm',
 		signed_url: 'https://signed.example.com/s3-audio.webm',
 	}),
 	like_count: 5,
@@ -95,8 +93,8 @@ export const localImagePost = makePost({
 	media: makeMedia({
 		id: 30,
 		media_type: 'image',
-		file: '/media/uploads/local-image.png',
-		s3_file_key: undefined,
+		mime_type: 'image/png',
+		extension: 'png',
 		signed_url: null,
 		alt_text: 'A local image',
 	}),
