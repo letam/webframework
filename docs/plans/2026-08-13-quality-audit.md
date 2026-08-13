@@ -117,7 +117,7 @@ deploy) and sits in a registry-readable layer; `docs/deploy-fly.md`'s claim that
   placeholder + generation hint; make `build-prod.sh` refuse an empty/sample key. **User
   action:** confirm a `SECRET_KEY` Fly secret is set (`fly secrets list`) and rotate it.
 
-### P2 cluster · security hardening · S each
+### P2 cluster · security hardening · S each · 1 ✅ · 2 ⚠ FLAGGED (see status log)
 - Anonymous account has an empty-but-"usable" password (`init_users`); call
   `set_unusable_password()` + data migration.
 - Streaming-redirect presigned URLs live 3600s (`s3.py`), outliving token rotation / a flip to
