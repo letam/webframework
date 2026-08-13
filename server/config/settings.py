@@ -70,37 +70,44 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def check_and_create_env_file():
-    """Create a default .env file for local or production-like startup."""
-    # NOTE: In production containers and gunicorn, the working directory is
-    # the server project root. During local development from the repo root,
-    # the server child directory is present.
-    is_server_child_dir_present = (Path.cwd() / 'server').exists()
-    if is_server_child_dir_present:
-        env_file = 'server/.env'
-    else:
-        env_file = '.env'
+    """Bootstrap a development ``server/.env`` when one is missing.
 
-    if not Path(env_file).is_file():
-        logger.debug('Required .env file not found.')
-        from django.core.management.utils import get_random_secret_key
+    This is a local-developer convenience only. It deliberately never fabricates
+    a production secret: a real deploy must supply ``SECRET_KEY`` through the
+    environment (a Fly secret), and if it doesn't, ``SECRET_KEY = env('SECRET_KEY')``
+    below fails loudly at import — which is what ``docs/deploy-fly.md`` promises.
+    Two guards keep this helper out of production:
 
-        with open(env_file, 'a') as f:
-            f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
-            if is_server_child_dir_present:
-                f.write('DEBUG=True\n')
-                f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
-                f.write('USE_LOCAL_FILE_STORAGE=True\n')
-                f.write('MEDIA_ROOT=server/uploads\n')
-                logger.debug(
-                    'Created .env file at server/.env with default values for development.'
-                )
-                logger.warning('Please edit the .env file for production environment.')
-            else:
-                f.write('DEBUG=False\n')
-                f.write('DATABASE_URL=sqlite:////data/db.sqlite3\n')
-                f.write('MEDIA_ROOT=/data/uploads\n')
-                logger.debug('Created .env file at .env with default values for production.')
-        logger.debug('')
+    - If ``SECRET_KEY`` is already in the environment (a Fly secret, the Docker
+      build's dummy key, or CI), there is nothing to bootstrap — return without
+      writing a file, so a generated key is never baked into an image layer.
+    - Only the repo-root/dev layout (the ``server/`` child dir is present)
+      auto-creates an ``.env``. A production container's working directory is the
+      server root, so this returns there and boot fails loudly on a missing key
+      instead of silently inventing one that rotates on every rebuild.
+    """
+    if os.environ.get('SECRET_KEY'):
+        return
+
+    # A production container runs from the server root, where `server/` is not a
+    # child dir; only the repo-root dev layout bootstraps an .env.
+    if not (Path.cwd() / 'server').exists():
+        return
+
+    env_file = Path('server/.env')
+    if env_file.is_file():
+        return
+
+    from django.core.management.utils import get_random_secret_key
+
+    logger.debug('No server/.env found; creating development defaults.')
+    with open(env_file, 'a') as f:
+        f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
+        f.write('DEBUG=True\n')
+        f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
+        f.write('USE_LOCAL_FILE_STORAGE=True\n')
+        f.write('MEDIA_ROOT=server/uploads\n')
+    logger.warning('Created development server/.env — edit it before deploying.')
 
 
 check_and_create_env_file()

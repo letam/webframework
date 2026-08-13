@@ -111,6 +111,12 @@ WORKDIR /code
 # Copy the built backend files
 COPY --from=build-backend /code .
 
+# Defense in depth: never ship a baked-in .env. Real config comes from the
+# environment (Fly secrets) at runtime, and settings.py deliberately does not
+# fabricate a SECRET_KEY in a production layout — so a stray .env must not
+# smuggle one into a registry-readable image layer.
+RUN rm -f /code/.env
+
 # Copy the compiled frontend files
 COPY --from=build-frontend /code/dist /code/static/app
 

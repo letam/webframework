@@ -25,6 +25,13 @@ if [ ! -f "server/.env" ]; then
         mkdir -p data
         $SED_CMD -i "s|^DATABASE_URL=.*|DATABASE_URL=sqlite:///data/db.sqlite3|" server/.env
         $SED_CMD -i "s|^MEDIA_ROOT=.*|MEDIA_ROOT=data/uploads|" server/.env
+
+        ### The sample ships a placeholder SECRET_KEY; substitute a fresh one.
+        ### Append via printf (not sed) so the generated value is treated
+        ### literally — get_random_secret_key() can emit sed-special chars.
+        generated_key="$(uv run python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())')"
+        $SED_CMD -i '/^SECRET_KEY=/d' server/.env
+        printf 'SECRET_KEY=%s\n' "$generated_key" >> server/.env
     else
         echo "Please ensure that .env is setup correctly for production build."
         exit 1
@@ -34,6 +41,20 @@ fi
 if grep -q "DEBUG=True" server/.env; then
     echo "ERROR: DEBUG is set to True in server/.env"
     echo "Please ensure that .env is setup correctly for production build."
+    exit 1
+fi
+
+## Refuse an empty, placeholder, or committed-sample SECRET_KEY. Building on one
+## of these would ship a world-known key — the samples deliberately no longer
+## carry a real value.
+secret_key_value="$(grep -E '^SECRET_KEY=' server/.env | head -n1)"
+secret_key_value="${secret_key_value#SECRET_KEY=}"
+if [ -z "$secret_key_value" ] ||
+   [ "$secret_key_value" = "REPLACE_WITH_A_GENERATED_SECRET_KEY" ] ||
+   [ "$secret_key_value" = 'i!c#ilronu_o_g7@!tpvz9@94o2gkami5xkf3kytbgw1^#qt68' ]; then
+    echo "ERROR: SECRET_KEY in server/.env is empty or a known placeholder/sample value."
+    echo "Generate a real key with:"
+    echo "  python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'"
     exit 1
 fi
 

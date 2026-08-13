@@ -103,7 +103,7 @@ the reachable targets are the app's own `localhost:8000` and the 6PN network.
 - Fix: resolve once, then connect to the validated IP literal with an explicit `Host` header
   (custom `httpx` transport/resolver); re-pin on each redirect hop.
 
-### P1-c · `SECRET_KEY` handling: baked into the image, and a real value in the samples 🔑 · S
+### P1-c · `SECRET_KEY` handling: baked into the image, and a real value in the samples 🔑 · S ✅
 Two reviewers, two related defects. (1) `check_and_create_env_file()`
 (`server/config/settings.py:72-115`) writes `/code/.env` with a fresh `get_random_secret_key()`
 during the Docker `build-backend` stage, and `Dockerfile:112` carries it into the image — so
@@ -445,3 +445,20 @@ _(updated as items land)_
   `test_media_stream_and_mime_type_are_gated` proves the thumbnail endpoint 404s without a token and
   streams the bytes with one. Full backend suite (229) green, typecheck/lint 8-8/Biome/164 frontend
   tests green, Ruff clean. **Deploy is a user step** and must ship the config change with the code.
+- **2026-08-13 · P1-c ✅** 🔑 — `check_and_create_env_file()` no longer fabricates a production
+  secret. Two guards: it returns early if `SECRET_KEY` is already in the environment (Fly secret,
+  the Docker build's dummy key, or CI), and it only bootstraps an `.env` in the repo-root/dev
+  layout (`server/` child dir present). Its prod-writing branch is gone, so a keyless prod boot now
+  fails loudly at `SECRET_KEY = env('SECRET_KEY')` — runtime-verified with the local `server/.env`
+  moved aside: `environs.EnvError: Environment variable "SECRET_KEY" not set`. This makes
+  `docs/deploy-fly.md`'s "cannot boot without a SECRET_KEY" claim true (it was false before), so no
+  doc edit was needed. Dockerfile production stage gained a defensive `rm -f /code/.env` (belt-and-
+  suspenders: the build no longer writes one, and `.dockerignore` already excludes `server/.env`).
+  Replaced the committed working literal `SECRET_KEY=i!c#…qt68` in all three `server/.env*` samples
+  with `REPLACE_WITH_A_GENERATED_SECRET_KEY` + a `get_random_secret_key()` generation hint.
+  `build-prod.sh` now generates a real key when it creates an `.env` from the sample (via
+  delete-line + `printf`, not `sed`, so key-special chars stay literal) and refuses to build on an
+  empty/placeholder/old-literal `SECRET_KEY`. 229 backend tests green, Ruff clean, `bash -n` clean.
+  **User action:** confirm a `SECRET_KEY` Fly secret is set (`fly secrets list`) and rotate it —
+  the previously image-baked key should be considered compromised. Rotation and deploy are user
+  steps.
