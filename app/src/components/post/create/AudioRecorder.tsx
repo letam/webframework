@@ -169,24 +169,12 @@ const normalizeAudio = async (audioBlob: Blob): Promise<Blob> => {
 				maxAmplitude = Math.max(maxAmplitude, Math.abs(channelData[i]))
 			}
 
-			console.log('Original max amplitude:', maxAmplitude) // DEBUG
-
 			// Apply normalization if needed
 			const gain = maxAmplitude > 0 ? 0.8 / maxAmplitude : 1
-			console.log('Applied gain:', gain) // DEBUG
 
 			for (let i = 0; i < channelData.length; i++) {
 				normalizedData[i] = channelData[i] * gain
 			}
-
-			// DEBUG
-			// Verify the new max amplitude
-			let newMaxAmplitude = 0
-			for (let i = 0; i < normalizedData.length; i++) {
-				newMaxAmplitude = Math.max(newMaxAmplitude, Math.abs(normalizedData[i]))
-			}
-			console.log('New max amplitude:', newMaxAmplitude)
-			// END DEBUG
 		}
 
 		const offlineContext = new OfflineAudioContext(
