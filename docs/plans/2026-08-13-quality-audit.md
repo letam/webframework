@@ -341,7 +341,7 @@ asset. This is the exact `test_drf_compat` substring failure mode, and the sibli
 - No index backs the feed's `('-created', '-id')` ordering — add
   `models.Index(fields=['-created', '-id'])` (one migration; cheap now, cheaper than later).
 
-### P2 frontend · S each (unless noted)
+### P2 frontend · S each (unless noted) · ✅ (item 10 credentials: safe part ✅, cross-origin ⚠ FLAGGED — see status log)
 - Delete dead composer code: `AudioPostTab`/`VideoPostTab`/`TextPostTab` (~190 lines, imported
   by nothing) and the recorder ref API (`useImperativeHandle`, `forwardRef`, unused props) that
   only they used — the dead API is what made P0-e's cleanup bug look wired-up.
@@ -758,3 +758,51 @@ _(updated as items land)_
     read through gated endpoints or presigned URLs, so they don't need `public-read`; the exposure that
     remains is bucket-level, not fixable by this Django setting alone. **Left unchanged; needs a
     user/infra decision.**
+
+- **2026-08-13 · P2 frontend cluster ✅ (credentials cross-origin ⚠ FLAGGED)** — Landed in six commits;
+  verify-before-acting overturned three of the plan's claims.
+  - **Dead composer code + recorder ref API removed** (`9c9afb4`). Deleted `AudioPostTab`/`VideoPostTab`/
+    `TextPostTab` (imported by nothing). **Correction:** the plan implied the recorder *components* were
+    dead; they are LIVE — `AudioRecorderModal`/`VideoRecorderModal` render them. Only the imperative ref
+    API was dead, so just that was removed: `AudioRecorder` lost its `useImperativeHandle` + `ref` prop
+    (React-19 ref-as-prop shape); `VideoRecorder` was converted from `forwardRef` back to a plain
+    component. That dead ref API is exactly what made P0-e's cleanup bug look wired-up.
+  - **Five correctness fixes** (`f294895`). (1) `useAuth` no longer double-fetches `/auth/status/` on a
+    signed-in load — root cause was `authState.userId` in the `useCallback` deps churning the callback
+    identity and re-firing the mount effect; moved the last-user compare to a ref, deps now `[queryClient]`
+    — and added the missing `else` so a non-2xx logs instead of reading as logged-out. (2)
+    `VideoRecorder.onstop` wraps its dynamic-import + `fixWebmDuration` in try/catch so a failed
+    duration-fix toasts + still resets rather than silently losing the take. (3) All three `CreatePost`
+    file inputs reset `e.target.value` so re-picking the same file after clearing re-fires `onChange`.
+    (4) `TagFilterPopover` seeds its pending tags only on the open transition (a `wasOpenRef`) instead of
+    on every parent render, so in-progress ticks survive a background refetch. (5) Post `<img>` uses
+    `alt={mediaAltText ?? ''}` so screen readers don't announce the URL when alt text is absent.
+  - **FormatText hardened** (`28f2886`). **Correction:** the render was not actually exploitable —
+    `renderInlineMarkdown` only emits `<strong>`/`<em>` — but the plan was right that the sanitize was
+    mis-ordered (sanitize-then-rewrite). Now it linkifies/hashtags the raw text first and sanitizes the
+    *assembled* HTML once with an explicit `ALLOWED_TAGS`/`ALLOWED_ATTR` allow-list — correct
+    defense-in-depth ordering. Verified the allow-list neutralizes `javascript:` hrefs and strips event
+    handlers/unknown tags while leaving prose lossless.
+  - **Dead helpers + debug logging removed** (`537a2a6`). **Correction:** the plan's "type `Media.file`
+    as `string | null`" is moot — P0-a already dropped the raw storage paths from the serializer, so
+    `Media` has no `file` field and `getMimeTypeFromPath`/`getFileExtension` were fully dead (zero
+    callers) → deleted rather than hardened for nullability. Also removed the `// DEBUG` logs and a dead
+    `newMaxAmplitude` loop in `normalizeAudio`.
+  - **Filter / tag / Publish-all scope labeled honestly** (`a2a9426`). Feed tag/text filtering and the
+    profile Publish-all both act only on the client-loaded page-prefix but presented as feed-wide (the
+    tag popover advertises server-wide counts; "Showing X of Y posts" read Y as the total). When more
+    pages remain (`hasNextPage`) the feed now says filtering only covers loaded posts and the empty-filter
+    state points at scroll-to-load; the Publish-all confirmation warns that only loaded drafts publish.
+    Durable fix (server-side `search`/`tag`/publish params) is L, tracked separately.
+  - **`credentials` made explicit + comment fixed** (`62a9237`). `getFetchOptions` set no `credentials`
+    (fetch default `same-origin`) yet its comment claimed it added "credentials"; production serves the
+    SPA from Django (same origin) so the default sends the session cookie and auth works. Made
+    `credentials: 'same-origin'` explicit (a provable no-op) and corrected the comment.
+    - ⚠ **FLAGGED, left for the user — the cross-origin half is an infra/CORS decision.** Switching to
+      `credentials: 'include'` for a split-origin API deployment does nothing useful without server-side
+      `CORS_ALLOW_CREDENTIALS = True`, `SameSite=None; Secure` cookies, and matching CSRF trusted origins
+      (none of which are set today). That is a deliberate cross-origin posture, not a reversible tweak,
+      and dovetails with the P1-q e2e flag. Not deciding this autonomously.
+  - Every commit passed the frontend gates green: typecheck (TS 7 `tsc -b`), 167 tests, ESLint 8/8
+    warnings (0 errors, none new), Biome. This closes the P2 frontend cluster — all items ✅ except the
+    credentials cross-origin decision, flagged above.
