@@ -262,7 +262,7 @@ than Fly runs.
 - Fix: frontend → install bun, `COPY app/bun.lock`, `bun install --frozen-lockfile`; backend →
   `COPY uv.lock pyproject.toml` + `uv sync --frozen --no-dev` (or `uv export --frozen`).
 
-### P1-o · `build-prod.sh` runs unguarded destructive steps · S
+### P1-o · `build-prod.sh` runs unguarded destructive steps · S ✅
 No `set -euo pipefail`; the sequence `migrate → collectstatic → npm run build → rm -rf
 "$STATIC_APP_DIR" → mv app/dist ...` will `rm -rf` the served directory even if the build
 failed, then `mv` fails and the script exits 0 — leaving the site with no frontend. Three
@@ -544,3 +544,14 @@ _(updated as items land)_
   resolved-settings test would silently check nothing. The AST sees the production `else` branch
   whatever `DEBUG` is. Added a scan-guard test (script-src ≥1, style-src ≥3) mirroring
   `test_logging`. Verified: 3 script + 9 style hashes, disjoint; 7 tests pass under `DEBUG=True`.
+
+- **2026-08-13 · P1-o ✅** — `build-prod.sh` no longer runs its destructive steps unguarded. Added
+  `set -euo pipefail`, so a failed `npm run build` (or any earlier step) aborts instead of falling
+  through to `rm -rf "$STATIC_APP_DIR"` and leaving the site with no frontend while exiting 0. The
+  frontend swap now stages the new build first and replaces the served directory with two renames on
+  one filesystem, so the live directory is never removed before a good build exists to take its
+  place. Guarded the two greps that legitimately may not match (`read` on a non-interactive stdin,
+  the `SECRET_KEY` lookup) with `|| true` so `set -e`/`pipefail` surface the script's own error
+  messages rather than aborting silently. Deleted the three dead `sed` lines that stripped
+  lovable.dev / gpteng.co / "DO NOT REMOVE" markers no longer present in the built shell. `bash -n`
+  clean (no Docker daemon available to run the script end to end).
