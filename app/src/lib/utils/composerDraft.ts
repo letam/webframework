@@ -197,6 +197,57 @@ export const saveComposerDraft = async (
 	}
 }
 
+/**
+ * Update only the text fields of the stored draft, reusing the stored media Blob.
+ *
+ * Typing a caption on a large recording must not re-serialize the take on every
+ * keystroke. This reads the current record and writes it back with new text,
+ * keeping the persisted Blob by reference — the in-memory 40 MB video is never
+ * re-copied to disk. If no record exists yet (storage unavailable, or the media
+ * write has not landed), it degrades to a text-only put.
+ */
+export const updateComposerDraftFields = async (
+	userId: number | null,
+	fields: Pick<ComposerDraft, 'text' | 'visibility' | 'mediaType'>
+): Promise<void> => {
+	const key = draftKeyForUser(userId)
+	const db = await openDb()
+	if (!db) return
+
+	try {
+		await new Promise<void>((resolve) => {
+			let tx: IDBTransaction
+			try {
+				tx = db.transaction(STORE, 'readwrite')
+			} catch {
+				resolve()
+				return
+			}
+			const store = tx.objectStore(STORE)
+			const getRequest = store.get(key)
+			getRequest.onsuccess = () => {
+				const existing = getRequest.result as ComposerDraft | undefined
+				const record: ComposerDraft = existing
+					? { ...existing, ...fields, savedAt: Date.now() }
+					: {
+							...fields,
+							media: null,
+							mediaName: null,
+							mediaIsFile: false,
+							mediaOmitted: false,
+							savedAt: Date.now(),
+						}
+				store.put(record, key)
+			}
+			tx.oncomplete = () => resolve()
+			tx.onerror = () => resolve()
+			tx.onabort = () => resolve()
+		})
+	} finally {
+		db.close()
+	}
+}
+
 /** Drop the stored draft. Called on a successful post and on explicit discard. */
 export const clearComposerDraft = async (userId: number | null): Promise<void> => {
 	const key = draftKeyForUser(userId)

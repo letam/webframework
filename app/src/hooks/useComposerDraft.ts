@@ -7,6 +7,7 @@ import {
 	draftKeyForUser,
 	loadComposerDraft,
 	saveComposerDraft,
+	updateComposerDraftFields,
 } from '@/lib/utils/composerDraft'
 
 /** Text edits settle before hitting disk; a keystroke is not worth a write. */
@@ -95,6 +96,7 @@ export const useComposerDraft = ({
 	// write can never race one another.
 	const previousIsEmpty = useRef(isEmpty)
 	const previousUserId = useRef(userId)
+	const previousMedia = useRef<Blob | null>(media)
 	// Set when a logout (signed-in id → anonymous) is seen with content still in
 	// the composer, so neither the debounce nor the on-hide flush copies the
 	// signed-out user's words into the shared anonymous slot. Cleared once the
@@ -105,8 +107,10 @@ export const useComposerDraft = ({
 
 		const wasEmpty = previousIsEmpty.current
 		const previousId = previousUserId.current
+		const mediaChanged = media !== previousMedia.current
 		previousIsEmpty.current = isEmpty
 		previousUserId.current = userId
+		previousMedia.current = media
 
 		// Logout: never let the signed-out user's words land in the shared
 		// anonymous slot. Erase it, drop the restore notice, and block further
@@ -130,16 +134,23 @@ export const useComposerDraft = ({
 
 		if (anonWriteBlocked.current) return
 
-		const write = () => void saveComposerDraft(userId, toRecord(text, visibility, mediaType, media))
-
-		// Media lands immediately — a recording is the one thing that cannot be
-		// recreated, and the tab may not survive another 600ms. Text waits for a
-		// pause in typing.
-		if (media) {
-			write()
+		// A newly attached or swapped recording lands immediately — it is the one
+		// thing that cannot be recreated, and the tab may not survive another 600ms.
+		if (mediaChanged && media) {
+			void saveComposerDraft(userId, toRecord(text, visibility, mediaType, media))
 			return
 		}
-		const timer = setTimeout(write, TEXT_DEBOUNCE_MS)
+
+		// Everything else waits for a pause in typing. When a recording is already
+		// attached, a caption keystroke updates only the text fields and reuses the
+		// Blob already on disk — never re-serializing a 40 MB take per character.
+		const timer = setTimeout(() => {
+			if (media) {
+				void updateComposerDraftFields(userId, { text, visibility, mediaType })
+			} else {
+				void saveComposerDraft(userId, toRecord(text, visibility, mediaType, media))
+			}
+		}, TEXT_DEBOUNCE_MS)
 		return () => clearTimeout(timer)
 	}, [enabled, isEmpty, userId, media, text, visibility, mediaType])
 

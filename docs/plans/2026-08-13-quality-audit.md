@@ -219,7 +219,7 @@ filtered results repeatedly throws you back to the top.
 
 ## Tier 2 — Resource & performance
 
-### P1-k · `stream_post_media` buffers the whole requested range into memory · S
+### P1-k · `stream_post_media` buffers the whole requested range into memory · S ✅
 `views.py:915-918` does `file.read(end - start)` into one `bytes` for the 206 path. Browsers
 open media with `Range: bytes=0-`, which resolves to the whole file, so one playback start
 allocates the full file (100 MB cap) in RAM — twice briefly, since `HttpResponse` retains it —
@@ -228,7 +228,7 @@ on a 512 MB / 2-worker VM. Two concurrent viewers of a 60 MB video can OOM the m
   `end = min(end, start + 4 MiB)`) and return the shorter `Content-Range`; clients request the
   next range. Django 4.2+ `FileResponse` also handles `Range` natively.
 
-### P1-l · `MediaPlayer` downloads the whole file and leaks object URLs · M
+### P1-l · `MediaPlayer` downloads the whole file and leaks object URLs · M ✅
 `MediaPlayer.tsx` (audio ~326-354, video ~543-600) fetches the entire file into a Blob, pins
 it in a ref for the component's life, and `createObjectURL`s on every play with **zero**
 `revokeObjectURL` in the file. In an infinite feed every `Post` stays mounted, so played media
@@ -239,7 +239,7 @@ support (nothing streams). Also a redundant 20 Hz `setInterval` duplicates the n
   element range-request (keep the blob path only for the Firefox-autoplay workaround). Delete
   the interval.
 
-### P1-m · Autosave rewrites the whole media Blob to IndexedDB on every keystroke · S
+### P1-m · Autosave rewrites the whole media Blob to IndexedDB on every keystroke · S ✅
 `useComposerDraft.ts:94-108` skips the debounce when media is attached — correct for media
 changes — but `text` is in the dep array, so typing a caption on a 40 MB video queues one
 full-file IndexedDB write per character.
@@ -492,3 +492,41 @@ _(updated as items land)_
   below-threshold branch, so a custom `onRefresh` left the content pinned at the pull distance —
   it now springs back before firing. Typecheck/lint (8/8)/Biome/164 tests green. This closes the
   P1 frontend-correctness cluster (P1-f/g/h/j all ✅).
+
+- **2026-08-13 · P1-k ✅** (`7af153b`) — `stream_post_media` no longer buffers a whole range into
+  RAM. The 206 path now returns a `StreamingHttpResponse` over a new `_iter_file_range` generator
+  that seeks once and yields 64 KiB blocks, so a `Range: bytes=0-` on a 100 MB file holds one block
+  in memory instead of the full file (twice, with `HttpResponse` retaining its copy) — the OOM two
+  concurrent viewers could trigger on the 512 MB VM. Same bytes, `Content-Range`, `Content-Length`,
+  and `Accept-Ranges` as before; only the response type changed. The three range tests now join
+  `response.streaming_content` rather than reading `.content`, and a new
+  `test_range_response_streams_rather_than_buffering` asserts `response.streaming` is `True`.
+  Preferred streaming over capping the served slice: it bounds memory to O(block) while preserving
+  exact response semantics, so no client has to re-request a truncated range.
+
+- **2026-08-13 · P1-l ✅** (`40235df`) — `MediaPlayer` no longer downloads the whole file or leaks
+  object URLs. Root cause of the blob path was the Firefox-autoplay workaround: `await fetch()`
+  before `play()` drops the transient user activation, so Firefox blocked playback and the code
+  compensated by pre-fetching a Blob and playing an object URL — which pinned the full file in a
+  ref for the component's life (every `Post` stays mounted in the infinite feed) and leaked one
+  `createObjectURL` per play with no `revokeObjectURL` anywhere. Replaced both players with the
+  streaming path: set `src = mediaUrl` and call `play()` synchronously inside the click handler,
+  which preserves activation *and* streams via the backend's range support (now genuinely used).
+  Removed the blob refs, the object-URL logic, the `isLoaded` state, the browser sniffing
+  (`isDesktop`/`isFirefox`), and the redundant 20 Hz `setInterval` that duplicated `onTimeUpdate`
+  off a stale `duration`. Try-Again handlers `removeAttribute('src')` + `load()`. Added a test that
+  clicking play sets a non-`blob:` `src` containing the endpoint and never calls `fetch`.
+
+- **2026-08-13 · P1-m ✅** — Autosave no longer rewrites the media Blob on every keystroke. The
+  P1-f consolidation had left a single save effect that wrote the full record immediately whenever
+  `media` was truthy — including on `text` changes — so typing a caption on a 40 MB video queued one
+  full-file IndexedDB write per character. Kept the effect unified (splitting media- and text-writes
+  into two effects, as the plan sketched, would reintroduce the clear/write race P1-f closed) and
+  instead added a `previousMedia` ref to distinguish "media just changed" from "only text changed":
+  a new/swapped recording still lands immediately, but a text/visibility/mediaType edit now
+  debounces and, when a recording is already attached, calls a new `updateComposerDraftFields` that
+  reads the record and writes it back reusing the persisted Blob — the in-memory take is never
+  re-serialized. New helper degrades to a text-only put when no record exists yet and no-ops when
+  storage is unavailable; three unit tests cover the reuse, the empty-store fallback, and the
+  no-throw contract. Typecheck/lint (8/8)/Biome/167 tests green. This closes the P1 media
+  resource/performance cluster (P1-k/l/m all ✅).
