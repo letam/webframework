@@ -1,5 +1,6 @@
 {
-	"include": ["."],
+	"include": ["admin", "server"],
+	"exclude": ["**/node_modules", "**/__pycache__", ".git", "app"],
 	"venvPath": ".",
 	"venv": ".venv"
 }

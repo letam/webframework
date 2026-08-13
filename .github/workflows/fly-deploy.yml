@@ -18,7 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only
+      # --config is required: the root fly.toml is a stale reference snapshot
+      # (see CLAUDE.md "Deployment"). fly-sqlite.toml is the production config.
+      - run: flyctl deploy --remote-only --config admin/configs/fly-sqlite.toml
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
   # If using storage volume, i.e. to persist SQLite database, then uncomment to activate the following job:

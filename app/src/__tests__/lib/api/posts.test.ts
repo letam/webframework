@@ -148,6 +148,7 @@ describe('posts API', () => {
 			expect(getFetchOptions).toHaveBeenNthCalledWith(1, 'POST', {
 				file_name: 'clip.webm',
 				content_type: 'audio/webm',
+				content_length: file.size,
 			})
 			const createOptions = fetchMock.mock.calls[2][1] as RequestInit
 			const formData = createOptions.body as FormData

@@ -294,7 +294,7 @@ asset. This is the exact `test_drf_compat` substring failure mode, and the sibli
   alongside the P1-b guard fix so they exercise the fixed code, not the current broken shape: a
   302-to-link-local test, a `MAX_REDIRECTS` test, and an oversized-body test.
 
-### P2 cluster · tooling & CI coherence · S each
+### P2 cluster · tooling & CI coherence · S each ✅
 - `black`/`isort` are documented as a ruff alternative but are misconfigured (line-length 88 vs
   99, isort would rewrite a migration ruff excludes) and would turn CI red. Pick one — recommend
   deleting `[tool.black]`/`[tool.isort]` + the CLAUDE.md lines (ruff's `I` covers imports).
@@ -656,3 +656,48 @@ _(updated as items land)_
     can't be produced has no attempt counter and would be reprocessed every run. New test class covers the
     missing-asset/settled selection.
   - 244 backend tests pass (3 new); ruff clean.
+
+- **2026-08-13 · P2 cluster · tooling & CI coherence ✅** — Every item in the cluster, plus two
+  branch defects the verification surfaced:
+  - **black/isort removed.** Deleted `[tool.black]`/`[tool.isort]` from `pyproject.toml`, dropped
+    `black`/`isort` from the dev group, and rewrote the CLAUDE.md formatter/import-sorter lines to name
+    `ruff format` (the `quote-style = "preserve"` setting already reproduces Black's
+    skip-string-normalization). Ruff's `I` rule is the sole import sorter. `uv sync` uninstalled black,
+    isort, and their four transitive deps.
+  - **Pyright config collision resolved.** Both `pyrightconfig.json` and `[tool.pyright]` existed;
+    pyright reads the JSON file and ignores the pyproject table entirely, so the pyproject copy was
+    silently dead. Merged the useful `include`/`exclude` into `pyrightconfig.json` (now scopes to
+    `admin`/`server`, excludes `app`/node_modules/pycache/.git) and replaced `[tool.pyright]` with a
+    one-line pointer comment.
+  - **DRF stubs moved to dev.** `djangorestframework-stubs[compatible-mypy]` left
+    `[project.dependencies]` (it was shipping mypy + stubs into the prod image) for the dev group beside
+    `django-stubs`.
+  - **`test:coverage` fixed.** Added `@vitest/coverage-v8@^4.1.10` (matched to the installed vitest 4)
+    so the documented command runs instead of erroring on a missing package.
+  - **`"test": "vitest run"`.** Was watch mode, contradicting CLAUDE.md's "run once". CI now calls
+    `bun run test` (was `bunx vitest run`) so local and CI run the identical command.
+  - **Playwright CI artifacts + cache.** The e2e job now caches `~/.cache/ms-playwright` (keyed on
+    `app/bun.lock`, so a `@playwright/test` bump re-downloads) and uploads the HTML report +
+    `test-results/` as an artifact on failure (`if: failure()`, 7-day retention).
+  - **fly-deploy.yml points at the real config.** `flyctl deploy` gained
+    `--config admin/configs/fly-sqlite.toml`; it was deploying the root `fly.toml` that CLAUDE.md says
+    never to deploy.
+  - **just recipes.** New `admin/justfiles/frontend.just` (`typecheck`/`lint`/`check`/`test-app` plus
+    `app-install`/`app-dev`/`app-build`) and a root `verify` recipe chaining exactly what CI runs
+    (ruff/biome pinned to CI versions, backend tests, frontend typecheck/lint/test/build; e2e omitted —
+    needs a browser install).
+  - **`sys/mkdir-error-log`.** Fixed the mis-ordered `2>&1 echo` (it printed the fatal error to stdout)
+    to `echo … >&2`. Left the file in place — its only caller is a commented-out block in `settings.py`,
+    so deleting it would have meant touching unrelated dead code.
+  - **`server/.env.example`.** Added commented `DB_CONN_MAX_AGE` and the two cache-size vars
+    (`CACHE_MAX_ENTRIES`/`RATE_LIMIT_CACHE_MAX_ENTRIES`) with defaults; `TASKS_IMMEDIATE` and the Sentry
+    vars were already present. Also added the documented-but-missing `VITE_UPLOAD_FILES_TO_S3` to the
+    frontend `.env.development.local.sample`.
+  - **Two branch defects the verify pass caught, folded in.** (1) `test_csp_hashes.py` (added on this
+    branch in `b273465`) had a bare `zip(node.keys, node.values)` — B905, which would fail CI's
+    backend-lint job; added `strict=True` (an `ast.Dict` always has parallel keys/values). (2) The P1-a
+    frontend change (`ef41330`) added `content_length` to the presign body but left `posts.test.ts`
+    asserting the old two-key body; updated the assertion to expect `content_length: file.size`.
+  - Full gate green: `just --list` parses, ruff check + format clean, 244 backend tests pass, frontend
+    typecheck clean, 167 frontend tests pass, ESLint 8/8 warnings (0 errors), `biome ci` exits 0, and
+    `bun run test:coverage` runs.

@@ -54,7 +54,9 @@ def allowlisted_hashes_by_directive():
     for node in ast.walk(tree):
         if not isinstance(node, ast.Dict):
             continue
-        for key, value in zip(node.keys, node.values):
+        # An ast.Dict always has parallel, equal-length keys/values, so strict
+        # is both correct and what B905 wants.
+        for key, value in zip(node.keys, node.values, strict=True):
             if not (isinstance(key, ast.Constant) and key.value in hashes):
                 continue
             if not isinstance(value, ast.List):
