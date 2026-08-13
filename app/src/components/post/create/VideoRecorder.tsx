@@ -1,4 +1,4 @@
-import { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Video, Square } from 'lucide-react'
 // webm-duration-fix (and its Node polyfills) is only needed once a recording
 // stops, so it is imported dynamically to keep it out of the initial bundle.
@@ -8,10 +8,6 @@ import { supportedVideoMimeType } from '@/lib/utils/media'
 import { isIOS } from '@/lib/utils/browser'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getSettings } from '@/lib/utils/settings'
-
-export interface VideoRecorderRef {
-	reset: () => void
-}
 
 interface VideoRecorderModalProps {
 	onVideoCaptured: (videoBlob: Blob) => void
@@ -63,14 +59,13 @@ const cameraErrorMessage = (error: unknown): string => {
 	return 'Unable to access camera or microphone. Please check permissions and try again.'
 }
 
-const VideoRecorder = forwardRef<
-	VideoRecorderRef,
-	{
-		onVideoCaptured: (videoBlob: Blob) => void
-		disabled?: boolean
-		autoStart?: boolean
-	}
->(({ onVideoCaptured, disabled, autoStart = false }, ref) => {
+interface VideoRecorderProps {
+	onVideoCaptured: (videoBlob: Blob) => void
+	disabled?: boolean
+	autoStart?: boolean
+}
+
+const VideoRecorder = ({ onVideoCaptured, disabled, autoStart = false }: VideoRecorderProps) => {
 	const [isRecording, setIsRecording] = useState(false)
 	const [videoURL, setVideoURL] = useState<string | null>(null)
 	const [recordingTime, setRecordingTime] = useState<number>(0)
@@ -136,10 +131,6 @@ const VideoRecorder = forwardRef<
 			timerRef.current = undefined
 		}
 	}
-
-	useImperativeHandle(ref, () => ({
-		reset,
-	}))
 
 	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
@@ -337,6 +328,6 @@ const VideoRecorder = forwardRef<
 			/>
 		</div>
 	)
-})
+}
 
 export default VideoRecorder

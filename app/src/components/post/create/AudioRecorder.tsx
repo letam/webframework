@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useImperativeHandle } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Square, Pause, Play, Loader2, Mic } from 'lucide-react'
 import { cn } from '@/lib/utils'
 // webm-duration-fix (and its Node polyfills) is only needed once a recording
@@ -210,20 +210,12 @@ const normalizeAudio = async (audioBlob: Blob): Promise<Blob> => {
 	}
 }
 
-export interface AudioRecorderRef {
-	stopRecording: () => void
-	getStatus: () => RecordingStatus
-	reset: () => void
-	startRecording: () => Promise<void>
-}
-
 interface AudioRecorderProps {
 	onAudioCaptured: (audioBlob: Blob) => void
 	disabled?: boolean
 	submitStatus?: '' | 'preparing' | 'compressing' | 'submitting'
 	isProcessing?: boolean
 	autoStart?: boolean
-	ref?: React.Ref<AudioRecorderRef>
 }
 
 const AudioRecorder = ({
@@ -232,7 +224,6 @@ const AudioRecorder = ({
 	submitStatus = '',
 	isProcessing = false,
 	autoStart = false,
-	ref,
 }: AudioRecorderProps) => {
 	const [status, setStatus] = useState<RecordingStatus>('idle')
 	const [showNormalizingMessage, setShowNormalizingMessage] = useState(false)
@@ -486,13 +477,6 @@ const AudioRecorder = ({
 			reset()
 		}
 	}, [])
-
-	useImperativeHandle(ref, () => ({
-		stopRecording,
-		getStatus: () => status,
-		reset,
-		startRecording,
-	}))
 
 	return (
 		<div className="flex flex-col h-full">
