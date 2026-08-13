@@ -252,7 +252,7 @@ full-file IndexedDB write per character.
 
 _Theme: every gate guards the dev path; the path to production is unguarded._
 
-### P1-n · The production image installs deps CI never tested · M
+### P1-n · The production image installs deps CI never tested · M ✅
 `Dockerfile:68-71` builds the frontend with `npm install --legacy-peer-deps` and no lockfile
 (`app/package.json` is all caret ranges; `--legacy-peer-deps` also masks the TS6/TS7 peer
 conflict) while CI gates on `bun.lock`. Backend `Dockerfile:44` runs `uv pip compile
@@ -555,3 +555,18 @@ _(updated as items land)_
   messages rather than aborting silently. Deleted the three dead `sed` lines that stripped
   lovable.dev / gpteng.co / "DO NOT REMOVE" markers no longer present in the built shell. `bash -n`
   clean (no Docker daemon available to run the script end to end).
+
+- **2026-08-13 · P1-n ✅** — The production image now installs the dependency sets CI locked and
+  tested, not a fresh resolution. Frontend build stage moved off `node:22-alpine` +
+  `npm install --legacy-peer-deps` (no lockfile; the flag also masked the deliberate TS6/TS7 peer
+  split) onto `oven/bun:1`, copying `app/bun.lock` and running `bun install --frozen-lockfile` +
+  `bun run build` — the same bun/lockfile CI's `oven-sh/setup-bun` job uses. Backend stage replaced
+  `uv pip compile pyproject.toml` (which re-resolved the floating ranges) with `COPY uv.lock` +
+  `uv export --frozen --no-dev --no-emit-project -o requirements.txt` feeding the existing
+  `pip install`, so the production system site-packages the final stage copies are exactly the locked
+  versions; `--frozen` fails the build on lock drift. Dropped the now-unused `NODE_*` args; added
+  `USER root` to the bun stage so WORKDIR/COPY/install are user-agnostic across bun tag variants.
+  Verified the two frozen-install commands the image runs: `uv export --frozen …` produces 57 hashed
+  pins with the lock in sync, and `bun install --frozen-lockfile --dry-run` resolves clean. The full
+  image build could not be run — the Docker daemon is down on this host — so the image-level mechanics
+  (base image, `USER root`, WORKDIR) are reasoned, not built; a CI/Fly build is the remaining proof.

@@ -1,7 +1,8 @@
 ARG PYTHON_VERSION=3.13
 ARG PYTHON_IMAGE_VERSION=${PYTHON_VERSION}-slim
-ARG NODE_VERSION=22
-ARG NODE_IMAGE_VERSION=${NODE_VERSION}-alpine
+# Match CI, which builds the frontend with bun (oven-sh/setup-bun) against the
+# committed bun.lock — the production image must do the same, not npm.
+ARG BUN_VERSION=1
 
 # Reference for Dockerizing Django app: https://www.docker.com/blog/how-to-dockerize-django-app/
 # Reference for Dockerizing React app: https://www.docker.com/blog/how-to-dockerize-react-app/
@@ -39,11 +40,14 @@ ADD https://astral.sh/uv/0.7.11/install.sh /uv-installer.sh
 RUN sh /uv-installer.sh && rm /uv-installer.sh
 ENV PATH="/root/.local/bin/:$PATH"
 
-# Compile requirements.txt dependencies from pyproject.toml
-COPY pyproject.toml /code/
-RUN uv pip compile pyproject.toml -o requirements.txt
+# Export the exact, hashed dependency set from the committed lockfile rather than
+# re-resolving the floating ranges in pyproject.toml at build time. This installs
+# what CI locked and tested; `--frozen` fails the build if uv.lock has drifted
+# from pyproject.toml instead of silently picking newer versions.
+COPY pyproject.toml uv.lock /code/
+RUN uv export --frozen --no-dev --no-emit-project -o requirements.txt
 
-# Install dependencies
+# Install dependencies (pip enforces --require-hashes given the hashes uv emits).
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy backend files to the container
@@ -56,25 +60,27 @@ RUN SECRET_KEY="DUMMY_SECRET_KEY_FOR_BUILD_PROCESS" python manage.py collectstat
 
 
 # Build Stage: Frontend
-FROM node:${NODE_IMAGE_VERSION} AS build-frontend
+FROM oven/bun:${BUN_VERSION} AS build-frontend
 
-# Create the app directory
-RUN mkdir -p /code
+# Run the build as root so WORKDIR/COPY/install are not tripped up by the image's
+# default user across bun tag variants.
+USER root
 
-# Set the working directory inside the container
+# Set the working directory inside the container (created automatically)
 WORKDIR /code
 
-# Copy package.json and package-lock.json
-COPY app/package*.json ./
+# Copy the manifest and the committed lockfile CI gates on
+COPY app/package.json app/bun.lock ./
 
-# Install dependencies
-RUN npm install --legacy-peer-deps
+# Install from the frozen lockfile — the same resolution CI tested, not a fresh
+# one. (npm --legacy-peer-deps also masked the deliberate TS6/TS7 peer split.)
+RUN bun install --frozen-lockfile
 
 # Copy the rest of your application files
 COPY app .
 
 # Build frontend files
-RUN npm run build
+RUN bun run build
 
 # Add build timestamp to index-*.js
 RUN echo "// Build time: $(date +'%Y-%m-%d %H:%M:%S %Z')" >> dist/assets/index-*.js
