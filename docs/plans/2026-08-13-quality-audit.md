@@ -322,7 +322,7 @@ asset. This is the exact `test_drf_compat` substring failure mode, and the sibli
 
 ## Tier 4 — Cleanup & debt
 
-### P2 backend · S each
+### P2 backend · S each ✅ (two "dead code" items were mis-diagnosed — see status log)
 - `sync_link_previews` (`link_previews.py:809-822`, called from the viewset's atomic blocks)
   deletes the image from storage inside the caller's transaction — a rollback resurrects the row
   pointing at a deleted file. Collect names, delete via `transaction.on_commit()` (the pattern
@@ -701,3 +701,60 @@ _(updated as items land)_
   - Full gate green: `just --list` parses, ruff check + format clean, 244 backend tests pass, frontend
     typecheck clean, 167 frontend tests pass, ESLint 8/8 warnings (0 errors), `biome ci` exits 0, and
     `bun run test:coverage` runs.
+
+- **2026-08-13 · P2 backend cluster ✅** — Landed in four commits; verifying-before-acting overturned
+  two of the plan's "dead code" claims.
+  - **Image-flatten dedup + preview-image deletion deferred** (`53e1bc9`). Promoted the RGBA/palette→RGB
+    flatten to `blogs.utils.flatten_to_rgb`; `media_processing`, the avatar pipeline, and the
+    link-preview download now share it (was three drifting copies). `sync_link_previews` now deletes
+    `LinkPreview` rows through the queryset and frees their stored images from `transaction.on_commit`,
+    so a rollback of the viewset's atomic block can't strand a row whose image was already deleted; the
+    one affected test now runs on_commit callbacks. 244 tests green, ruff clean.
+  - **Media.pk "dead branch" was a MIS-DIAGNOSIS — documented, not deleted** (folded into `53e1bc9`).
+    `Media.save()`'s insert-twice branch is live: `media_file_path` interpolates `self.id`, and every
+    caller that creates a file-bearing Media *without* pre-assigning an id (test factories at
+    `test_views.py:131` and six `test_media_pipeline.py` sites, plus the 0010 data migration) depends on
+    it. The create view happens to pin `id=post.id`, so only it skips the branch. Deleting it would have
+    stored those files under `post/None/media/...`. Documented the coupling on both sides instead.
+  - **Dead-code cleanup** (`5a21c28`). Removed genuinely-dead code: `config/settings_production.py`
+    (unreferenced but for one commented systemd line); `apps/auth`'s `startapp` scaffolding
+    (`models.py`/`admin.py`/`apps.py`/empty `migrations/` — auth has no models and is a views-only module
+    wired straight into `urls.py`); and the `media` field on `PostCreateSerializer` (the create view
+    pops the incoming media payload before validation, so the field only ever generated a writable pk
+    that would reject that payload). `PostSerializer`: `HyperlinkedModelSerializer`→`ModelSerializer`
+    (no hyperlinked behavior was triggered — output byte-identical, confirmed by the suite). Added
+    `apps/uploads/__init__.py` (it was an implicit namespace package); this reclassified its intra-repo
+    imports as first-party, which ruff reformatted in `storage.py`/`views.py`.
+    - **The double `LOGGING` was the SECOND mis-diagnosis — documented, not deleted.** `settings.py:61`
+      applies the first dict immediately via `logging.config.dictConfig()`, standing up the `server` /
+      `server.apps` console loggers the app uses; `:353` reassigns `LOGGING` to `DEFAULT_LOGGING` for
+      Django to read at startup, and `disable_existing_loggers=False` keeps the earlier loggers alive.
+      Removing the first block would drop app console logging. Also documented why `apps/auth` is
+      deliberately kept out of `INSTALLED_APPS`: an `AppConfig` there yields the label `auth`, colliding
+      with `django.contrib.auth`.
+  - **Feed ordering index + stable tiebreaker** (`823d514`). The default feed sorted by `-created` only,
+    which is non-unique (`auto_now_add` collisions), so pagination could drop/repeat rows. Added `-id` to
+    `Post.Meta.ordering` and a matching `('-created', '-id')` index (migration `blogs/0026`).
+
+- **2026-08-13 · P2 security cluster · 1 ✅ · 2 ⚠ FLAGGED** —
+  - **Anonymous account unusable password ✅** (`8380a59`). The `anonymous` author account (migration
+    0003) had an empty password hash — not loginnable (no hasher matches empty), but now marked
+    explicitly unusable. Data migration `users/0006` locks it on existing DBs (idempotent), and
+    `init_users` sets it unusable on creation. Three regression tests added (migration end-state,
+    migration function, command create-branch). 247 tests green.
+  - **⚠ FLAGGED — lower `stream_post_media` / `signed_url` presign TTL.** `stream_post_media` gates on
+    `is_visible_to`, then for R2 media 302-redirects to a presigned GET URL (`generate_presigned_get_url`,
+    `expires_in=3600`). Browsers — Safari especially, the reason this endpoint exists — issue range
+    requests (seeks) against the redirected URL. Dropping the TTL to ~60s would 403 any seek past 60s and
+    break playback. Whether the media element re-hits the gated endpoint (fresh redirect per range) or
+    caches the redirect target is browser-specific and needs a real Safari-against-R2 test I can't run
+    here. The plan already lists this as a user-decision item. **Left unchanged.**
+  - **⚠ FLAGGED — remove `AWS_DEFAULT_ACL = 'public-read'` (`settings.py:598`).** Not a safe one-liner:
+    (1) avatars are served via `storage.url()` **unsigned** public URLs (`users/utils.py:15`) with
+    `AWS_QUERYSTRING_AUTH=False`, so removing `public-read` breaks avatar display unless avatar delivery
+    is first reworked to presigned/gated; (2) on Cloudflare R2 object ACLs are largely a no-op (public
+    access is bucket-level), so the setting is likely cosmetic and real remediation is a bucket-policy +
+    existing-object change — a user/infra action. Post media, thumbnails, and link-preview images already
+    read through gated endpoints or presigned URLs, so they don't need `public-read`; the exposure that
+    remains is bucket-level, not fixable by this Django setting alone. **Left unchanged; needs a
+    user/infra decision.**
