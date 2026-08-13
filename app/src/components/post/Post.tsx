@@ -51,7 +51,12 @@ const FormatText: React.FC<{
 	className?: string
 	onTagClick?: (tag: string) => void
 }> = ({ children, className, onTagClick }) => {
-	const content = renderInlineMarkdown(DOMPurify.sanitize(children))
+	// Assemble the display HTML from the raw post text — inline markdown, then line
+	// breaks, autolinks, and hashtags — and sanitize the finished string ONCE against
+	// a strict allow-list. Vetting the final HTML (rather than the input, before these
+	// transforms run) guarantees what reaches the DOM is exactly what was filtered, so
+	// a future change to any transform can't smuggle markup past the sanitizer.
+	const html = renderInlineMarkdown(children)
 		.replace(/\n/g, '<br/>')
 		.replace(/((?:https?:\/\/|www\.)[^\s<>"']+)/g, (_match, url) => {
 			const href = url.startsWith('www.') ? `http://${url}` : url
@@ -62,6 +67,11 @@ const FormatText: React.FC<{
 				? `${prefix}<button type="button" data-tag="${tag}" class="hashtag">#${tag}</button>`
 				: `${prefix}<span class="hashtag">#${tag}</span>`
 		)
+
+	const content = DOMPurify.sanitize(html, {
+		ALLOWED_TAGS: ['strong', 'em', 'br', 'a', 'button', 'span'],
+		ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'type', 'data-tag'],
+	})
 
 	const handleTagClick = (event: React.MouseEvent<HTMLDivElement>) => {
 		const target = (event.target as HTMLElement).closest('[data-tag]')
