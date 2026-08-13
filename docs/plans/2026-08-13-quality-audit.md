@@ -269,7 +269,7 @@ failed, then `mv` fails and the script exits 0 — leaving the site with no fron
 `sed -i` lines target lovable/gpteng markers that no longer exist (dead).
 - Fix: `set -euo pipefail`; build into a temp dir, swap only on success; delete the dead seds.
 
-### P1-p · `test_csp_hashes` scrapes `settings.py` as text — the pattern this repo renounced · S
+### P1-p · `test_csp_hashes` scrapes `settings.py` as text — the pattern this repo renounced · S ✅
 `tests/test_csp_hashes.py:20-45` regex-matches hash literals in the settings **source file**
 and ignores the captured `tag`, so a `<style>` hash allowlisted only under `script-src`
 passes, and a hash left visible in a comment keeps the test green while prod CSP blocks the
@@ -530,3 +530,17 @@ _(updated as items land)_
   storage is unavailable; three unit tests cover the reuse, the empty-store fallback, and the
   no-throw contract. Typecheck/lint (8/8)/Biome/167 tests green. This closes the P1 media
   resource/performance cluster (P1-k/l/m all ✅).
+
+- **2026-08-13 · P1-p ✅** — `test_csp_hashes` no longer scrapes `settings.py` as a flat text blob.
+  The old `setUp` regex-collected every `'sha256-…'` literal in the source into one set and checked
+  membership ignoring the `tag`, so a `<style>` hash allowlisted only under `script-src` passed, and
+  a hash left in a comment kept a since-changed block green while prod CSP blocked the asset — the
+  same failure mode as the retired `test_drf_compat` substring check. Replaced it with an AST walk
+  (`allowlisted_hashes_by_directive`) that buckets each hash under the directive key it actually sits
+  below, and keyed the per-block assertion on the tag (`script`→`script-src`, `style`→`style-src`).
+  Read from the source AST rather than `settings.CONTENT_SECURITY_POLICY['DIRECTIVES']` on purpose:
+  the resolved dict is built once at import from the ambient `DEBUG`, so a dev running the suite with
+  `DEBUG=True` (this machine) gets the debug branch — `'unsafe-inline'`, zero hashes — and a
+  resolved-settings test would silently check nothing. The AST sees the production `else` branch
+  whatever `DEBUG` is. Added a scan-guard test (script-src ≥1, style-src ≥3) mirroring
+  `test_logging`. Verified: 3 script + 9 style hashes, disjoint; 7 tests pass under `DEBUG=True`.
