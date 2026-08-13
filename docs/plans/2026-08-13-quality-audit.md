@@ -278,17 +278,21 @@ asset. This is the exact `test_drf_compat` substring failure mode, and the sibli
 - Fix: read the resolved `settings.CONTENT_SECURITY_POLICY['DIRECTIVES']` and key on `tag`
   (`script-src` vs `style-src`).
 
-### P1-q · Load-bearing behavior with no test · S–M
-- No test POSTs valid credentials to `/auth/login/`, asserts logout clears the session, or hits
-  `/auth/csrf/` at all — the backbone of every write path (`apps/auth/tests.py`).
-- The e2e suite is structurally unable to test authed/write flows: browser origin is the Vite
-  dev server, API is another origin, and the fetch wrapper never sets `credentials`, so
-  session/CSRF cookies are never stored or sent — CI even provisions `e2e_admin` creds no spec
-  uses. Fix by running e2e against the Django origin (same-origin), or add
-  `credentials: 'include'` + `CORS_ALLOW_CREDENTIALS`.
-- The SSRF guard's redirect-revalidation and size cap are untested, and the fake httpx client
-  can't express the bug (it ignores `follow_redirects`). Add a 302-to-link-local test, a
-  `MAX_REDIRECTS` test, and an oversized-body test.
+### P1-q · Load-bearing behavior with no test · S–M ✅ (backend auth) · ⚠ FLAG (e2e) · ↪ #P1-b (SSRF)
+- ✅ No test POSTs valid credentials to `/auth/login/`, asserts logout clears the session, or hits
+  `/auth/csrf/` at all — the backbone of every write path (`apps/auth/tests.py`). **Done** — see
+  status log.
+- ⚠ **FLAGGED for the user** — a product/infra decision, not a silent code change. The e2e suite is
+  structurally unable to test authed/write flows: browser origin is the Vite dev server, API is
+  another origin, and the fetch wrapper never sets `credentials`, so session/CSRF cookies are never
+  stored or sent — CI even provisions `e2e_admin` creds no spec uses. The two fixes have different
+  security postures: running e2e against the Django origin (same-origin) changes nothing in prod;
+  adding `credentials: 'include'` + `CORS_ALLOW_CREDENTIALS` loosens CORS for real and needs a
+  deliberate call on allowed origins. Left for the user to choose.
+- ↪ **Moved to P1-b.** The SSRF guard's redirect-revalidation and size cap are untested, and the
+  fake httpx client can't express the bug (it ignores `follow_redirects`). These tests are written
+  alongside the P1-b guard fix so they exercise the fixed code, not the current broken shape: a
+  302-to-link-local test, a `MAX_REDIRECTS` test, and an oversized-body test.
 
 ### P2 cluster · tooling & CI coherence · S each
 - `black`/`isort` are documented as a ruff alternative but are misconfigured (line-length 88 vs
@@ -570,3 +574,22 @@ _(updated as items land)_
   pins with the lock in sync, and `bun install --frozen-lockfile --dry-run` resolves clean. The full
   image build could not be run — the Docker daemon is down on this host — so the image-level mechanics
   (base image, `USER root`, WORKDIR) are reasoned, not built; a CI/Fly build is the remaining proof.
+
+- **2026-08-13 · P1-q partial ✅ (backend auth tests)** — Added the four missing auth-endpoint tests
+  the plan named as the backbone of every write path (`apps/auth/tests.py`): `test_csrf_returns_a_token`
+  (GET `/auth/csrf/` → 200 with a non-empty `token`), `test_login_success` (valid JSON creds → 200
+  echoing the bare `user_id`, then `/auth/status/` shows `is_authenticated` with the right id/username),
+  `test_login_wrong_password_leaves_session_anonymous` (400 and the session stays anonymous — the
+  security-relevant negative), and `test_logout_clears_session` (POST logout flips `/auth/status/` back
+  to anonymous). Before this, the login happy path had zero coverage — only the failed attempts the
+  rate-limit tests drive — and logout/CSRF had none. 12 auth tests pass.
+  - ⚠ **FLAGGED, left for the user** — the e2e authed-flow gap is a product/infra decision, not a
+    silent change. The e2e browser runs on the Vite origin while the API is another origin and the
+    fetch wrapper sets no `credentials`, so session/CSRF cookies are never sent (CI even provisions
+    `e2e_admin` creds no spec uses). Same-origin e2e (run against the Django origin) changes nothing in
+    prod; `credentials: 'include'` + `CORS_ALLOW_CREDENTIALS` genuinely loosens CORS and needs a
+    deliberate allowed-origins call. Not deciding this autonomously.
+  - ↪ **Moved to P1-b (task #11).** The SSRF redirect-revalidation / size-cap tests are written with
+    the guard fix so they exercise fixed code, not the current broken shape (the fake httpx client
+    can't even express `follow_redirects`). This closes the P1 build/CI-integrity cluster
+    (P1-n/o/p ✅, P1-q backend ✅; e2e flagged, SSRF tests tracked under P1-b).

@@ -20,8 +20,10 @@ class AuthViewsTestCase(TestCase):
     def setUp(self):
         """Create a client and reset shared rate-limit state."""
         self.client = Client()
+        self.csrf_url = '/auth/csrf/'
         self.signup_url = '/auth/signup/'
         self.login_url = '/auth/login/'
+        self.logout_url = '/auth/logout/'
         self.status_url = '/auth/status/'
         # Rate-limit counters live in a process-global cache; reset them per test.
         caches[RATE_LIMIT_CACHE_ALIAS].clear()
@@ -127,6 +129,69 @@ class AuthViewsTestCase(TestCase):
         status_data = status_response.json()
         self.assertTrue(status_data['is_authenticated'])
         self.assertEqual(status_data['username'], 'testuser')
+
+    def test_csrf_returns_a_token(self):
+        """The endpoint the fetch wrapper primes itself from must hand back a token.
+
+        Every write path depends on this: with no token the frontend cannot make
+        a single non-GET request, so a regression here silently breaks the app.
+        """
+        response = self.client.get(self.csrf_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['token'])
+
+    def test_login_success(self):
+        """Valid credentials authenticate the session and echo the user id.
+
+        The happy path of the login endpoint had no coverage — only the failed
+        attempts exercised by the rate-limit tests.
+        """
+        user = User.objects.create_user(username='returning', password='testpass123')
+
+        response = self.client.post(
+            self.login_url,
+            data=json.dumps({'username': 'returning', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        # The view returns the bare user id (safe=False), not a wrapping object.
+        self.assertEqual(response.json(), user.id)
+
+        # The session now carries the login, as /auth/status/ reports.
+        status_data = self.client.get(self.status_url).json()
+        self.assertTrue(status_data['is_authenticated'])
+        self.assertEqual(status_data['user_id'], user.id)
+        self.assertEqual(status_data['username'], 'returning')
+
+    def test_login_wrong_password_leaves_session_anonymous(self):
+        """A bad password is a 400 and must not authenticate the session."""
+        User.objects.create_user(username='returning', password='testpass123')
+
+        response = self.client.post(
+            self.login_url,
+            data=json.dumps({'username': 'returning', 'password': 'wrong-password'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(self.client.get(self.status_url).json()['is_authenticated'])
+
+    def test_logout_clears_session(self):
+        """A POST logout drops the authenticated session back to anonymous."""
+        User.objects.create_user(username='returning', password='testpass123')
+        self.client.post(
+            self.login_url,
+            data=json.dumps({'username': 'returning', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
+        self.assertTrue(self.client.get(self.status_url).json()['is_authenticated'])
+
+        response = self.client.post(self.logout_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(self.client.get(self.status_url).json()['is_authenticated'])
 
     def test_logout_rejects_get(self):
         """Logging out via GET would allow logout-by-link CSRF; only POST/DELETE."""
