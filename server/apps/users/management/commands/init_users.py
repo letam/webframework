@@ -49,9 +49,13 @@ class Command(BaseCommand):
             self.create_superuser()
             created_any = True
 
-        # Create anonymous user--for anonymous posts
-        _, created = User.objects.get_or_create(username='anonymous')
+        # Create anonymous user--for anonymous posts. It is never logged into, so
+        # give it an unusable password rather than the empty hash get_or_create
+        # would otherwise leave (see migration 0005 for existing databases).
+        anonymous, created = User.objects.get_or_create(username='anonymous')
         if created:
+            anonymous.set_unusable_password()
+            anonymous.save(update_fields=['password'])
             self.stdout.write(self.style.SUCCESS('Created user "anonymous".'))
             created_any = True
 
