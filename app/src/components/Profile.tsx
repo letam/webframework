@@ -461,6 +461,9 @@ const Profile: React.FC = () => {
 						<AlertDialogTitle>Publish {drafts.posts.length} drafts?</AlertDialogTitle>
 						<AlertDialogDescription>
 							This will publish each draft and move it into your public post list.
+							{drafts.hasNextPage
+								? ' Only the drafts loaded so far will be published — scroll the list to load the rest first.'
+								: ''}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
