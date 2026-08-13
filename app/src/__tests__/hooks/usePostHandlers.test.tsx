@@ -197,4 +197,24 @@ describe('usePostHandlers auto-transcribe create flow', () => {
 		expect(toast.error).toHaveBeenCalledWith('You can pin up to 3 posts')
 		consoleError.mockRestore()
 	})
+
+	it('rethrows edit failures so the modal keeps the in-progress edit', async () => {
+		const queryClient = createQueryClient()
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+		queryClient.setQueryData(['posts', {}], infiniteData([makePost({ id: 7 })]))
+		vi.mocked(postsApi.updatePost).mockRejectedValueOnce(new Error('save failed'))
+
+		const { result } = renderHook(() => usePostHandlers({}, { enabled: false }), {
+			wrapper: createWrapper(queryClient),
+		})
+
+		await act(async () => {
+			await expect(result.current.handleEditPost(7, 'New title', 'New body')).rejects.toThrow(
+				'save failed'
+			)
+		})
+
+		expect(toast.error).toHaveBeenCalledWith('Failed to update post')
+		consoleError.mockRestore()
+	})
 })

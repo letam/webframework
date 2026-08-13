@@ -395,6 +395,17 @@ _(updated as items land)_
   throttle at the IP-keyed classes; set `NUM_PROXIES=1` as defense in depth. Dropped the
   spoofable `X-Forwarded-For` branch from `get_client_ip` (also fixes the plain-Django
   login/signup/presign limiters). All 228 backend tests pass.
+- **2026-08-13 · P0-d + P1-e ✅** — `Feed.handlePostCreated` no longer swallows the create
+  error; the rejection now reaches `CreatePost.submitPost`, which keeps the composer text and
+  saved draft and toasts the failure instead of falsely clearing them. `usePostHandlers.
+  handleEditPost` rethrows after toasting so `EditPostModal` keeps the dialog (and the
+  in-progress edit) open on save failure. `EditPostModal` now seeds its form on the open
+  transition (`[open]`) rather than on every `post` object identity change, so a background
+  refetch (like/view/transcription poll) no longer reverts in-progress typing. Added a hook
+  test for the edit rethrow. `handleChangeVisibility`/`handlePublishPost` were left toasting
+  without a false success and retain no user-typed state; delete closes its confirm
+  optimistically with no typed-content loss — so only the edit path needed the rethrow. 164
+  frontend tests pass; typecheck + lint (8/8 warnings) green.
 - **2026-08-13 · P0-b ✅** — `_viewer_key_for_request` no longer calls `request.session.save()`:
   authenticated → `u:<id>`, anon-with-cookie → session-hash, cookieless → a per-day
   `(client-ip, user-agent)` fingerprint hash. Cookieless crawlers therefore dedupe instead of

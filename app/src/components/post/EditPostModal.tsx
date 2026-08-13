@@ -41,14 +41,21 @@ export const EditPostModal: React.FC<EditPostModalProps> = ({
 	const [poster, setPoster] = useState<File | null>(null)
 	const [isSubmitting, setIsSubmitting] = useState(false)
 
-	// Update state when post changes
+	// Seed the form from the post when the modal opens, capturing the latest data
+	// (e.g. a transcript that finished while the dialog was closed). We deliberately
+	// do NOT re-seed on `post` changes while open: a background refetch (a like, a
+	// view, or a transcription poll) mints a fresh post object and would otherwise
+	// wipe the user's in-progress edits.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: seed on the open transition, not on every post refetch
 	useEffect(() => {
+		if (!open) return
 		setHead(post.head)
 		setBody(post.body)
 		setTranscript(post.media?.transcript || '')
 		setAltText(post.media?.alt_text || '')
 		setPoster(null)
-	}, [post])
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [open])
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()

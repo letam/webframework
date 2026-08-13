@@ -60,11 +60,11 @@ const Feed: React.FC = () => {
 	)
 
 	const handlePostCreated = async (postData: CreatePostRequest) => {
-		try {
-			await addPost(postData)
-		} catch (error) {
-			console.error('Failed to create post:', error)
-		}
+		// Let a failed create reject. CreatePost.submitPost keeps the composer text
+		// and the saved draft on rejection and toasts the error; swallowing here made
+		// a failed post look successful and wiped the one unposted recording autosave
+		// exists to protect.
+		await addPost(postData)
 	}
 
 	const handleTagClick = useCallback(
