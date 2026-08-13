@@ -40,7 +40,6 @@ const Feed: React.FC = () => {
 		matchMode,
 		setMatchMode,
 		filteredPosts,
-		filteredPostCount,
 		postCountLabel,
 		addFiltersFromText,
 		removeFilter,
@@ -138,7 +137,6 @@ const Feed: React.FC = () => {
 					onTagsSubmit={applyTagFilters}
 					disabled={isLoading}
 					filters={filters}
-					filteredPostCount={filteredPostCount}
 				/>
 
 				<ActiveFiltersList

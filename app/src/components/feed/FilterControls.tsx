@@ -19,7 +19,6 @@ type FilterControlsProps = {
 	onTagsSubmit: (tags: string[]) => void
 	disabled?: boolean
 	filters: FilterToken[]
-	filteredPostCount: number
 }
 
 const matchModeLabel: Record<MatchMode, string> = {
@@ -38,28 +37,38 @@ export const FilterControls: React.FC<FilterControlsProps> = ({
 	onTagsSubmit,
 	disabled = false,
 	filters,
-	filteredPostCount,
 }) => {
 	const labelRef = useRef<HTMLLabelElement | null>(null)
-	const previousFilteredPostCount = useRef<number | null>(null)
+	const lastScrolledSignature = useRef<string | null>(null)
 	const filterHintTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const filterInputId = useId()
 	const [isFilterInputFocused, setIsFilterInputFocused] = useState(false)
 
+	// A value-stable signature of the filter *set* (terms + their enabled state +
+	// match mode). Deliberately excludes the result count: infinite scroll changes
+	// the count on every loaded page, which used to yank the viewport back to the
+	// top mid-scroll.
+	const hasFilters = filters.length > 0
+	const filterSetSignature = JSON.stringify({ matchMode, filters })
+
 	useEffect(() => {
-		if (previousFilteredPostCount.current === null) {
-			previousFilteredPostCount.current = filteredPostCount
+		// Scroll to the filter label whenever the filter set changes — a term added
+		// or removed, or the match mode toggled — so filtered results read from the
+		// top. Record (without scrolling) on the first render so a restored filter
+		// set doesn't scroll on load.
+		if (lastScrolledSignature.current === null) {
+			lastScrolledSignature.current = filterSetSignature
 			return
 		}
+		if (filterSetSignature === lastScrolledSignature.current) {
+			return
+		}
+		lastScrolledSignature.current = filterSetSignature
 
-		const countChanged = filteredPostCount !== previousFilteredPostCount.current
-
-		previousFilteredPostCount.current = filteredPostCount
-
-		if (filters.length > 0 && countChanged) {
+		if (hasFilters) {
 			scrollToElement(labelRef.current)
 		}
-	}, [filteredPostCount, filters])
+	}, [filterSetSignature, hasFilters])
 
 	useEffect(() => {
 		const inputElement = document.getElementById(filterInputId) as HTMLInputElement
