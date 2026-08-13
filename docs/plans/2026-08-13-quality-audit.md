@@ -188,7 +188,7 @@ render pulls it in. On a browser/webview without `MediaRecorder`, module eval th
 React mounts: a blank page the error boundary can't catch. Also ships two `console.log`s.
 - Fix: make both lazy / guarded by `typeof MediaRecorder !== 'undefined'`; delete the logs.
 
-### P1-h · `PullToRefresh` reloads the whole SPA from inside modals · M
+### P1-h · `PullToRefresh` reloads the whole SPA from inside modals · M ✅
 `app/src/components/PullToRefresh.tsx:41-108` binds touch handlers to `window`, guarded only by
 `scrollY <= 0`. Radix dialogs lock body scroll at 0 and portal outside the subtree, so a
 downward drag inside any dialog (record, image preview, tag popover) is read as a pull and past
@@ -482,3 +482,13 @@ _(updated as items land)_
   further writes (via an `anonWriteBlocked` ref honoured by both the save and the on-hide flush
   effects) until the composer is emptied. Clear and write share the one save effect so they cannot
   race. Typecheck/lint (8/8)/Biome/164 tests green.
+- **2026-08-13 · P1-h ✅** (`ac81b48`) — `PullToRefresh` no longer reloads the SPA from inside a
+  modal. Bound the touch listeners to the content element instead of `window`, so touches inside a
+  portaled Radix overlay never reach them; added a belt-and-suspenders guard that ignores a
+  gesture whose touchstart target sits inside `[role="dialog"]`/`[data-radix-popper-content-wrapper]`.
+  `Index` now passes an `onRefresh` that `invalidateQueries(['posts'])` — a soft refetch in place
+  of the `window.location.reload()` fallback that discarded the TanStack cache. Also fixed a
+  latent bug the soft path exposed: `finishGesture` reset the pull distance only on the
+  below-threshold branch, so a custom `onRefresh` left the content pinned at the pull distance —
+  it now springs back before firing. Typecheck/lint (8/8)/Biome/164 tests green. This closes the
+  P1 frontend-correctness cluster (P1-f/g/h/j all ✅).
