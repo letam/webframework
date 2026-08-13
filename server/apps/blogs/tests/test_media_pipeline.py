@@ -801,7 +801,7 @@ class StreamPostMediaRangeTests(ViewTestCase):
         response = self.client.get(self.url, HTTP_RANGE='bytes=2-5')
 
         self.assertEqual(response.status_code, 206)
-        self.assertEqual(response.content, b'2345')
+        self.assertEqual(b''.join(response.streaming_content), b'2345')
         self.assertEqual(response['Content-Length'], '4')
         self.assertEqual(response['Content-Range'], f'bytes 2-5/{len(self.CONTENT)}')
 
@@ -810,7 +810,7 @@ class StreamPostMediaRangeTests(ViewTestCase):
         response = self.client.get(self.url, HTTP_RANGE='bytes=-4')
 
         self.assertEqual(response.status_code, 206)
-        self.assertEqual(response.content, b'6789')
+        self.assertEqual(b''.join(response.streaming_content), b'6789')
         self.assertEqual(response['Content-Range'], f'bytes 6-9/{len(self.CONTENT)}')
 
     def test_open_ended_range_returns_remaining_bytes(self):
@@ -818,7 +818,7 @@ class StreamPostMediaRangeTests(ViewTestCase):
         response = self.client.get(self.url, HTTP_RANGE='bytes=3-')
 
         self.assertEqual(response.status_code, 206)
-        self.assertEqual(response.content, b'3456789')
+        self.assertEqual(b''.join(response.streaming_content), b'3456789')
         self.assertEqual(response['Content-Range'], f'bytes 3-9/{len(self.CONTENT)}')
 
     def test_unsatisfiable_range_returns_416(self):
@@ -827,3 +827,15 @@ class StreamPostMediaRangeTests(ViewTestCase):
 
         self.assertEqual(response.status_code, 416)
         self.assertEqual(response['Content-Range'], f'bytes */{len(self.CONTENT)}')
+
+    def test_range_response_streams_rather_than_buffering(self):
+        """The 206 body must stream, not buffer the whole slice into one bytes.
+
+        A browser opens media with ``bytes=0-`` (the whole file); buffering that
+        into RAM is what let two viewers OOM the box.
+        """
+        response = self.client.get(self.url, HTTP_RANGE='bytes=0-')
+
+        self.assertEqual(response.status_code, 206)
+        self.assertTrue(response.streaming)
+        self.assertEqual(b''.join(response.streaming_content), self.CONTENT)

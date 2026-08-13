@@ -20,7 +20,14 @@ from django.db.models import (
     Value,
 )
 from django.db.models.functions import Coalesce
-from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpResponse,
+    HttpResponseRedirect,
+    JsonResponse,
+    StreamingHttpResponse,
+)
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils import timezone
@@ -883,6 +890,27 @@ def get_post_media_mime_type(request, post_id):
     return HttpResponse(mime_type, content_type="text/plain")
 
 
+# Streaming a range block-by-block keeps a media request at O(block size) in RAM.
+# Reading the whole slice into one bytes object (what this did before) meant a
+# browser's opening `Range: bytes=0-` allocated the entire file — up to the 100 MB
+# cap, briefly doubled by the response object — enough for two concurrent viewers
+# to OOM a 512 MB VM.
+_MEDIA_STREAM_BLOCK_SIZE = 64 * 1024
+
+
+def _iter_file_range(file_path, start, length, block_size=_MEDIA_STREAM_BLOCK_SIZE):
+    """Yield ``length`` bytes of ``file_path`` starting at ``start``, block by block."""
+    with open(file_path, 'rb') as file_to_send:
+        file_to_send.seek(start)
+        remaining = length
+        while remaining > 0:
+            chunk = file_to_send.read(min(block_size, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            yield chunk
+
+
 @require_GET
 def stream_post_media(request, post_id):
     """Stream a media file to the client. Necessary to load media files in Safari.
@@ -927,16 +955,16 @@ def stream_post_media(request, post_id):
         return response
 
     start, end = bounds
-    with open(file_path, 'rb') as file_to_send:
-        file_to_send.seek(start)
-        data = file_to_send.read(end - start)
-
+    length = end - start
+    response = StreamingHttpResponse(
+        _iter_file_range(file_path, start, length),
+        status=206,  # Partial Content
+        content_type=get_file_mime_type(file_path),
+    )
+    response['Content-Length'] = str(length)
     # HTTP Content-Range is end-inclusive, hence end - 1.
-    response = HttpResponse(data, content_type=get_file_mime_type(file_path))
-    response['Content-Length'] = len(data)
     response['Content-Range'] = f'bytes {start}-{end - 1}/{file_size}'
     response['Accept-Ranges'] = 'bytes'
-    response.status_code = 206  # Partial Content
     return response
 
 
