@@ -83,8 +83,14 @@ STAGING_APP_DIR="server/static/.app-staging"
 
 ### Build frontend files into app/dist. `set -e` aborts here on a build failure,
 ### so nothing below runs against a broken or absent build.
+###
+### bun, not npm, and --frozen-lockfile: this must resolve the same dependency
+### tree CI gates and the Dockerfile ships. Building against whatever happens to
+### be in app/node_modules — or letting npm re-resolve bun.lock's ranges — means
+### this path can produce a bundle nothing ever tested.
 cd app
-npm run build
+bun install --frozen-lockfile
+bun run build
 
 ### Add build timestamp to index-*.js
 BUILD_TIME=$(date +'%Y-%m-%d %H:%M:%S %Z')
