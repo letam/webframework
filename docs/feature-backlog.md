@@ -201,7 +201,13 @@ default", import/export, even a fully client-side encrypted variant). Big lift; 
 >
 > **The priority also dropped.** Composer autosave (shipped 2026-08-04, `b785a68`) already
 > answers the concrete pain this thread kept circling — not losing a recording to a refresh.
-> What remains here is the genuinely large and genuinely optional part.
+> Stages 1 and 3 remain the genuinely large and optional parts.
+>
+> **✅ Stage 2 shipped 2026-08-20** (branch `feature/offline-posts`, spec + deviation log
+> in `docs/plans/2026-08-20-offline-posts.md`): IndexedDB outbox with auto-sync on
+> reconnect, media support (100 MB cap), an always-visible sync-status indicator, an
+> auto-sync toggle for local-first drafts, and a Settings default (auto / local /
+> remember-last). Server-side idempotency via `Post.client_uuid`. Stages 1 and 3 remain.
 
 ## P3 — Federation / cross-posting
 

@@ -1,6 +1,7 @@
 # Offline posts — implementation spec
 
-Status: in progress 2026-08-20. Pipeline: fable-5 spec → gpt-5.6-sol implementation per
+Status: complete 2026-08-20 — all four phases plus a post-review hardening round landed
+on `feature/offline-posts`. Pipeline: fable-5 spec → gpt-5.6-sol implementation per
 phase → fable-5 review. This is stage 2 of the "Offline / local-first" item in
 `docs/feature-backlog.md` (queue posts in IndexedDB, sync on reconnect); stage 1 (service
 worker / PWA shell) is explicitly not a prerequisite and stays out of scope.
@@ -634,3 +635,35 @@ Phase 4:
   `'remember'` keeps the shipped phase 1–3 behavior exactly (offline posts composed in auto
   mode still auto-send across reloads — offline composing never flips the mode), while
   `'auto'`/`'local'` remain available in Settings for users who want a pinned start mode.
+
+Hardening round (post-review):
+
+An adversarial multi-agent review over the finished branch confirmed six defects (nine
+findings; the rest were coverage gaps). All fixed in the hardening commit:
+
+- `removeEntry` published the snapshot *after* awaiting the IndexedDB delete; a flush
+  trigger firing inside that await (backoff timer, reconnect, another enqueue) still saw
+  the entry and could publish the post the user had just removed. The snapshot filter now
+  happens before the await.
+- `runFlush`'s auth-verify abort left `pendingFlushIds` latched, so ids from a manual
+  "Post all" could replay on an unrelated later automatic pass — in local mode, long
+  after the click. The abort now clears the latch; auto-mode backoff still covers the
+  queue as a whole.
+- Flipping auto-sync off mid-pass didn't stop the pass: entries kept publishing after the
+  user turned syncing off. An automatic pass now stops at the next entry boundary
+  (`if (!options?.manual && snapshot.syncMode !== 'auto') break`); a manual pass
+  deliberately keeps going.
+- The offline indicator promised "They'll go out when you're back online." even in local
+  mode, where reconnecting sends nothing. Offline + local now says "on this device."
+- The composer's online submit and its offline fallback used different `client_uuid`s: a
+  create whose response was lost after the server processed it would duplicate on flush.
+  `submitPost` now mints one uuid, sends it with the live request, and hands the same
+  uuid to `enqueuePost` (which grew an optional `id` input) so the replay dedupes
+  server-side.
+- The size-cap toast hardcoded "100 MB limit"; it's now derived from
+  `MAX_QUEUED_MEDIA_BYTES`.
+
+Refuted findings deliberately not changed: "Post now" on draft entries (spec-pinned),
+Retry's missing offline guard (doesn't end in silence), `resolveInitialSyncMode` input
+validation (only typed writers exist), a TanStack mid-flight pause/resume duplicate
+(mutations retry 0 — the mechanism cannot occur), and stale-identity flush (spec-pinned).

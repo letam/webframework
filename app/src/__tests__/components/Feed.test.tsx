@@ -1,9 +1,11 @@
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Feed from '@/components/Feed'
+import type { CreatePostRequest } from '@/types/post'
 import { mockPosts } from '../data/mockPosts'
 
 const mockUsePostHandlers = vi.hoisted(() => vi.fn())
+const mockCreatePost = vi.hoisted(() => vi.fn())
 
 vi.mock('@/hooks/usePostHandlers', () => ({
 	usePostHandlers: mockUsePostHandlers,
@@ -14,7 +16,10 @@ vi.mock('@/components/post/Post', () => ({
 }))
 
 vi.mock('@/components/post/create', () => ({
-	default: () => <div data-testid="create-post" />,
+	default: (props: unknown) => {
+		mockCreatePost(props)
+		return <div data-testid="create-post" />
+	},
 }))
 
 vi.mock('@/components/feed/FilterControls', () => ({
@@ -89,5 +94,22 @@ describe('Feed component', () => {
 		render(<Feed />)
 
 		expect(screen.getByText('Loading more…')).toBeInTheDocument()
+	})
+
+	it('rethrows addPost failures through the composer callback', async () => {
+		const error = new TypeError('network failed')
+		const addPost = vi.fn().mockRejectedValue(error)
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+		mockUsePostHandlers.mockReturnValue(handlers({ addPost }))
+		render(<Feed />)
+		const { onPostCreated } = mockCreatePost.mock.calls[0][0] as {
+			onPostCreated: (request: CreatePostRequest) => Promise<void>
+		}
+		const request = { text: 'Retry me', client_uuid: crypto.randomUUID() }
+
+		await expect(onPostCreated(request)).rejects.toBe(error)
+
+		expect(addPost).toHaveBeenCalledWith(request)
+		consoleError.mockRestore()
 	})
 })

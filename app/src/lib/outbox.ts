@@ -253,6 +253,11 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 	}
 	if (!auth) {
 		flushLocked = false
+		// Ids latched during the failed auth check would otherwise replay from some
+		// unrelated later pass — in local mode, long after the click they came from.
+		// They'd fail this same auth check anyway; in auto mode the backoff pass
+		// below covers the whole queue.
+		pendingFlushIds = null
 		if (options?.manual) {
 			toast.error("Couldn't reach the server — your posts are still on this device.")
 		}
@@ -267,6 +272,9 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 
 	try {
 		for (const id of ids) {
+			// The user can flip auto-sync off while a pass is mid-flight; an automatic
+			// pass stops at the next entry boundary (a manual "Post all" keeps going).
+			if (!options?.manual && snapshot.syncMode !== 'auto') break
 			const latestAuth = dependencies?.getAuthState() ?? auth
 			const result = await syncEntry(id, latestAuth)
 			if (result === 'synced') synced += 1
@@ -331,10 +339,12 @@ export const loadOutbox = async () => {
 	setEntries([...entriesById.values()])
 }
 
-export const enqueuePost = async (input: EnqueueInput): Promise<boolean> => {
+// `id` lets the composer's online-submit fallback reuse the client_uuid its live
+// request already carried, so a create whose response was lost dedupes on flush.
+export const enqueuePost = async (input: EnqueueInput & { id?: string }): Promise<boolean> => {
 	const entry: OutboxEntry = {
 		...input,
-		id: crypto.randomUUID(),
+		id: input.id ?? crypto.randomUUID(),
 		createdAt: Date.now(),
 		status: 'queued',
 		attempts: 0,
@@ -376,8 +386,11 @@ export const removeEntry = async (id: string): Promise<RemoveEntryResult> => {
 	// publication, so refuse instead of pretending the post is gone.
 	const entry = snapshot.entries.find((candidate) => candidate.id === id)
 	if (entry?.status === 'sending') return 'sending'
-	await deleteOutboxEntry(id)
+	// Drop from the snapshot before awaiting the IDB delete: a flush trigger firing
+	// inside that await (backoff timer, reconnect, another enqueue) would still find
+	// the entry and publish the post the user just removed.
 	setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
+	await deleteOutboxEntry(id)
 	return 'removed'
 }
 

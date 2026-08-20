@@ -5,6 +5,7 @@ import CreatePost from '@/components/post/create/CreatePost'
 import { toast } from '@/components/ui/sonner'
 import { saveComposerDraft } from '@/lib/utils/composerDraft'
 import { requestComposerLoad } from '@/lib/composerBridge'
+import { MAX_QUEUED_MEDIA_BYTES } from '@/lib/outbox'
 import type { OutboxEntry } from '@/lib/utils/outboxDb'
 
 const mockUseAuth = vi.hoisted(() => vi.fn())
@@ -24,11 +25,14 @@ vi.mock('@/hooks/useOutbox', () => ({
 	useOutbox: mockUseOutbox,
 }))
 
-vi.mock('@/lib/outbox', () => ({
-	enqueuePost: mockEnqueuePost,
-	MAX_QUEUED_MEDIA_BYTES: 100 * 1024 * 1024,
-	setSyncMode: mockSetSyncMode,
-}))
+vi.mock('@/lib/outbox', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('@/lib/outbox')>()
+	return {
+		enqueuePost: mockEnqueuePost,
+		MAX_QUEUED_MEDIA_BYTES: actual.MAX_QUEUED_MEDIA_BYTES,
+		setSyncMode: mockSetSyncMode,
+	}
+})
 
 // jsdom has no IndexedDB, and what these tests are about is whether the composer
 // decides to write at all — not what the write does once it starts.
@@ -377,20 +381,24 @@ describe('CreatePost', () => {
 		expect(screen.getByPlaceholderText("What's on your mind?")).toHaveValue('')
 	})
 
-	it('keeps an oversized offline image in the composer and does not queue it', async () => {
+	it('uses the derived size-cap copy for an oversized offline image', async () => {
 		setOnline(false)
 		const user = userEvent.setup()
 		render(<CreatePost onPostCreated={vi.fn()} />)
 		const composer = screen.getByPlaceholderText("What's on your mind?")
 		const file = new File(['image'], 'oversized.png', { type: 'image/png' })
-		Object.defineProperty(file, 'size', { value: 100 * 1024 * 1024 + 1 })
+		Object.defineProperty(file, 'size', { value: MAX_QUEUED_MEDIA_BYTES + 1 })
 
 		await user.type(composer, 'Keep all of this')
 		await user.upload(screen.getByTestId('composer-image-input'), file)
 		await user.click(screen.getByRole('button', { name: 'Post' }))
 
 		await waitFor(() =>
-			expect(toast.error).toHaveBeenCalledWith('This file is too big to queue (100 MB limit).')
+			expect(toast.error).toHaveBeenCalledWith(
+				`This file is too big to queue (${Math.round(
+					MAX_QUEUED_MEDIA_BYTES / (1024 * 1024)
+				)} MB limit).`
+			)
 		)
 		expect(mockEnqueuePost).not.toHaveBeenCalled()
 		expect(composer).toHaveValue('Keep all of this')
@@ -420,7 +428,7 @@ describe('CreatePost', () => {
 		expect(queued.mediaName).toBe(queued.media.name)
 	})
 
-	it('falls back to the outbox when an online create throws TypeError', async () => {
+	it('reuses the online client uuid when a TypeError falls back to the outbox', async () => {
 		const user = userEvent.setup()
 		const onPostCreated = vi.fn().mockRejectedValue(new TypeError('network failed'))
 		render(<CreatePost onPostCreated={onPostCreated} />)
@@ -430,8 +438,10 @@ describe('CreatePost', () => {
 
 		await waitFor(() => expect(mockEnqueuePost).toHaveBeenCalledTimes(1))
 		expect(onPostCreated).toHaveBeenCalledTimes(1)
+		const request = onPostCreated.mock.calls[0][0]
+		expect(request.client_uuid).toEqual(expect.any(String))
 		expect(mockEnqueuePost).toHaveBeenCalledWith(
-			expect.objectContaining({ text: 'Connection blip' })
+			expect.objectContaining({ id: request.client_uuid, text: 'Connection blip' })
 		)
 	})
 

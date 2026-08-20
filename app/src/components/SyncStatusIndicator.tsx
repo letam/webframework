@@ -16,10 +16,15 @@ export const SyncStatusIndicator = () => {
 
 	if (!online && count > 0) {
 		Icon = WifiOff
+		// Local mode must not promise an auto-send that reconnecting won't perform.
 		label =
-			count === 1
-				? "You're offline — 1 post queued. It'll go out when you're back online."
-				: `You're offline — ${count} posts queued. They'll go out when you're back online.`
+			syncMode === 'local'
+				? count === 1
+					? "You're offline — 1 post on this device."
+					: `You're offline — ${count} posts on this device.`
+				: count === 1
+					? "You're offline — 1 post queued. It'll go out when you're back online."
+					: `You're offline — ${count} posts queued. They'll go out when you're back online.`
 	} else if (!online) {
 		Icon = WifiOff
 		label = "You're offline. New posts will be queued on this device."

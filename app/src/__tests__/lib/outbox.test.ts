@@ -247,6 +247,37 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
+	it('stops an automatic pass at the next entry after switching to local mode', async () => {
+		await enqueueText({ text: 'First automatic post' })
+		await enqueueText({ text: 'Second automatic post' })
+		let releaseFirst!: (post: Awaited<ReturnType<typeof postsApi.createPost>>) => void
+		vi.mocked(postsApi.createPost)
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						releaseFirst = resolve
+					})
+			)
+			.mockResolvedValueOnce(makePost({ id: 106 }))
+		setOnline(true)
+
+		const automaticPass = flushOutbox()
+		await vi.waitFor(() => expect(postsApi.createPost).toHaveBeenCalledTimes(1))
+		setSyncMode('local')
+		releaseFirst(makePost({ id: 105 }))
+		await automaticPass
+
+		expect(postsApi.createPost).toHaveBeenCalledTimes(1)
+		expect(getOutboxSnapshot().entries.map((entry) => entry.text)).toEqual([
+			'Second automatic post',
+		])
+
+		await flushOutbox({ manual: true })
+
+		expect(postsApi.createPost).toHaveBeenCalledTimes(2)
+		expect(getOutboxSnapshot().entries).toEqual([])
+	})
+
 	it('manually posts one queued entry while local', async () => {
 		setSyncMode('local')
 		await enqueueText()
@@ -540,6 +571,44 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
+	it('clears manual ids latched during an aborted auth verification', async () => {
+		await enqueueText({ text: 'Latched manual post' })
+		await enqueueText({ text: 'Unrelated manual post' })
+		const [latchedId, unrelatedId] = getOutboxSnapshot().entries.map((entry) => entry.id)
+		let releaseRefresh!: (verified: boolean) => void
+		const refreshAuthStatus = vi
+			.fn()
+			.mockImplementationOnce(
+				() =>
+					new Promise<boolean>((resolve) => {
+						releaseRefresh = resolve
+					})
+			)
+			.mockResolvedValue(true)
+		configureOutbox({ queryClient, getAuthState: () => auth, refreshAuthStatus })
+		setOnline(true)
+
+		const reconnectPass = handleOutboxOnline()
+		await vi.waitFor(() => expect(refreshAuthStatus).toHaveBeenCalledTimes(1))
+		auth = { isAuthenticated: false, userId: null, isAuthResolved: true }
+		await flushEntry(latchedId)
+		releaseRefresh(false)
+		await reconnectPass
+
+		expect(postsApi.createPost).not.toHaveBeenCalled()
+		auth = { isAuthenticated: true, userId: 1, isAuthResolved: true }
+		vi.mocked(postsApi.createPost).mockResolvedValue(makePost({ id: 87 }))
+
+		await flushEntry(unrelatedId)
+		await Promise.resolve()
+
+		expect(postsApi.createPost).toHaveBeenCalledTimes(1)
+		expect(postsApi.createPost).toHaveBeenCalledWith(
+			expect.objectContaining({ text: 'Unrelated manual post' })
+		)
+		expect(getOutboxSnapshot().entries.map((entry) => entry.id)).toEqual([latchedId])
+	})
+
 	it('sends nothing after a reconnect until the identity re-check succeeds', async () => {
 		await enqueueText()
 		const refreshAuthStatus = vi.fn(async () => false)
@@ -580,5 +649,82 @@ describe('outbox sync engine', () => {
 		release(makePost({ id: 95 }))
 		await pass
 		expect(getOutboxSnapshot().entries).toEqual([])
+	})
+
+	it('hides a removed entry before its storage deletion resolves', async () => {
+		await enqueueText()
+		const entryId = getOutboxSnapshot().entries[0].id
+		let releaseDelete!: (deleted: boolean) => void
+		vi.mocked(outboxDb.deleteOutboxEntry).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					releaseDelete = resolve
+				})
+		)
+
+		const removal = removeEntry(entryId)
+
+		expect(getOutboxSnapshot().entries).toEqual([])
+		setOnline(true)
+		await flushOutbox()
+		expect(postsApi.createPost).not.toHaveBeenCalled()
+
+		releaseDelete(true)
+		await expect(removal).resolves.toBe('removed')
+	})
+
+	it('starts auto-transcription after an authenticated audio entry syncs', async () => {
+		localStorage.setItem('app-settings', JSON.stringify({ autoTranscribe: true }))
+		await enqueueText({
+			autoTranscribe: true,
+			mediaType: 'audio',
+			media: new Blob(['audio'], { type: 'audio/webm' }),
+			mediaName: 'queued.webm',
+		})
+		const created = makePost({ id: 96 })
+		vi.mocked(postsApi.createPost).mockResolvedValueOnce(created)
+		vi.mocked(postsApi.transcribePost).mockResolvedValueOnce(created)
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(postsApi.transcribePost).toHaveBeenCalledOnce()
+		expect(postsApi.transcribePost).toHaveBeenCalledWith(96)
+	})
+
+	it('does not auto-transcribe text, disabled, or anonymous entries', async () => {
+		vi.mocked(postsApi.createPost).mockResolvedValue(makePost({ id: 97 }))
+
+		localStorage.setItem('app-settings', JSON.stringify({ autoTranscribe: true }))
+		await enqueueText({ autoTranscribe: true })
+		setOnline(true)
+		await flushOutbox()
+
+		setOnline(false)
+		localStorage.setItem('app-settings', JSON.stringify({ autoTranscribe: false }))
+		await enqueueText({
+			autoTranscribe: false,
+			mediaType: 'audio',
+			media: new Blob(['audio'], { type: 'audio/webm' }),
+			mediaName: 'disabled.webm',
+		})
+		setOnline(true)
+		await flushOutbox()
+
+		setOnline(false)
+		localStorage.setItem('app-settings', JSON.stringify({ autoTranscribe: true }))
+		auth = { isAuthenticated: false, userId: null, isAuthResolved: true }
+		await enqueueText({
+			author: 'anon',
+			autoTranscribe: true,
+			mediaType: 'audio',
+			media: new Blob(['audio'], { type: 'audio/webm' }),
+			mediaName: 'anonymous.webm',
+		})
+		setOnline(true)
+		await flushOutbox()
+
+		expect(postsApi.createPost).toHaveBeenCalledTimes(3)
+		expect(postsApi.transcribePost).not.toHaveBeenCalled()
 	})
 })

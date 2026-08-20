@@ -47,6 +47,10 @@ interface CreatePostProps {
 
 type SubmitStatus = '' | 'preparing' | 'compressing' | 'submitting'
 
+const MEDIA_CAP_TOAST = `This file is too big to queue (${Math.round(
+	MAX_QUEUED_MEDIA_BYTES / (1024 * 1024)
+)} MB limit).`
+
 const VISIBILITY_OPTIONS = [
 	{
 		value: 'public',
@@ -365,10 +369,12 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	const queuePost = async (
 		isDraft: boolean,
-		media: { mediaType: 'audio' | 'video' | 'image'; file: File } | null
+		media: { mediaType: 'audio' | 'video' | 'image'; file: File } | null,
+		id?: string
 	) => {
 		const settings = getSettings()
 		const stored = await enqueuePost({
+			id,
 			author: isAuthenticated && userId !== null ? userId : isAuthResolved ? 'anon' : 'unknown',
 			text: postText,
 			visibility: isAuthenticated ? visibility : null,
@@ -424,7 +430,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			try {
 				const prepared = await prepareMediaFile()
 				if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
-					toast.error('This file is too big to queue (100 MB limit).')
+					toast.error(MEDIA_CAP_TOAST)
 					return
 				}
 				await queuePost(isDraft, prepared)
@@ -442,12 +448,18 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		// would enqueue the text without its media.
 		let prepareCompleted = false
 
+		// The live request and the fallback queue entry share one client_uuid: if the
+		// create landed but its response was lost, the flush replays instead of
+		// duplicating.
+		const clientUuid = crypto.randomUUID()
+
 		try {
 			prepared = await prepareMediaFile()
 			prepareCompleted = true
 			setSubmitStatus('submitting')
 			const newPost: CreatePostRequest = {
 				text: postText,
+				client_uuid: clientUuid,
 				media_type: prepared?.mediaType,
 				media: prepared?.file ?? null,
 				visibility: isAuthenticated ? visibility : undefined,
@@ -460,10 +472,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		} catch (error) {
 			if (error instanceof TypeError && prepareCompleted) {
 				if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
-					toast.error('This file is too big to queue (100 MB limit).')
+					toast.error(MEDIA_CAP_TOAST)
 					return
 				}
-				await queuePost(isDraft, prepared)
+				await queuePost(isDraft, prepared, clientUuid)
 			} else {
 				toast.error('Failed to create post')
 			}

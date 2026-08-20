@@ -118,7 +118,7 @@ describe('SyncStatusIndicator', () => {
 		expect(container.querySelector('.lucide-hard-drive')).toBeInTheDocument()
 	})
 
-	it('keeps the offline state ahead of local mode', () => {
+	it('keeps the offline state ahead of local mode, without promising auto-send', () => {
 		mockUseOnlineStatus.mockReturnValue(false)
 		mockUseOutbox.mockReturnValue({
 			entries: [makeEntry()],
@@ -127,12 +127,22 @@ describe('SyncStatusIndicator', () => {
 		})
 		renderIndicator()
 
-		expect(
-			screen.getByLabelText("You're offline — 1 post queued. It'll go out when you're back online.")
-		).toBeInTheDocument()
+		expect(screen.getByLabelText("You're offline — 1 post on this device.")).toBeInTheDocument()
 		expect(
 			screen.queryByLabelText('Auto-sync is off — posts stay on this device.')
 		).not.toBeInTheDocument()
+	})
+
+	it('shows plural device-only copy while offline in local mode', () => {
+		mockUseOnlineStatus.mockReturnValue(false)
+		mockUseOutbox.mockReturnValue({
+			entries: [makeEntry(), makeEntry()],
+			flushing: false,
+			syncMode: 'local',
+		})
+		renderIndicator()
+
+		expect(screen.getByLabelText("You're offline — 2 posts on this device.")).toBeInTheDocument()
 	})
 
 	it('is hidden while online and empty', () => {
