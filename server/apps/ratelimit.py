@@ -12,6 +12,7 @@ stuffing and bulk abuse, but it is not a hard global guarantee.
 """
 
 import logging
+import math
 import time
 from functools import wraps
 
@@ -74,6 +75,17 @@ def json_rate_limited_response(request):
     return JsonResponse({'error': RATE_LIMITED_MESSAGE}, status=429)
 
 
+def _seconds_until_window_ends(now, window_seconds):
+    """How long the caller must wait for a fresh allowance, rounded up.
+
+    Windows are fixed, not sliding: every counter in a window expires together
+    at the next multiple of ``window_seconds``, so the wait is exact rather than
+    a guess. Never returns 0 — a Retry-After of 0 invites an immediate retry
+    that would just be rejected again.
+    """
+    return max(1, math.ceil(window_seconds - (now % window_seconds)))
+
+
 def rate_limit(scope, limit, window_seconds, limited_response=json_rate_limited_response):
     """Reject requests with a 429 once a client exceeds `limit` per window.
 
@@ -82,6 +94,10 @@ def rate_limit(scope, limit, window_seconds, limited_response=json_rate_limited_
     renders HTML must pass one that matches: served the default, a reader who
     reloads a share page too quickly gets a raw JSON blob in their browser
     window, which reads as a broken site rather than as "wait a moment".
+
+    Every rejection carries ``Retry-After``. Without it a well-behaved client or
+    crawler has nothing to back off on and keeps retrying at its own cadence,
+    which is the load the limiter is trying to shed.
     """
 
     def decorator(view_func):
@@ -95,7 +111,8 @@ def rate_limit(scope, limit, window_seconds, limited_response=json_rate_limited_
                 else DEFAULT_CACHE_ALIAS
             )
             cache = caches[alias]
-            window = int(_now() / window_seconds)
+            now = _now()
+            window = int(now / window_seconds)
             key = f'rate-limit:{scope}:{get_client_ip(request)}:{window}'
             if cache.add(key, 1, timeout=window_seconds):
                 count = 1
@@ -107,7 +124,9 @@ def rate_limit(scope, limit, window_seconds, limited_response=json_rate_limited_
                     count = 1
                     cache.add(key, 1, timeout=window_seconds)
             if count > limit:
-                return limited_response(request)
+                response = limited_response(request)
+                response['Retry-After'] = str(_seconds_until_window_ends(now, window_seconds))
+                return response
             return view_func(request, *args, **kwargs)
 
         return wrapper

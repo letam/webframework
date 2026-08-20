@@ -318,6 +318,14 @@ class PostDetailRateLimitTests(ViewTestCase):
         self.assertEqual(response['Content-Type'], 'application/json')
         self.assertIn('error', json.loads(response.content))
 
+    def test_a_throttled_reader_is_told_when_to_come_back(self):
+        """Frozen on a window boundary, so the whole 60-second window remains."""
+        self._spend_the_budget()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response['Retry-After'], '60')
+
     def test_rejecting_a_request_touches_no_database(self):
         """A rejection has to be cheaper than the request it replaces.
 
