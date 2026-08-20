@@ -168,6 +168,7 @@ class CspHashTests(BaseTestCase):
             settings.BASE_DIR / 'templates' / 'shared' / 'base.html',
             settings.BASE_DIR / 'templates' / 'shared' / 'header.html',
             settings.BASE_DIR / 'apps' / 'blogs' / 'templates' / 'blogs' / 'post_detail.html',
+            settings.BASE_DIR / 'apps' / 'blogs' / 'templates' / 'blogs' / 'rate_limited.html',
             # Production serves website/dist/index.html, built from app/index.html.
             # apps/website/templates/website/index.html is intentionally absent: it is
             # DEBUG-only, and the DEBUG CSP branch uses UNSAFE_INLINE, so its hashes

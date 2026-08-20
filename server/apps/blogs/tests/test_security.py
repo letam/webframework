@@ -9,7 +9,7 @@ from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured
 from django.core.files.base import ContentFile
-from django.test import SimpleTestCase, override_settings
+from django.test import Client, SimpleTestCase, override_settings
 from django.urls import reverse
 from django.utils.module_loading import import_string
 from rest_framework.test import APIClient
@@ -262,3 +262,77 @@ class S3ConfigurationTests(SimpleTestCase):
         """
         backend = import_string(django_settings.S3_MEDIA_STORAGE_BACKEND)
         self.assertTrue(issubclass(backend, GuardedS3Boto3Storage))
+
+
+class PostDetailRateLimitTests(ViewTestCase):
+    """The share page is HTML, so being throttled has to look like HTML too.
+
+    Time is frozen for the same reason as the auth suite's rate-limit tests: the
+    limiter buckets on `int(time.time() / window)`, so a run that straddles a
+    boundary starts counting again and the request meant to be throttled sails
+    through. See RateLimitTests in apps/auth/tests.py.
+    """
+
+    POST_DETAIL_LIMIT = 120
+
+    def setUp(self):
+        """Publish a post, freeze the rate-limit window, and take a fresh client."""
+        super().setUp()
+        self.author = User.objects.create_user(username='sharer', password='testpass123')
+        self.post = Post.objects.create(author=self.author, head='Shared', body='Body')
+        self.url = reverse('post_detail', args=[self.post.id])
+        self.client = Client()
+        frozen_time = mock.patch('apps.ratelimit._now', return_value=1_800_000_000.0)
+        frozen_time.start()
+        self.addCleanup(frozen_time.stop)
+
+    def _spend_the_budget(self):
+        """Use up the window's allowance so the next request is throttled.
+
+        Requested as JSON deliberately: the counter is keyed on scope and IP
+        alone, so these still fill the same bucket, and the JSON branch skips
+        view recording and template rendering — 120 rendered pages per test is a
+        slow way to arrive at the same state.
+        """
+        for _ in range(self.POST_DETAIL_LIMIT):
+            response = self.client.get(self.url, HTTP_ACCEPT='application/json')
+            self.assertEqual(response.status_code, 200, 'Requests within the limit pass through')
+
+    def test_throttled_browser_request_gets_an_html_page(self):
+        """A reader who reloads too fast should get a page, not a JSON blob."""
+        self._spend_the_budget()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 429)
+        self.assertIn('text/html', response['Content-Type'])
+        self.assertContains(response, 'Too many requests', status_code=429)
+
+    def test_throttled_json_request_still_gets_json(self):
+        """Clients on the JSON contract keep getting JSON when throttled."""
+        self._spend_the_budget()
+
+        response = self.client.get(self.url, HTTP_ACCEPT='application/json')
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response['Content-Type'], 'application/json')
+        self.assertIn('error', json.loads(response.content))
+
+    def test_rejecting_a_request_touches_no_database(self):
+        """A rejection has to be cheaper than the request it replaces.
+
+        This is the reason the 429 template is standalone rather than extending
+        shared/base.html: that base includes a header evaluating
+        `user.is_authenticated`, which forces the lazy `request.user` and — for
+        any request carrying a sessionid, as this signed-in client does — buys a
+        session SELECT on the exact path that exists to shed load. Rendering the
+        page is free; going to the database for it is not.
+        """
+        self.client.force_login(self.author)
+        self._spend_the_budget()
+
+        with self.assertNumQueries(0):
+            response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 429)
+        self.assertContains(response, 'Too many requests', status_code=429)

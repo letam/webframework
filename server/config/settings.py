@@ -720,6 +720,7 @@ else:
                 "'sha256-GWweojyzwwt2WuqsMmaOTzMtCkOvLHnP8sc9dK1mDVo='",  # shared/base.html
                 "'sha256-IRlJG500ORUkBOhtvOMpg7SkjvGWHfulUZyeuTyhpVE='",  # blogs/post_detail.html
                 "'sha256-c2svKMHHIytNvecMVUzr4RNy61AT1b0sYT937DFULOk='",  # shared/header.html
+                "'sha256-v1embGqtcODRQZIc/2fDHxTufPf+4ME9OkfDU3ps8Hc='",  # blogs/rate_limited.html
             ],
             'connect-src': [SELF, 'http://127.0.0.1:8000'],
         }

@@ -66,8 +66,23 @@ def get_client_ip(request):
     return request.META.get('REMOTE_ADDR', 'unknown')
 
 
-def rate_limit(scope, limit, window_seconds):
-    """Reject requests with a 429 once a client exceeds `limit` per window."""
+RATE_LIMITED_MESSAGE = 'Too many requests. Please try again later.'
+
+
+def json_rate_limited_response(request):
+    """The default 429 body: JSON, which is what every fetch()-called view wants."""
+    return JsonResponse({'error': RATE_LIMITED_MESSAGE}, status=429)
+
+
+def rate_limit(scope, limit, window_seconds, limited_response=json_rate_limited_response):
+    """Reject requests with a 429 once a client exceeds `limit` per window.
+
+    ``limited_response`` builds the rejection. It defaults to JSON, correct for
+    the auth and upload endpoints the frontend calls with fetch(). A view that
+    renders HTML must pass one that matches: served the default, a reader who
+    reloads a share page too quickly gets a raw JSON blob in their browser
+    window, which reads as a broken site rather than as "wait a moment".
+    """
 
     def decorator(view_func):
         @wraps(view_func)
@@ -92,9 +107,7 @@ def rate_limit(scope, limit, window_seconds):
                     count = 1
                     cache.add(key, 1, timeout=window_seconds)
             if count > limit:
-                return JsonResponse(
-                    {'error': 'Too many requests. Please try again later.'}, status=429
-                )
+                return limited_response(request)
             return view_func(request, *args, **kwargs)
 
         return wrapper

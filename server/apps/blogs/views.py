@@ -41,7 +41,12 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from werkzeug.http import parse_range_header
 
-from apps.ratelimit import get_client_ip, rate_limit
+from apps.ratelimit import (
+    RATE_LIMITED_MESSAGE,
+    get_client_ip,
+    json_rate_limited_response,
+    rate_limit,
+)
 from apps.throttling import IpScopedRateThrottle, IpUserRateThrottle
 from apps.uploads.s3 import (
     ALLOWED_CONTENT_TYPE_RE,
@@ -1075,7 +1080,31 @@ def _link_preview_meta(preview):
     return ' · '.join(part for part in parts if part)
 
 
-@rate_limit('post_detail', limit=120, window_seconds=60)
+def _post_detail_rate_limited(request):
+    """Build post_detail's 429 in the shape the caller asked for.
+
+    Mirrors the view's own Accept negotiation below: an `application/json`
+    client is on the API contract and gets JSON, and everyone else — a reader
+    who reloaded the share page a few too many times, a crawler — gets a page.
+    The default JSON body would render as a raw blob in a browser window, which
+    looks like a broken site rather than like "try again in a minute".
+    """
+    if 'application/json' in request.META.get('HTTP_ACCEPT', ''):
+        return json_rate_limited_response(request)
+    return render(
+        request,
+        'blogs/rate_limited.html',
+        {'message': RATE_LIMITED_MESSAGE},
+        status=429,
+    )
+
+
+@rate_limit(
+    'post_detail',
+    limit=120,
+    window_seconds=60,
+    limited_response=_post_detail_rate_limited,
+)
 def post_detail(request, post_id):
     """View for individual post detail pages.
 
