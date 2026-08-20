@@ -24,6 +24,12 @@ describe('settings utilities', () => {
 		expect(getSettings().autoTranscribe).toBe(true)
 	})
 
+	it('persists post sync default updates', () => {
+		updateSettings({ postSyncDefault: 'remember' })
+
+		expect(getSettings().postSyncDefault).toBe('remember')
+	})
+
 	it('merges defaults into stored settings missing newer keys', () => {
 		localStorage.setItem(
 			'app-settings',
@@ -36,6 +42,7 @@ describe('settings utilities', () => {
 			autoTranscribe: false,
 			linkPreviews: true,
 			showLinkPreviews: true,
+			postSyncDefault: 'remember',
 		})
 	})
 })

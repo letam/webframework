@@ -9,6 +9,7 @@ export interface AppSettings {
 	linkPreviews: boolean
 	showLinkPreviews: boolean
 	saveComposerDrafts: boolean
+	postSyncDefault: 'auto' | 'local' | 'remember'
 }
 
 // Determine if audio normalization should be enabled by default
@@ -26,6 +27,10 @@ const defaultSettings: AppSettings = {
 	// On by default: the cost of an unwanted restore is one click, the cost of a
 	// lost recording is the recording.
 	saveComposerDrafts: true,
+	// 'remember', not 'auto': an 'auto' default would reset the composer's sync
+	// mode on reload and the mount flush would silently publish posts the user
+	// explicitly held on this device.
+	postSyncDefault: 'remember',
 }
 
 export const getSettings = (): AppSettings => {

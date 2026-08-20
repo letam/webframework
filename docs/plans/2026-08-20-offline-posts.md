@@ -619,3 +619,18 @@ Phase 3:
   flush instead of burning a doomed attempt.
 - Draft-ness is not restored on Edit (spec-pinned): the composer has no draft slot; the user
   re-chooses at submit.
+
+Phase 4:
+
+- Resolution moved from provider mount to engine module init, via a pure exported
+  `resolveInitialSyncMode()` (reads the setting; `'remember'` → the stored `'post-sync-mode'`
+  history, fallback auto; no writes, no flush). Mount-time resolution through `setSyncMode`
+  would have persisted the *default* into `'post-sync-mode'` on every app start, destroying
+  the history "Remember my last choice" exists to read — and phase 3's module-init read
+  would have rendered the wrong mode until the provider effect ran.
+- `postSyncDefault` defaults to `'remember'`, not the spec-pinned `'auto'`. The phase-3 e2e
+  reload test exposed the harm: with an `'auto'` default, reloading resets the mode and the
+  provider's mount flush silently publishes posts the user explicitly held on this device.
+  `'remember'` keeps the shipped phase 1–3 behavior exactly (offline posts composed in auto
+  mode still auto-send across reloads — offline composing never flips the mode), while
+  `'auto'`/`'local'` remain available in Settings for users who want a pinned start mode.

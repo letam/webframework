@@ -11,6 +11,7 @@ import {
 	getOutboxSnapshot,
 	handleOutboxOnline,
 	removeEntry,
+	resolveInitialSyncMode,
 	retryEntry,
 	setSyncMode,
 	subscribeOutbox,
@@ -85,34 +86,75 @@ const enqueueText = (overrides: Partial<Parameters<typeof enqueuePost>[0]> = {})
 
 describe('outbox sync mode initialization', () => {
 	afterEach(() => {
+		localStorage.removeItem('app-settings')
 		localStorage.removeItem('post-sync-mode')
 		vi.restoreAllMocks()
 	})
 
 	it.each([
-		['local', 'local'],
-		['auto', 'auto'],
-		['unexpected', 'auto'],
-	] as const)('initializes %s storage as %s mode', async (stored, expected) => {
+		['auto', 'auto', 'local'],
+		['local', 'local', 'auto'],
+	] as const)('resolves the %s setting as %s regardless of stored %s history', (setting, expected, stored) => {
+		localStorage.setItem('app-settings', JSON.stringify({ postSyncDefault: setting }))
 		localStorage.setItem('post-sync-mode', stored)
+
+		expect(resolveInitialSyncMode()).toBe(expected)
+	})
+
+	it('resolves remember to local when the stored history is local', () => {
+		localStorage.setItem('app-settings', JSON.stringify({ postSyncDefault: 'remember' }))
+		localStorage.setItem('post-sync-mode', 'local')
+
+		expect(resolveInitialSyncMode()).toBe('local')
+	})
+
+	it('honors stored history with no stored settings (the remember default)', () => {
+		localStorage.setItem('post-sync-mode', 'local')
+
+		expect(resolveInitialSyncMode()).toBe('local')
+	})
+
+	it('resolves remember to auto when stored history is absent', () => {
+		localStorage.setItem('app-settings', JSON.stringify({ postSyncDefault: 'remember' }))
+
+		expect(resolveInitialSyncMode()).toBe('auto')
+	})
+
+	it('resolves remember to auto when stored history is unexpected', () => {
+		localStorage.setItem('app-settings', JSON.stringify({ postSyncDefault: 'remember' }))
+		localStorage.setItem('post-sync-mode', 'unexpected')
+
+		expect(resolveInitialSyncMode()).toBe('auto')
+	})
+
+	it('never persists stored history while resolving', () => {
+		localStorage.setItem('app-settings', JSON.stringify({ postSyncDefault: 'remember' }))
+		localStorage.setItem('post-sync-mode', 'local')
+		const storageWrite = vi.spyOn(Storage.prototype, 'setItem')
+
+		expect(resolveInitialSyncMode()).toBe('local')
+		expect(storageWrite).not.toHaveBeenCalled()
+	})
+
+	it('uses the resolved setting for the module snapshot', async () => {
+		localStorage.setItem('app-settings', JSON.stringify({ postSyncDefault: 'local' }))
+		localStorage.setItem('post-sync-mode', 'auto')
 		vi.resetModules()
 
 		const freshOutbox = await import('@/lib/outbox')
 
-		expect(freshOutbox.getOutboxSnapshot().syncMode).toBe(expected)
+		expect(freshOutbox.getOutboxSnapshot().syncMode).toBe('local')
 		freshOutbox.__resetOutboxForTests()
 	})
 
-	it('falls back to auto when storage cannot be read', async () => {
-		vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-			throw new Error('blocked')
+	it('falls back to auto when stored history cannot be read', () => {
+		const storedSettings = JSON.stringify({ postSyncDefault: 'remember' })
+		vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => {
+			if (key === 'post-sync-mode') throw new Error('blocked')
+			return key === 'app-settings' ? storedSettings : null
 		})
-		vi.resetModules()
 
-		const freshOutbox = await import('@/lib/outbox')
-
-		expect(freshOutbox.getOutboxSnapshot().syncMode).toBe('auto')
-		freshOutbox.__resetOutboxForTests()
+		expect(resolveInitialSyncMode()).toBe('auto')
 	})
 })
 

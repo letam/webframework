@@ -4,6 +4,7 @@ import { createPost, transcribePost } from '@/lib/api/posts'
 import { ApiError } from '@/lib/api/errors'
 import { applyCreatedPostToCaches } from '@/hooks/usePosts'
 import { clearCsrfTokenCache } from '@/lib/utils/fetch'
+import { getSettings } from '@/lib/utils/settings'
 import {
 	deleteOutboxEntry,
 	loadOutboxEntries,
@@ -50,7 +51,16 @@ const getInitialSyncMode = (): SyncMode => {
 	}
 }
 
-let snapshot: OutboxSnapshot = { entries: [], flushing: false, syncMode: getInitialSyncMode() }
+export const resolveInitialSyncMode = (): SyncMode => {
+	const postSyncDefault = getSettings().postSyncDefault
+	return postSyncDefault === 'remember' ? getInitialSyncMode() : postSyncDefault
+}
+
+let snapshot: OutboxSnapshot = {
+	entries: [],
+	flushing: false,
+	syncMode: resolveInitialSyncMode(),
+}
 let dependencies: OutboxDependencies | null = null
 let retryTimer: number | undefined
 let retryIndex = 0
