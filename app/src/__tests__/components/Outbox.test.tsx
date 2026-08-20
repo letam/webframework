@@ -9,6 +9,8 @@ const mockUseAuth = vi.hoisted(() => vi.fn())
 const mockUseOutbox = vi.hoisted(() => vi.fn())
 const mockRemoveEntry = vi.hoisted(() => vi.fn())
 const mockRetryEntry = vi.hoisted(() => vi.fn())
+const mockCreateObjectURL = vi.hoisted(() => vi.fn(() => 'blob:queued-media'))
+const mockRevokeObjectURL = vi.hoisted(() => vi.fn())
 const mockToast = vi.hoisted(() =>
 	Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn(), info: vi.fn() })
 )
@@ -42,6 +44,14 @@ const makeEntry = (overrides: Partial<OutboxEntry> = {}): OutboxEntry => ({
 describe('OutboxCard', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
+		Object.defineProperty(URL, 'createObjectURL', {
+			configurable: true,
+			value: mockCreateObjectURL,
+		})
+		Object.defineProperty(URL, 'revokeObjectURL', {
+			configurable: true,
+			value: mockRevokeObjectURL,
+		})
 		mockUseAuth.mockReturnValue({
 			isAuthenticated: true,
 			username: 'tam',
@@ -97,6 +107,22 @@ describe('OutboxCard', () => {
 
 		await waitFor(() => expect(mockRemoveEntry).toHaveBeenCalledWith(entry.id))
 		expect(mockToast).toHaveBeenCalledWith('Removed.')
+	})
+
+	it('renders an image preview and revokes its object URL on unmount', async () => {
+		const media = new Blob(['image'], { type: 'image/png' })
+		const { unmount } = render(
+			<OutboxCard entry={makeEntry({ media, mediaName: 'queued.png', mediaType: 'image' })} />
+		)
+
+		const preview = await screen.findByTestId('outbox-media-preview')
+		expect(
+			within(preview).getByRole('img', { name: 'Queued attachment: queued.png' })
+		).toHaveAttribute('src', 'blob:queued-media')
+		expect(mockCreateObjectURL).toHaveBeenCalledWith(media)
+
+		unmount()
+		expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:queued-media')
 	})
 })
 

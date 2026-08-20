@@ -7,6 +7,7 @@ import { saveComposerDraft } from '@/lib/utils/composerDraft'
 
 const mockUseAuth = vi.hoisted(() => vi.fn())
 const mockEnqueuePost = vi.hoisted(() => vi.fn())
+const mockConvertWavToWebM = vi.hoisted(() => vi.fn())
 const mockToast = vi.hoisted(() =>
 	Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn(), info: vi.fn() })
 )
@@ -17,6 +18,7 @@ vi.mock('@/hooks/useAuth', () => ({
 
 vi.mock('@/lib/outbox', () => ({
 	enqueuePost: mockEnqueuePost,
+	MAX_QUEUED_MEDIA_BYTES: 100 * 1024 * 1024,
 }))
 
 // jsdom has no IndexedDB, and what these tests are about is whether the composer
@@ -39,6 +41,29 @@ vi.mock('@/components/ui/sonner', () => ({
 	toast: mockToast,
 }))
 
+vi.mock('@/lib/utils/audio', () => ({
+	convertWavToWebM: mockConvertWavToWebM,
+	getAudioExtension: () => 'wav',
+}))
+
+vi.mock('@/components/post/create/AudioRecorder', () => ({
+	AudioRecorderModal: ({
+		open,
+		onAudioCaptured,
+	}: {
+		open: boolean
+		onAudioCaptured: (blob: Blob) => void
+	}) =>
+		open ? (
+			<button
+				type="button"
+				onClick={() => onAudioCaptured(new Blob(['recording'], { type: 'audio/wav' }))}
+			>
+				Use recording
+			</button>
+		) : null,
+}))
+
 const setOnline = (online: boolean) => {
 	Object.defineProperty(navigator, 'onLine', { configurable: true, value: online })
 }
@@ -49,12 +74,20 @@ describe('CreatePost', () => {
 		setOnline(true)
 		// isAuthResolved matters: the composer only autosaves drafts once auth has
 		// actually answered, so a mock without it silently opts these out.
+		Object.defineProperty(URL, 'createObjectURL', {
+			configurable: true,
+			value: vi.fn(() => 'blob:preview'),
+		})
+		Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
 		mockUseAuth.mockReturnValue({
 			isAuthenticated: true,
 			isAuthResolved: true,
 			userId: 7,
 		})
 		mockEnqueuePost.mockResolvedValue(true)
+		mockConvertWavToWebM.mockResolvedValue(
+			new Blob(['converted'], { type: 'audio/webm;codecs=opus' })
+		)
 	})
 
 	it('submits the selected visibility', async () => {
@@ -211,25 +244,70 @@ describe('CreatePost', () => {
 		)
 	})
 
-	it('keeps an offline media post in the composer behind the phase-one guard', async () => {
+	it('queues an attached image offline and clears the composer', async () => {
 		setOnline(false)
-		Object.defineProperty(URL, 'createObjectURL', {
-			configurable: true,
-			value: vi.fn(() => 'blob:1'),
-		})
-		Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
 		const user = userEvent.setup()
 		const onPostCreated = vi.fn()
-		const { container } = render(<CreatePost onPostCreated={onPostCreated} />)
+		render(<CreatePost onPostCreated={onPostCreated} />)
 		const file = new File(['image'], 'queued.png', { type: 'image/png' })
 
-		await user.upload(container.querySelector('input[accept="image/*"]') as HTMLInputElement, file)
+		await user.upload(screen.getByTestId('composer-image-input'), file)
 		await user.click(screen.getByRole('button', { name: 'Post' }))
 
-		expect(mockEnqueuePost).not.toHaveBeenCalled()
+		await waitFor(() => expect(mockEnqueuePost).toHaveBeenCalledTimes(1))
+		expect(mockEnqueuePost).toHaveBeenCalledWith(
+			expect.objectContaining({
+				media: file,
+				mediaName: 'queued.png',
+				mediaType: 'image',
+			})
+		)
 		expect(onPostCreated).not.toHaveBeenCalled()
-		expect(screen.getByText('queued.png')).toBeInTheDocument()
-		expect(toast.error).toHaveBeenCalledWith("You're offline — media posts can't be queued yet.")
+		expect(screen.queryByText('queued.png')).not.toBeInTheDocument()
+		expect(screen.getByPlaceholderText("What's on your mind?")).toHaveValue('')
+	})
+
+	it('keeps an oversized offline image in the composer and does not queue it', async () => {
+		setOnline(false)
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+		const composer = screen.getByPlaceholderText("What's on your mind?")
+		const file = new File(['image'], 'oversized.png', { type: 'image/png' })
+		Object.defineProperty(file, 'size', { value: 100 * 1024 * 1024 + 1 })
+
+		await user.type(composer, 'Keep all of this')
+		await user.upload(screen.getByTestId('composer-image-input'), file)
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith('This file is too big to queue (100 MB limit).')
+		)
+		expect(mockEnqueuePost).not.toHaveBeenCalled()
+		expect(composer).toHaveValue('Keep all of this')
+		expect(screen.getByText('oversized.png')).toBeInTheDocument()
+	})
+
+	it('converts normalized recorded audio before queueing it offline', async () => {
+		setOnline(false)
+		localStorage.setItem(
+			'app-settings',
+			JSON.stringify({ normalizeAudio: true, saveComposerDrafts: false })
+		)
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Use recording' }))
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+
+		await waitFor(() => expect(mockConvertWavToWebM).toHaveBeenCalledTimes(1))
+		await waitFor(() => expect(mockEnqueuePost).toHaveBeenCalledTimes(1))
+		const queued = mockEnqueuePost.mock.calls[0][0]
+		expect(queued.mediaType).toBe('audio')
+		expect(queued.media).toBeInstanceOf(File)
+		expect(queued.media).toEqual(expect.objectContaining({ type: 'audio/webm;codecs=opus' }))
+		expect(queued.media.name).toMatch(/^recording_\d+\.webm$/)
+		expect(queued.mediaName).toBe(queued.media.name)
 	})
 
 	it('falls back to the outbox when an online create throws TypeError', async () => {
@@ -261,5 +339,21 @@ describe('CreatePost', () => {
 			expect(toast.error).toHaveBeenCalledWith("Couldn't save this post on this device.")
 		)
 		expect(composer).toHaveValue('Only copy')
+	})
+
+	it('keeps media and shows the quota copy when media enqueue storage fails', async () => {
+		setOnline(false)
+		mockEnqueuePost.mockResolvedValueOnce(false)
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+		const file = new File(['image'], 'only-copy.png', { type: 'image/png' })
+
+		await user.upload(screen.getByTestId('composer-image-input'), file)
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+
+		await waitFor(() =>
+			expect(toast.error).toHaveBeenCalledWith("Couldn't queue this post — device storage is full.")
+		)
+		expect(screen.getByText('only-copy.png')).toBeInTheDocument()
 	})
 })

@@ -54,6 +54,23 @@ describe('outbox storage', () => {
 		expect(await getOutboxEntry(entry.id)).toBeNull()
 	})
 
+	it('round-trips media metadata', async () => {
+		const media = new Blob(['queued image'], { type: 'image/png' })
+		const entry = makeEntry({
+			media,
+			mediaType: 'image',
+			mediaName: 'queued.png',
+		})
+
+		expect(await saveOutboxEntry(entry)).toBe(true)
+		const [loaded] = await loadOutboxEntries()
+
+		expect(loaded?.mediaType).toBe('image')
+		expect(loaded?.mediaName).toBe('queued.png')
+		// Byte fidelity is covered by e2e because fake-indexeddb under jsdom does not preserve Blob
+		// contents; this unit test deliberately pins only the Blob's outbox metadata.
+	})
+
 	it('recovers sending entries to queued on load', async () => {
 		const entry = makeEntry({ status: 'sending' })
 		await saveOutboxEntry(entry)

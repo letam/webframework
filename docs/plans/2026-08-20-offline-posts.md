@@ -581,3 +581,18 @@ per-finding refutation workflow); each amends what the spec originally pinned:
 - The display-side visibility predicate (`useOutbox` → `getVisibleOutboxEntries`) had no
   unmocked test coverage — the filter could be deleted with every test staying green. A
   real-engine `useOutbox` hook test now pins both the authenticated and signed-out filters.
+
+Phase 2:
+
+- A `TypeError` raised *during* media preparation (WAV→WebM conversion) is not a network drop,
+  and treating it as one would queue the text with its media silently stripped. Both queue
+  paths now enqueue only after preparation completes (`prepareCompleted` guard on the online
+  fallback, a catch on the offline branch); a preparation failure surfaces the generic
+  create-failure toast with composer state kept.
+- The spec's quota-failure copy ("device storage is full") is used only when the entry carries
+  media; text-only enqueue failures keep phase 1's generic copy. IDB reports no distinct quota
+  error through the outbox layer, and a text-only entry failing to store is almost never a
+  quota problem.
+- The queued card's status/Draft chip row moved from the header cluster to below the text and
+  media preview, so status sits next to the error line it explains; media previews made the
+  header placement cramped. The image alt text carries the stored filename.

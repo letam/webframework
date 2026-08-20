@@ -11,6 +11,9 @@ import {
 	type OutboxEntry,
 } from '@/lib/utils/outboxDb'
 
+// Mirrors MAX_MEDIA_UPLOAD_BYTES in server/config/settings.py.
+export const MAX_QUEUED_MEDIA_BYTES = 100 * 1024 * 1024
+
 export type SyncMode = 'auto' | 'local'
 
 export type EnqueueInput = Omit<

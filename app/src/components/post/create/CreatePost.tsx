@@ -23,7 +23,7 @@ import { modifierKeyLabel } from '@/lib/utils/browser'
 import { useAuth } from '@/hooks/useAuth'
 import { useComposerDraft } from '@/hooks/useComposerDraft'
 import type { ComposerDraft } from '@/lib/utils/composerDraft'
-import { enqueuePost } from '@/lib/outbox'
+import { enqueuePost, MAX_QUEUED_MEDIA_BYTES } from '@/lib/outbox'
 
 interface CreatePostProps {
 	onPostCreated: (post: CreatePostRequest) => Promise<void> | void
@@ -274,7 +274,56 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		textareaRef.current?.focus()
 	}
 
-	const queueTextPost = async (isDraft: boolean) => {
+	const prepareMediaFile = async (): Promise<{
+		mediaType: 'audio' | 'video' | 'image'
+		file: File
+	} | null> => {
+		let finalMediaType: 'audio' | 'video' | 'image' | undefined
+		let file: File | null = null
+
+		if (mediaType === 'audio' && (audioBlob || audioFile)) {
+			const blob = audioFile || audioBlob
+			if (blob) {
+				finalMediaType = 'audio'
+				if (!(blob instanceof File)) {
+					// Only convert to WebM if normalization is enabled (since normalization converts the blob to WAV)
+					if (getSettings().normalizeAudio) {
+						setSubmitStatus('compressing')
+						const webmBlob = await convertWavToWebM(blob)
+						file = new File([webmBlob], `recording_${Date.now()}.webm`, {
+							type: 'audio/webm;codecs=opus',
+						})
+					} else {
+						const extension = getMediaExtension(blob.type, 'audio')
+						file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
+					}
+				} else {
+					file = blob
+				}
+			}
+		} else if (mediaType === 'video' && (videoBlob || videoFile)) {
+			const blob = videoFile || videoBlob
+			if (blob) {
+				finalMediaType = 'video'
+				if (!(blob instanceof File)) {
+					const extension = getMediaExtension(blob.type, 'video')
+					file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
+				} else {
+					file = blob
+				}
+			}
+		} else if (mediaType === 'image' && imageFile) {
+			finalMediaType = 'image'
+			file = imageFile
+		}
+
+		return finalMediaType && file ? { mediaType: finalMediaType, file } : null
+	}
+
+	const queuePost = async (
+		isDraft: boolean,
+		media: { mediaType: 'audio' | 'video' | 'image'; file: File } | null
+	) => {
 		const settings = getSettings()
 		const stored = await enqueuePost({
 			author: isAuthenticated && userId !== null ? userId : isAuthResolved ? 'anon' : 'unknown',
@@ -283,13 +332,17 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			isDraft,
 			linkPreviewsEnabled: settings.linkPreviews,
 			autoTranscribe: settings.autoTranscribe && isAuthenticated,
-			mediaType: null,
-			media: null,
-			mediaName: null,
+			mediaType: media?.mediaType ?? null,
+			media: media?.file ?? null,
+			mediaName: media?.file.name ?? null,
 		})
 
 		if (!stored) {
-			toast.error("Couldn't save this post on this device.")
+			toast.error(
+				media
+					? "Couldn't queue this post — device storage is full."
+					: "Couldn't save this post on this device."
+			)
 			return
 		}
 
@@ -322,13 +375,16 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		}
 
 		if (!navigator.onLine) {
-			if (!hasNoMedia) {
-				toast.error("You're offline — media posts can't be queued yet.")
-				return
-			}
-			setSubmitStatus('submitting')
+			setSubmitStatus('preparing')
 			try {
-				await queueTextPost(isDraft)
+				const prepared = await prepareMediaFile()
+				if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
+					toast.error('This file is too big to queue (100 MB limit).')
+					return
+				}
+				await queuePost(isDraft, prepared)
+			} catch {
+				toast.error('Failed to create post')
 			} finally {
 				setSubmitStatus('')
 			}
@@ -336,52 +392,19 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		}
 
 		setSubmitStatus('preparing')
+		let prepared: { mediaType: 'audio' | 'video' | 'image'; file: File } | null = null
+		// A TypeError thrown *during* preparation is not a network drop; queueing then
+		// would enqueue the text without its media.
+		let prepareCompleted = false
 
 		try {
-			let finalMediaType: 'audio' | 'video' | 'image' | undefined
-			let file: File | null = null
-
-			if (mediaType === 'audio' && (audioBlob || audioFile)) {
-				const blob = audioFile || audioBlob
-				if (blob) {
-					finalMediaType = 'audio'
-					if (!(blob instanceof File)) {
-						// Only convert to WebM if normalization is enabled (since normalization converts the blob to WAV)
-						if (getSettings().normalizeAudio) {
-							setSubmitStatus('compressing')
-							const webmBlob = await convertWavToWebM(blob)
-							file = new File([webmBlob], `recording_${Date.now()}.webm`, {
-								type: 'audio/webm;codecs=opus',
-							})
-						} else {
-							const extension = getMediaExtension(blob.type, 'audio')
-							file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
-						}
-					} else {
-						file = blob
-					}
-				}
-			} else if (mediaType === 'video' && (videoBlob || videoFile)) {
-				const blob = videoFile || videoBlob
-				if (blob) {
-					finalMediaType = 'video'
-					if (!(blob instanceof File)) {
-						const extension = getMediaExtension(blob.type, 'video')
-						file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
-					} else {
-						file = blob
-					}
-				}
-			} else if (mediaType === 'image' && imageFile) {
-				finalMediaType = 'image'
-				file = imageFile
-			}
-
+			prepared = await prepareMediaFile()
+			prepareCompleted = true
 			setSubmitStatus('submitting')
 			const newPost: CreatePostRequest = {
 				text: postText,
-				media_type: finalMediaType,
-				media: file,
+				media_type: prepared?.mediaType,
+				media: prepared?.file ?? null,
 				visibility: isAuthenticated ? visibility : undefined,
 				is_draft: isDraft || undefined,
 			}
@@ -390,12 +413,12 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			resetComposer()
 			toast.success(isDraft ? 'Saved to drafts.' : 'Post created successfully!')
 		} catch (error) {
-			if (error instanceof TypeError) {
-				if (!hasNoMedia) {
-					toast.error("You're offline — media posts can't be queued yet.")
-				} else {
-					await queueTextPost(isDraft)
+			if (error instanceof TypeError && prepareCompleted) {
+				if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
+					toast.error('This file is too big to queue (100 MB limit).')
+					return
 				}
+				await queuePost(isDraft, prepared)
 			} else {
 				toast.error('Failed to create post')
 			}
@@ -702,6 +725,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				<input
 					type="file"
 					ref={imageInputRef}
+					data-testid="composer-image-input"
 					className="hidden"
 					accept="image/*"
 					onChange={handleImageFileChange}

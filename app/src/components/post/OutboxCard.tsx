@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -33,8 +33,20 @@ const statusLabel = (entry: OutboxEntry) => {
 export const OutboxCard = ({ entry }: OutboxCardProps) => {
 	const { isAuthenticated, username, avatar } = useAuth()
 	const [removeOpen, setRemoveOpen] = useState(false)
+	const [mediaUrl, setMediaUrl] = useState<string | null>(null)
 	const identity = isAuthenticated ? (username ?? 'you') : 'anonymous'
 	const authorLabel = isAuthenticated ? `@${username ?? 'you'}` : '@anonymous'
+
+	useEffect(() => {
+		if (!entry.media) {
+			setMediaUrl(null)
+			return
+		}
+
+		const url = URL.createObjectURL(entry.media)
+		setMediaUrl(url)
+		return () => URL.revokeObjectURL(url)
+	}, [entry.media])
 
 	const handleRemove = async () => {
 		const result = await removeEntry(entry.id)
@@ -66,23 +78,6 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 							{formatShortTime(entry.createdAt)}
 						</span>
 					</div>
-					<div className="mt-1 flex flex-wrap items-center gap-1.5">
-						<span
-							className={cn(
-								'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium leading-none text-muted-foreground',
-								entry.status === 'failed' &&
-									'border-destructive/30 bg-destructive/10 text-destructive'
-							)}
-						>
-							{entry.status === 'sending' && <Loader2 className="h-3 w-3 animate-spin" />}
-							{statusLabel(entry)}
-						</span>
-						{entry.isDraft && (
-							<span className="rounded-full border px-1.5 py-0.5 text-[11px] font-medium leading-none text-muted-foreground">
-								Draft
-							</span>
-						)}
-					</div>
 				</div>
 			</div>
 
@@ -91,6 +86,45 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 					{entry.text}
 				</p>
 			)}
+
+			{entry.media && entry.mediaType && mediaUrl && (
+				<div className="mt-3 w-full" data-testid="outbox-media-preview">
+					{entry.mediaType === 'image' && (
+						<img
+							src={mediaUrl}
+							alt={entry.mediaName ? `Queued attachment: ${entry.mediaName}` : 'Queued attachment'}
+							className="max-h-64 w-full rounded-md bg-black object-contain"
+						/>
+					)}
+					{entry.mediaType === 'audio' && (
+						<audio src={mediaUrl} controls className="w-full">
+							<track kind="captions" label="English" />
+						</audio>
+					)}
+					{entry.mediaType === 'video' && (
+						<video src={mediaUrl} controls className="max-h-64 w-full rounded-md bg-black">
+							<track kind="captions" label="English" />
+						</video>
+					)}
+				</div>
+			)}
+
+			<div className="mt-2 flex flex-wrap items-center gap-1.5">
+				<span
+					className={cn(
+						'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium leading-none text-muted-foreground',
+						entry.status === 'failed' && 'border-destructive/30 bg-destructive/10 text-destructive'
+					)}
+				>
+					{entry.status === 'sending' && <Loader2 className="h-3 w-3 animate-spin" />}
+					{statusLabel(entry)}
+				</span>
+				{entry.isDraft && (
+					<span className="rounded-full border px-1.5 py-0.5 text-[11px] font-medium leading-none text-muted-foreground">
+						Draft
+					</span>
+				)}
+			</div>
 
 			{entry.status === 'failed' && entry.lastError && (
 				<p className="mt-2 text-sm text-destructive">{entry.lastError}</p>
