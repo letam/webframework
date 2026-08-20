@@ -240,6 +240,7 @@ class Post(models.Model):
     link_previews_enabled = models.BooleanField(default=True)
     pinned_at = models.DateTimeField(null=True, blank=True)
     share_token = models.CharField(max_length=32, default=generate_share_token)
+    client_uuid = models.UUIDField(null=True, blank=True, default=None, editable=False)
 
     objects = PostQuerySet.as_manager()
 
@@ -253,6 +254,13 @@ class Post(models.Model):
         ordering = ['-created', '-id']
         indexes = [
             models.Index(fields=['-created', '-id'], name='blogs_post_feed_idx'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['author', 'client_uuid'],
+                condition=models.Q(client_uuid__isnull=False),
+                name='unique_author_client_uuid',
+            ),
         ]
 
     def __str__(self):

@@ -7,10 +7,11 @@ import os
 import tempfile
 from datetime import timedelta
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import (
     BooleanField,
     Count,
@@ -303,12 +304,35 @@ class PostViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """Save a post with the authenticated or anonymous author."""
+        serializer.save(author=self._create_author())
+
+    def _create_author(self):
+        """Resolve the author used for a create request."""
         if self.request.user.is_authenticated:
-            serializer.save(author=self.request.user)
-        else:
-            # Anonymous posts are attributed to the dedicated 'anonymous' user
-            # (created by migrations / init_users).
-            serializer.save(author=get_user_model().objects.get(username='anonymous'))
+            return self.request.user
+        # Anonymous posts are attributed to the dedicated 'anonymous' user
+        # (created by migrations / init_users).
+        return get_user_model().objects.get(username='anonymous')
+
+    def _existing_client_post(self, author, client_uuid):
+        """Return an idempotent create match when the client UUID is valid."""
+        if client_uuid in (None, ''):
+            return None
+        try:
+            parsed_uuid = UUID(str(client_uuid))
+        except (AttributeError, TypeError, ValueError):
+            return None
+        return Post.objects.filter(author=author, client_uuid=parsed_uuid).first()
+
+    def _created_post_response(self, instance, response_status):
+        """Serialize a fresh or replayed create response."""
+        response_serializer = PostSerializer(instance, context=self.get_serializer_context())
+        headers = (
+            self.get_success_headers(response_serializer.data)
+            if response_status == status.HTTP_201_CREATED
+            else {}
+        )
+        return Response(response_serializer.data, status=response_status, headers=headers)
 
     def create(self, request, *args, **kwargs):
         """Create a post and attach validated media when provided."""
@@ -321,6 +345,12 @@ class PostViewSet(viewsets.ModelViewSet):
                 {'error': 'Authentication required'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+        author = self._create_author()
+        client_uuid = request.data.get('client_uuid')
+        existing_post = self._existing_client_post(author, client_uuid)
+        if existing_post:
+            return self._created_post_response(existing_post, status.HTTP_200_OK)
 
         try:
             media_payload = self._validate_media_payload(request)
@@ -341,44 +371,45 @@ class PostViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request_data)
         serializer.is_valid(raise_exception=True)
 
-        with transaction.atomic():
-            self.perform_create(serializer)
-            post = serializer.instance
+        try:
+            with transaction.atomic():
+                serializer.save(author=author)
+                post = serializer.instance
 
-            if media_payload:
-                # Pin the Media pk to the Post pk so a direct-upload file lands
-                # under post/<post.id>/media/... on first save (media_file_path
-                # reads instance.id). This intentionally couples the two pks and
-                # lets Media.save() skip its insert-twice fallback; see the note
-                # in Media.save() for the mechanism.
-                media_kwargs = {
-                    'id': post.id,  # pyright: ignore [reportOptionalMemberAccess]
-                    'media_type': media_payload['media_type'],
-                }
-                if media_payload['source'] == 'direct':
-                    media_kwargs['file'] = media_payload['file']
-                else:
-                    media_kwargs['s3_file_key'] = media_payload['s3_file_key']
-                    media_kwargs['duration'] = media_payload['duration']
+                if media_payload:
+                    # Pin the Media pk to the Post pk so a direct-upload file lands
+                    # under post/<post.id>/media/... on first save (media_file_path
+                    # reads instance.id). This intentionally couples the two pks and
+                    # lets Media.save() skip its insert-twice fallback; see the note
+                    # in Media.save() for the mechanism.
+                    media_kwargs = {
+                        'id': post.id,  # pyright: ignore [reportOptionalMemberAccess]
+                        'media_type': media_payload['media_type'],
+                    }
+                    if media_payload['source'] == 'direct':
+                        media_kwargs['file'] = media_payload['file']
+                    else:
+                        media_kwargs['s3_file_key'] = media_payload['s3_file_key']
+                        media_kwargs['duration'] = media_payload['duration']
 
-                media = Media.objects.create(**media_kwargs)
-                post.media = media  # pyright: ignore [reportOptionalMemberAccess]
-                post.save(update_fields=['media'])  # pyright: ignore [reportOptionalMemberAccess]
-                transaction.on_commit(
-                    lambda media_id=media.pk: _enqueue_process_post_media(media_id)
-                )
+                    media = Media.objects.create(**media_kwargs)
+                    post.media = media  # pyright: ignore [reportOptionalMemberAccess]
+                    post.save(update_fields=['media'])  # pyright: ignore [reportOptionalMemberAccess]
+                    transaction.on_commit(
+                        lambda media_id=media.pk: _enqueue_process_post_media(media_id)
+                    )
 
-            if sync_link_previews(post):
-                transaction.on_commit(
-                    lambda post_id=post.pk: _enqueue_fetch_link_previews(post_id)
-                )
+                if sync_link_previews(post):
+                    transaction.on_commit(
+                        lambda post_id=post.pk: _enqueue_fetch_link_previews(post_id)
+                    )
+        except IntegrityError:
+            existing_post = self._existing_client_post(author, client_uuid)
+            if existing_post:
+                return self._created_post_response(existing_post, status.HTTP_200_OK)
+            raise
 
-        # Get the created instance and serialize it with PostSerializer
-        instance = serializer.instance
-        response_serializer = PostSerializer(instance, context=self.get_serializer_context())
-        headers = self.get_success_headers(response_serializer.data)
-
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        return self._created_post_response(serializer.instance, status.HTTP_201_CREATED)
 
     def _validate_media_payload(self, request):
         media = request.data.get('media')
