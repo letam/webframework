@@ -14,9 +14,17 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 	</QueryClientProvider>
 )
 
-const statusOk = (body: Record<string, unknown>) => ({
+const statusOk = (body: Record<string, unknown> = {}) => ({
 	ok: true,
-	json: async () => ({ is_authenticated: true, user_id: 7, username: 'ana', ...body }),
+	json: async () => ({
+		is_authenticated: true,
+		user_id: 7,
+		username: 'ana',
+		avatar: null,
+		is_staff: false,
+		is_superuser: false,
+		...body,
+	}),
 })
 
 describe('useAuth', () => {
@@ -27,10 +35,11 @@ describe('useAuth', () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks()
+		vi.unstubAllGlobals()
 	})
 
 	it('resolves both gates once /auth/status/ answers', async () => {
-		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(statusOk({})))
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(statusOk()))
 
 		const { result } = renderHook(() => useAuth(), { wrapper })
 
@@ -39,10 +48,9 @@ describe('useAuth', () => {
 		expect(result.current.userId).toBe(7)
 	})
 
-	// The distinction these two cover: `isAuthLoading` going false does NOT mean
-	// the answer is "anonymous". On a failed check `userId` sits at its null
-	// default, and anything that keys storage on it — composer drafts — would
-	// write a signed-in user's words into the shared anonymous slot.
+	// isAuthLoading going false does not mean the answer is anonymous. On a
+	// failed check userId is still its null default, so user-keyed storage must
+	// continue to gate on isAuthResolved.
 	it('leaves auth unresolved when the status request throws', async () => {
 		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
 
@@ -66,18 +74,45 @@ describe('useAuth', () => {
 		const fetchMock = vi
 			.fn()
 			.mockRejectedValueOnce(new Error('offline'))
-			.mockResolvedValue(statusOk({}))
+			.mockResolvedValue(statusOk())
 		vi.stubGlobal('fetch', fetchMock)
 
 		const { result } = renderHook(() => useAuth(), { wrapper })
 		await waitFor(() => expect(result.current.isAuthLoading).toBe(false))
-		expect(result.current.isAuthResolved).toBe(false)
 
 		await act(async () => {
-			await result.current.refreshAuthStatus()
+			expect(await result.current.refreshAuthStatus()).toBe(true)
 		})
 
 		expect(result.current.isAuthResolved).toBe(true)
 		expect(result.current.userId).toBe(7)
+	})
+
+	// The outbox flush reads getAuthSnapshot in the microtask immediately after
+	// refreshAuthStatus resolves, before React necessarily commits the new state.
+	it('exposes the refreshed identity to getAuthSnapshot before React re-renders', async () => {
+		const fetchMock = vi
+			.fn()
+			.mockRejectedValueOnce(new TypeError('offline'))
+			.mockResolvedValueOnce(statusOk())
+		vi.stubGlobal('fetch', fetchMock)
+
+		const { result } = renderHook(() => useAuth(), { wrapper })
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
+		expect(result.current.getAuthSnapshot().isAuthResolved).toBe(false)
+
+		let snapshotAtResolve: ReturnType<typeof result.current.getAuthSnapshot> | null = null
+		await act(async () => {
+			await result.current.refreshAuthStatus().then((resolved) => {
+				expect(resolved).toBe(true)
+				snapshotAtResolve = result.current.getAuthSnapshot()
+			})
+		})
+
+		expect(snapshotAtResolve).toMatchObject({
+			isAuthResolved: true,
+			isAuthenticated: true,
+			userId: 7,
+		})
 	})
 })

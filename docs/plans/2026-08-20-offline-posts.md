@@ -78,7 +78,7 @@ These were weighed deliberately; do not re-litigate them during implementation.
   order the user wrote them and avoiding throttle bursts (anon 300/h, presign 30/h/IP).
 - **Auth is a first-class problem.** `/auth/status/` fails when offline, so
   `isAuthenticated: false, userId: null` can mean "anonymous" *or* "unknown". `useAuth`
-  gains an `authStatusKnown: boolean` (false until the first `response.ok` status
+  gains an `isAuthResolved: boolean` (false until the first `response.ok` status
   fetch). Entries record who composed them (`author: number | 'anon' | 'unknown'`) and
   both display and flush are gated on that — a queued post from user A must never be
   shown to, or posted as, user B (same bug class as autosave commits e3e5dcf/e4fa6c2).
@@ -158,7 +158,7 @@ user's uuid from blocking another's. Works on both SQLite and Postgres (house pr
 
 ### Modified files
 
-`useAuth.tsx` (`authStatusKnown`), `CreatePost.tsx` (offline branch; phase 3 toggle),
+`useAuth.tsx` (`isAuthResolved`), `CreatePost.tsx` (offline branch; phase 3 toggle),
 `Feed.tsx` (mount `OutboxList`), `Navbar.tsx` (indicator in the right cluster, before
 `<ThemeToggle/>`), `App.tsx` (provider), `posts.ts` (`client_uuid` param, `ApiError`),
 `usePosts.ts` (extract `applyCreatedPostToCaches`), `types/post.ts`
@@ -189,7 +189,7 @@ export interface OutboxEntry {
 }
 ```
 
-`author` at enqueue: `userId` when authenticated; `'anon'` when `authStatusKnown` and
+`author` at enqueue: `userId` when authenticated; `'anon'` when `isAuthResolved` and
 not authenticated; `'unknown'` when auth never resolved (offline app start). An
 `'unknown'` entry was composed by whoever holds the device's session, so it syncs as
 whatever the session resolves to once we're back online.
@@ -198,10 +198,16 @@ whatever the session resolves to once we're back online.
 
 - Visible (and countable in the indicator) when: authenticated → `author === userId ||
   author === 'unknown'`; unauthenticated → `author === 'anon' || author === 'unknown'`.
-- Flush-eligible: visible **and** `authStatusKnown` is true. A flush pass triggered by
-  the `online` event calls `refreshAuthStatus()` first (this also repairs
-  `authStatusKnown` and picks up session changes that happened in other tabs); other
-  triggers refresh only if `authStatusKnown` is still false.
+- Flush-eligible: visible **and** the session identity is verified. `refreshAuthStatus()`
+  returns whether it succeeded, and the engine reads auth through a snapshot getter that
+  `useAuth` updates synchronously when the status response lands — *before* React commits
+  the new state — so a pass that runs right after a refresh resolves gates on the fresh
+  identity, not the previous render's. The `online` event marks the identity stale
+  (`authRefreshNeeded`); the next pass (and any backoff retry) must complete a successful
+  refresh before anything is sent. Other triggers refresh only when `isAuthResolved` is
+  still false. A pass that cannot verify identity sends nothing and schedules a backoff
+  retry. A login or logout (identity change with `isAuthResolved` already true) triggers
+  a flush pass of its own, since it changes which entries are visible.
 
 ### Sync engine (in `lib/outbox.ts`)
 
@@ -214,11 +220,15 @@ subscribeOutbox(cb: () => void): () => void
 getOutboxSnapshot(): { entries: OutboxEntry[]; flushing: boolean; syncMode: SyncMode }
 loadOutbox(): Promise<void> // reads IDB, repairs 'sending' → 'queued', notifies
 enqueuePost(input: EnqueueInput): Promise<boolean> // false = storage failed
-flushOutbox(): Promise<void> // full eligible pass, FIFO; no-op if already flushing
+flushOutbox(): Promise<void> // full eligible pass, FIFO; latched if a pass is running
 flushEntry(id: string): Promise<void> // manual per-entry send, ignores syncMode
 retryEntry(id: string): Promise<void> // failed → queued (attempts reset), then flushEntry
-removeEntry(id: string): Promise<void>
+removeEntry(id: string): Promise<'removed' | 'sending'> // refuses while the send is in flight
 ```
+
+A flush request that arrives while a pass holds the lock (manual retry, the backoff
+timer, an enqueue) is never dropped: its ids are latched and the still-queued ones are
+replayed when the running pass ends.
 
 Flush pass, per entry (oldest `createdAt` first, strictly sequential):
 
@@ -252,10 +262,12 @@ Flush pass, per entry (oldest `createdAt` first, strictly sequential):
    per pass, not per entry).
 
 Triggers: provider mount after `loadOutbox()` resolves; the window `online` event
-(refresh auth, then flush); `authStatusKnown` flipping true; after `enqueuePost` when
+(mark identity stale, then flush — the pass performs the refresh); `isAuthResolved`
+flipping true; any identity change (login/logout); after `enqueuePost` when
 online (covers the TypeError-fallback case where the connection blips back); manual
 retry/flush calls; phase 3's mode flip to `auto`. Backoff for network-failed passes
-while `navigator.onLine` claims true: 15s → 30s → 60s → 120s → 300s cap, reset by
+while `navigator.onLine` claims true — including a pass aborted because the identity
+check itself failed: 15s → 30s → 60s → 120s → 300s cap, reset by
 success, a real `online` event, or a manual action. When `navigator.onLine` is false,
 no timer — wait for the event. Recovery: `loadOutbox` reverts any `sending` entry to
 `queued` (the create may have landed; `client_uuid` makes the re-send safe).
@@ -347,7 +359,7 @@ no `(s)`.
   enqueues.
 - `OutboxCard` / `OutboxList` render states + retry/remove flows;
   `SyncStatusIndicator` state table.
-- `useAuth` test for `authStatusKnown` (false on fetch reject, true after ok).
+- `useAuth` test for `isAuthResolved` (false on fetch reject, true after ok).
 - Check the `vi.mock('@/lib/api/posts')` factories (`usePosts.test.tsx`,
   `usePostHandlers.test.tsx`, `SettingsPage.test.tsx` and friends) — they enumerate
   every export by hand and throw on new ones. `ApiError` deliberately lives in
@@ -355,11 +367,15 @@ no `(s)`.
 
 ### Phase 1 e2e (`app/e2e/offline-posts.spec.ts`)
 
-Follow `composer-draft.spec.ts` patterns. Simulate offline with
-`page.route('**/api/**', route => route.abort())` **and** the same for `**/auth/**` —
+Follow `composer-draft.spec.ts` patterns. Simulate offline by aborting backend calls
+with a pathname-anchored predicate —
+`page.route(url => url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/'),
+route => route.abort())` — never bare `'**/api/**'` globs (they also match the Vite dev
+server's own module URLs like `/src/lib/api/posts.ts`, so the app never loads) and
 never `context.setOffline` (it severs the Vite dev server too). Trigger reconnect by
-unrouting and `page.evaluate(() => window.dispatchEvent(new Event('online')))` — the
-engine listens to the event, so no real connectivity change is needed.
+unrouting the same predicate and `page.evaluate(() => window.dispatchEvent(new
+Event('online')))` — the engine listens to the event, so no real connectivity change
+is needed.
 
 - Compose text offline → card with `Queued` chip appears, composer clears, navbar
   shows the offline indicator; reload → card still there (IDB persistence); unroute +
@@ -501,4 +517,67 @@ bun run test:e2e              # phases with e2e additions; Django must be on :80
 Deviations from this spec found necessary during implementation are recorded here by
 the implementing/judging models.
 
-- (none yet)
+- The existing `Feed.handlePostCreated` caught and logged create failures without rethrowing them,
+  so `CreatePost` could not distinguish the pinned network-level `TypeError` fallback from a
+  successful online submit. Phase 1 now rethrows after preserving the existing log; the composer
+  still owns the existing user-facing failure toast.
+- The existing auto-transcription failure copy in `usePostHandlers` is
+  `Auto-transcription failed to start`, not `Failed to start transcription` as described above.
+  The outbox reuses the real existing copy so the two create paths remain consistent.
+- DRF treats model fields with `editable=False` as read-only, so listing `client_uuid` in
+  `PostCreateSerializer.Meta.fields` did not provide the write semantics the spec expected from
+  the model field. The create serializer declares an explicit write-only `UUIDField` with the
+  pinned optional/null behavior; the read serializer remains unchanged.
+- Playwright route interception aborts requests but does not change `navigator.onLine`, and
+  dispatching only the `offline` event desyncs the flag from the event: TanStack's onlineManager
+  (which listens to the events) then pauses the live-path mutation while the composer (which reads
+  the flag) still takes the online path — the submit hangs and nothing is enqueued. The Phase 1
+  e2e therefore overrides `navigator.onLine` via `Object.defineProperty` and dispatches the
+  matching event together, the way a real browser flips both at once; reconnect restores the flag
+  and uses the pinned `online` event.
+- The spec originally pinned `page.route('**/api/**', …)` globs for the offline simulation. Under
+  the Vite dev server those also match the app's own module URLs (`/src/lib/api/posts.ts`,
+  `/src/lib/api/auth.ts`), aborting the source files themselves so the app never mounts — found
+  when the e2e run timed out waiting for the composer. The recipe above now uses a
+  pathname-anchored predicate (`url.pathname.startsWith('/api/')` etc.), which only matches real
+  backend calls on any backend port (CI :8000, local :8100).
+
+The following entries record fixes from the phase-1 adversarial review (a 4-lens finder /
+per-finding refutation workflow); each amends what the spec originally pinned:
+
+- The spec's original online-trigger design (`refreshAuthStatus()` then flush) read the refreshed
+  identity through provider state that React commits a task *after* the refresh resolves, so the
+  first entry of every online pass was gated on the pre-refresh identity — violating the
+  never-flush-as-another-user invariant the refresh exists to defend (confirmed with an empirical
+  React 19 timing probe). `useAuth` now maintains a synchronously-written snapshot ref exposed as
+  `getAuthSnapshot()`, the engine reads auth exclusively through it, and `refreshAuthStatus()`
+  reports success. The `online` event no longer refreshes inline: it marks the identity stale and
+  the pass itself must complete a successful refresh before sending — so a failed reconnect
+  refresh sends nothing (instead of flushing on stale identity) and backoff retries re-verify.
+- A pass aborted because the identity could not be verified originally returned silently, leaving
+  a pre-existing queue stuck at 'Queued' for the whole session when `/auth/status/` failed at app
+  load. Such an abort now schedules the normal backoff retry.
+- The spec pinned `flushOutbox()` as a silent no-op while a pass is running and accepted the
+  mid-flush-enqueue gap. That also silently swallowed manual Retry clicks and the backoff timer's
+  own firing (which had just been consumed), stranding entries with no remaining trigger. Flush
+  requests that hit the lock are now latched and replayed for still-queued entries when the pass
+  ends — which incidentally closes the accepted mid-flush-enqueue gap too.
+- The provider's flush effect keyed only on `isAuthResolved`, so a login after the flag was
+  already true (the visible path: sign in via the modal with queued entries present) never
+  triggered a pass. It now keys on the identity fields as deliberate change-triggers.
+- `removeEntry` was pinned `Promise<void>` with Remove always available, but confirming removal
+  while the entry's POST was in flight deleted the local copy and let the post publish anyway,
+  back-to-back 'Removed.' and 'Synced' toasts contradicting each other. `removeEntry` now returns
+  `'sending'` without deleting when the send is in flight, and the card explains; the Remove
+  button itself stays always-rendered as pinned.
+- `getCsrfToken` called `response.json()` without an ok-check, so a transient 5xx on
+  `/auth/csrf/` surfaced as a `SyntaxError` and landed in the generic-failure branch (permanent
+  'failed'), while the identical 5xx on the create itself was retryable. It now throws a
+  status-carrying `ApiError`, putting both failures in the same taxonomy branch.
+- The indicator's `<output>` is an implicit live region whose only accessible text was the bare
+  count digit — screen readers announced context-free numbers, and label-only state changes
+  announced nothing. The digit is now `aria-hidden` and a visually-hidden copy of the label lives
+  inside the region; `aria-label` stays for the accessible name (and the e2e/test selectors).
+- The display-side visibility predicate (`useOutbox` → `getVisibleOutboxEntries`) had no
+  unmocked test coverage — the filter could be deleted with every test staying green. A
+  real-engine `useOutbox` hook test now pins both the authenticated and signed-out filters.

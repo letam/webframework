@@ -16,6 +16,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { identityGradient } from '@/lib/utils/identity'
+import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 
 const navLinkClass =
 	'rounded-md text-foreground/60 transition-colors hover:text-foreground/80 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
@@ -133,6 +134,7 @@ const Navbar = () => {
 						)}
 					</nav>
 
+					<SyncStatusIndicator />
 					<ThemeToggle />
 
 					{/* Mobile Menu */}

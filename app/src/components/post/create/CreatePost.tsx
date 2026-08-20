@@ -23,9 +23,10 @@ import { modifierKeyLabel } from '@/lib/utils/browser'
 import { useAuth } from '@/hooks/useAuth'
 import { useComposerDraft } from '@/hooks/useComposerDraft'
 import type { ComposerDraft } from '@/lib/utils/composerDraft'
+import { enqueuePost } from '@/lib/outbox'
 
 interface CreatePostProps {
-	onPostCreated: (post: CreatePostRequest) => void
+	onPostCreated: (post: CreatePostRequest) => Promise<void> | void
 }
 
 type SubmitStatus = '' | 'preparing' | 'compressing' | 'submitting'
@@ -265,6 +266,41 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		setMediaType('text')
 	}
 
+	const resetComposer = () => {
+		setPostText('')
+		setVisibility('public')
+		clearMedia()
+		clearStoredDraft()
+		textareaRef.current?.focus()
+	}
+
+	const queueTextPost = async (isDraft: boolean) => {
+		const settings = getSettings()
+		const stored = await enqueuePost({
+			author: isAuthenticated && userId !== null ? userId : isAuthResolved ? 'anon' : 'unknown',
+			text: postText,
+			visibility: isAuthenticated ? visibility : null,
+			isDraft,
+			linkPreviewsEnabled: settings.linkPreviews,
+			autoTranscribe: settings.autoTranscribe && isAuthenticated,
+			mediaType: null,
+			media: null,
+			mediaName: null,
+		})
+
+		if (!stored) {
+			toast.error("Couldn't save this post on this device.")
+			return
+		}
+
+		resetComposer()
+		toast(
+			isDraft
+				? "Queued — will save to drafts when you're back online."
+				: "Queued — will post when you're back online."
+		)
+	}
+
 	// Throw away a restored draft the user did not want back.
 	const discardRestoredDraft = () => {
 		setPostText('')
@@ -282,6 +318,20 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 		if (!postText.trim() && !audioBlob && !audioFile && !videoBlob && !videoFile && !imageFile) {
 			toast.error('Please enter some text or add media')
+			return
+		}
+
+		if (!navigator.onLine) {
+			if (!hasNoMedia) {
+				toast.error("You're offline — media posts can't be queued yet.")
+				return
+			}
+			setSubmitStatus('submitting')
+			try {
+				await queueTextPost(isDraft)
+			} finally {
+				setSubmitStatus('')
+			}
 			return
 		}
 
@@ -337,17 +387,18 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			}
 
 			await onPostCreated(newPost)
-			// Reset form only on success
-			setPostText('')
-			setVisibility('public')
-			clearMedia()
-			// The draft has become a post; there is nothing left to rescue.
-			clearStoredDraft()
+			resetComposer()
 			toast.success(isDraft ? 'Saved to drafts.' : 'Post created successfully!')
-			// Focus back on text area
-			textareaRef.current?.focus()
-		} catch (_error) {
-			toast.error('Failed to create post')
+		} catch (error) {
+			if (error instanceof TypeError) {
+				if (!hasNoMedia) {
+					toast.error("You're offline — media posts can't be queued yet.")
+				} else {
+					await queueTextPost(isDraft)
+				}
+			} else {
+				toast.error('Failed to create post')
+			}
 		} finally {
 			setSubmitStatus('')
 		}

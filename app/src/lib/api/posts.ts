@@ -7,6 +7,7 @@ import type {
 } from '../../types/post'
 import { SERVER_API_URL, UPLOAD_FILES_TO_S3 } from '../constants'
 import { getFetchOptions } from '../utils/fetch'
+import { ApiError } from './errors'
 
 export interface PostsPage {
 	posts: Post[]
@@ -123,6 +124,9 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 		if (data.link_previews_enabled === false) {
 			formData.append('link_previews_enabled', 'false')
 		}
+		if (data.client_uuid) {
+			formData.append('client_uuid', data.client_uuid)
+		}
 
 		// // Debug logging
 		// console.log('Creating post with data:', data)
@@ -142,7 +146,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 			})
 			response = await fetch(`${SERVER_API_URL}/uploads/presign/`, options)
 			if (!response.ok) {
-				throw new Error('Failed to get an upload URL')
+				throw new ApiError('Failed to get an upload URL', response.status)
 			}
 			const presignedUrl = (await response.json()) as { url: string; file_path: string }
 
@@ -157,7 +161,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 				body: data.media,
 			})
 			if (!uploadResponse.ok) {
-				throw new Error('Failed to upload media')
+				throw new ApiError('Failed to upload media', uploadResponse.status)
 			}
 
 			// create post with file url
@@ -178,7 +182,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 		}
 
 		if (!response.ok) {
-			throw new Error('Failed to create post')
+			throw new ApiError('Failed to create post', response.status)
 		}
 		const record: Post = await response.json()
 		return revivePost(record)

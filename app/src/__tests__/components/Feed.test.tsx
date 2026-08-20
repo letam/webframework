@@ -25,6 +25,10 @@ vi.mock('@/components/feed/ActiveFiltersList', () => ({
 	ActiveFiltersList: () => null,
 }))
 
+vi.mock('@/components/feed/OutboxList', () => ({
+	OutboxList: () => <div data-testid="outbox-list" />,
+}))
+
 const handlers = (overrides: Record<string, unknown> = {}) => ({
 	posts: [],
 	isLoading: false,

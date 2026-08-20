@@ -1,3 +1,4 @@
+import { ApiError } from '../api/errors'
 import { SERVER_HOST } from '../constants'
 
 // CSRF token cache
@@ -21,8 +22,13 @@ export const getCsrfToken = async () => {
 		return csrfTokenCache.token
 	}
 
-	// Fetch new token
+	// Fetch new token. Throw a status-carrying error rather than letting
+	// response.json() choke on an error page: callers that classify failures
+	// by HTTP status (the outbox retry taxonomy) need to see the real status.
 	const response = await fetch(`${SERVER_HOST}/auth/csrf/`)
+	if (!response.ok) {
+		throw new ApiError('Failed to fetch CSRF token', response.status)
+	}
 	const data = await response.json()
 
 	// Cache the token with 1 hour expiration

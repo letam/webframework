@@ -18,9 +18,10 @@ vi.mock('@/lib/utils/fetch', () => ({
 
 const fetchMock = vi.fn()
 
-const response = (body: unknown, ok = true) =>
+const response = (body: unknown, ok = true, status = ok ? 200 : 500) =>
 	Promise.resolve({
 		ok,
+		status,
 		json: () => Promise.resolve(body),
 	} as Response)
 
@@ -138,6 +139,7 @@ describe('posts API', () => {
 				media_type: 'audio',
 				visibility: 'unlisted',
 				is_draft: true,
+				client_uuid: '2db60ca2-7637-46f5-a8ea-44ec850c004b',
 			})
 
 			expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
@@ -157,6 +159,7 @@ describe('posts API', () => {
 			expect(formData.get('s3_file_key')).toBe('uploads/clip.webm')
 			expect(formData.get('visibility')).toBe('unlisted')
 			expect(formData.get('is_draft')).toBe('true')
+			expect(formData.get('client_uuid')).toBe('2db60ca2-7637-46f5-a8ea-44ec850c004b')
 			expect(result.modified).toBeInstanceOf(Date)
 			expect(result.url).toBe(`${window.location.origin}/p/9/`)
 		})
@@ -165,11 +168,14 @@ describe('posts API', () => {
 			const { createPost } = await importPostsApi(true)
 			const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 			const file = new File(['audio'], 'clip.webm', { type: 'audio/webm' })
-			fetchMock.mockResolvedValueOnce(await response({ error: 'nope' }, false))
+			fetchMock.mockResolvedValueOnce(await response({ error: 'nope' }, false, 429))
 
 			await expect(
 				createPost({ text: 'Doomed.', media: file, media_type: 'audio' })
-			).rejects.toThrow('Failed to get an upload URL')
+			).rejects.toMatchObject({
+				message: 'Failed to get an upload URL',
+				status: 429,
+			})
 			expect(fetchMock).toHaveBeenCalledTimes(1)
 			consoleError.mockRestore()
 		})
@@ -185,11 +191,14 @@ describe('posts API', () => {
 						file_path: 'uploads/clip.webm',
 					})
 				)
-				.mockResolvedValueOnce(await response({}, false))
+				.mockResolvedValueOnce(await response({}, false, 503))
 
 			await expect(
 				createPost({ text: 'Doomed.', media: file, media_type: 'audio' })
-			).rejects.toThrow('Failed to upload media')
+			).rejects.toMatchObject({
+				message: 'Failed to upload media',
+				status: 503,
+			})
 			expect(fetchMock).toHaveBeenCalledTimes(2)
 			consoleError.mockRestore()
 		})
@@ -205,6 +214,7 @@ describe('posts API', () => {
 				media: file,
 				media_type: 'image',
 				visibility: 'private',
+				client_uuid: 'f7adeb32-f522-4cd6-87ef-bf39e3c5c5f2',
 			})
 
 			expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -214,8 +224,21 @@ describe('posts API', () => {
 			expect(formData.get('media_type')).toBe('image')
 			expect(formData.get('media')).toBe(file)
 			expect(formData.get('visibility')).toBe('private')
+			expect(formData.get('client_uuid')).toBe('f7adeb32-f522-4cd6-87ef-bf39e3c5c5f2')
 			expect(formData.get('is_draft')).toBeNull()
 			expect(formData.get('link_previews_enabled')).toBeNull()
+		})
+
+		it('throws an ApiError with the final create response status', async () => {
+			const { createPost } = await importPostsApi(false)
+			const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+			fetchMock.mockResolvedValueOnce(await response({ error: 'invalid' }, false, 400))
+
+			await expect(createPost({ text: 'Rejected.' })).rejects.toMatchObject({
+				message: 'Failed to create post',
+				status: 400,
+			})
+			consoleError.mockRestore()
 		})
 
 		it('appends link_previews_enabled false when disabled', async () => {
