@@ -806,3 +806,104 @@ _(updated as items land)_
   - Every commit passed the frontend gates green: typecheck (TS 7 `tsc -b`), 167 tests, ESLint 8/8
     warnings (0 errors, none new), Biome. This closes the P2 frontend cluster — all items ✅ except the
     credentials cross-origin decision, flagged above.
+
+- **2026-08-13 · Self-review round · 5 must-fixes ✅** — Re-read the whole branch against the plan.
+  Five defects the per-item work had introduced or left behind; each got a test that fails without
+  the fix.
+  - **`modified` never moved, so the stale-pending window never reset** (`201d448`). The transcribe
+    retry guard re-enqueues a media stuck at `'pending'` past `STALE_TRANSCRIPT_PENDING`, and its
+    comment promised the re-save bumped `modified` (`auto_now`). It didn't:
+    `save(update_fields=['transcript_status'])` omits `modified`, and Django runs a field's
+    `pre_save` — where `auto_now` stamps — only for the fields `update_fields` names. The window was
+    therefore measured from the row's last unrelated write, so any media older than 15 minutes read
+    as stranded on the *first* retry and an impatient second click bought another Whisper run, up to
+    the 10/hour throttle. The same file already gets this right at the draft-publish and share-token
+    sites.
+  - **Autosave stayed dead after a logout → login** (`e4fa6c2`). `anonWriteBlocked` (from P1-f) was
+    only ever cleared by the composer going empty. Log out with text still in it, log back in, and
+    every write — debounced and on-hide — was dropped for the rest of the session, silently. Being
+    signed in now lifts the block; the flag only ever guarded the shared anonymous slot. First test
+    file for the hook.
+  - **Recorded blobs leaked for the tab's lifetime** (`f5d2971`). Both recorders tear down with
+    `useEffect(() => () => reset(), [])`, and `reset` is redefined every render — so the empty dep
+    array captured render 1's copy, where the object URL is still `null`, and the
+    `URL.revokeObjectURL` inside it never ran. Device teardown was fine (recorder, stream and timers
+    live in refs). Revoking moved to an effect keyed on the URL, which also releases takes replaced
+    by a re-record or a second file pick.
+  - **`DATABASE_URL` / `MEDIA_ROOT` became silent fallbacks** (`9cc6f4f`). P1-c's rewrite of
+    `check_and_create_env_file()` was right to stop fabricating production config, but that helper
+    was their only in-repo source and both kept dev defaults. Unset, a deploy lands on a SQLite file
+    in the container's ephemeral filesystem and writes uploads outside the mounted volume: it boots,
+    passes the health check, serves zero posts, and loses everything on restart — precisely the
+    failure `SECRET_KEY` was made loud to avoid. Both are now required whenever `DEBUG` is off, with
+    throwaway values scoped onto the Docker `collectstatic` command exactly as `SECRET_KEY` is.
+  - **`build-prod.sh` shipped an untested bundle** (`c7d020e`). P1-n moved the Dockerfile to
+    `bun install --frozen-lockfile` + `bun run build` so the image resolves what CI locked; the other
+    production build path kept calling `npm run build` and installed nothing at all.
+
+- **2026-08-13 · Self-review round 2 · 5 second-tier fixes ✅** — A second read of the branch, this
+  time hunting the things the first pass had documented rather than fixed, plus what the fixes
+  themselves introduced. One finding was investigated and deliberately declined; the rest each got a
+  test proved by reverting the fix and watching it fail.
+  - **The mime probe forked `file` once per range request** (`c8dd7f8`). Media streaming asks for the
+    type on every request, so a browser scrubbing through a video spawned a process per seek to ask
+    the same unchanged file the same question. Memoized on `(path, size, mtime_ns)` — identity rather
+    than name, so a replacement at a known path is re-probed. Caching first required two corrections.
+    `file` does not report failure through its exit status: handed a path it cannot open it exits **0**
+    and prints `cannot open: Permission denied` on *stdout* (verified locally, not assumed), which the
+    old code would have returned as the `Content-Type` of a 206 — so the result is now shape-validated,
+    not just status-checked. And `lru_cache` stores return values but not exceptions, so a probe that
+    returned the fallback itself would pin `application/octet-stream` to a file after one timeout under
+    load; the probe raises and the uncached wrapper converts, which keeps a transient failure transient.
+    The fallback also moved from `''` (an empty `Content-Type` a browser cannot recover from) to
+    `application/octet-stream`.
+  - **`reprocess_media`'s age gate carried the same `auto_now` falsehood** (`9652427`). Its comment
+    claimed the gate skips in-flight rows because "a running job re-saves the row, bumping `modified`".
+    It does not — processing writes nothing until it succeeds, and that write names only the asset field
+    (`update_fields=['waveform']` / `['thumbnail']`), so `modified` is untouched either way. Identical
+    premise to the transcribe bug fixed in round 1, left behind in a comment where it would have misled
+    someone tuning `--min-age-minutes` as if it were a progress signal. Comment only: the gate is a
+    plain grace period, and a job still running when the window passes is re-enqueued into idempotent
+    work.
+  - **The throttled share page answered a browser with JSON** (`363f2ed`). P0-b's `@rate_limit` on
+    `post_detail` used the module default rejection, so a reader who reloaded a shared link too fast
+    got a raw `{"error": …}` blob in their browser window. `rate_limit` now takes the rejection builder
+    as an argument (still JSON by default, which is right for every `fetch()`-called endpoint) and
+    `post_detail` passes one mirroring its own `Accept` negotiation. The template is **deliberately
+    standalone** rather than extending `shared/base.html`: that base's header evaluates
+    `user.is_authenticated`, which forces the lazy `request.user` and — for any request carrying a
+    `sessionid` — buys a session SELECT plus a user SELECT *per rejection*, on the one path that exists
+    to shed load. Measured: reverting to the base costs exactly those 2 queries. An `assertNumQueries(0)`
+    test now pins the cheap path. Its `<style>` block is hashed into the production `style-src` and the
+    template added to `test_csp_hashes`'s list, or the page would arrive unstyled in prod and nowhere
+    else.
+  - **429s carried no `Retry-After`** (`e7c5488`). A rejection with no header gives a well-behaved
+    client or crawler nothing to back off to, so it keeps retrying at its own cadence — the load the
+    limiter exists to shed. The windows are fixed rather than sliding, so the wait is arithmetic and
+    shrinks honestly as the window runs out (throttled 45s into a 60s window → 15, not 60); it rounds
+    up and floors at 1, since rounding down returns the client a hair early to be rejected again and a
+    `Retry-After: 0` is an invitation to retry immediately. Set in the decorator, so login, signup,
+    presign and the share page all get it and a future caller cannot forget it.
+  - **`renderInlineMarkdown`'s docstring survived the pipeline it described** (`c8af0d1`). `28f2886`
+    inverted the sanitize order — raw text in, sanitize the assembled HTML once at the end — but this
+    function still claimed its input "MUST already be HTML-sanitized" and its output safe for
+    `dangerouslySetInnerHTML`. Following that would hand the DOM a string four passes had edited since
+    the allow-list saw it. Docstring corrected and the parameter renamed `sanitized` → `raw`, which was
+    the last place still asserting it.
+  - **Composer autosave gated on the wrong half of the auth state** (`1b6ae2b`). P1-f held drafts back
+    until `!isAuthLoading`, because before auth resolves `userId` is `null` and indistinguishable from a
+    genuine anonymous visitor. But loading also ends when the check *fails* — and a failed check is
+    exactly the case where the `null` is a default rather than an answer, so the one situation the gate
+    was written for was the one it let through. Added `isAuthResolved` (true only once `/auth/status/`
+    has answered; stays true afterwards) and gated on that; `isAuthLoading` keeps its meaning for UI
+    that can render a signed-out shell and recover. The existing `CreatePost` tests could not have
+    caught this — their `useAuth` mock omitted `isAuthLoading`, so `!undefined` passed the old gate too.
+    - **Investigated and declined:** that a failed check leaves autosave off for the whole session with
+      no retry. There is no rule that fails open safely here — writing to the anonymous slot risks
+      leaking a signed-in user's draft, writing to a guessed per-user slot risks losing it — and the
+      indistinguishability *is* the bug being fixed. Losing autosave is the recoverable half, so it
+      stands as a deliberate trade, documented at all three sites.
+  - Gates re-run as CI runs them: Ruff check/format, `makemigrations --check`, **264 backend tests**
+    (OK, 1 skipped), `test_csp_hashes` against the *built* shell with `REQUIRE_BUILT_SHELL=1`,
+    TS 7 `tsc -b`, ESLint 8/8 warnings (0 errors), Biome `ci` clean, **176 frontend tests**, `bun run
+    build`.
