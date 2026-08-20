@@ -783,6 +783,37 @@ class MediaPipelineTests(ViewTestCase):
         self.assertEqual(media.transcript_status, 'done')
         self.assertEqual(media.transcript, 'recovered')
 
+    def test_transcribe_retry_inside_the_window_does_not_reenqueue(self):
+        """Re-enqueueing a stranded transcription must reset its staleness window.
+
+        The window is read off `modified`, so the re-save has to bump it. Django
+        stamps an auto_now field only when update_fields names it — omit it there
+        and every retry on a post older than the window looks stranded again,
+        turning an impatient second click into another paid Whisper run.
+        """
+        from apps.blogs.views import STALE_TRANSCRIPT_PENDING
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(
+                    file=self._audio_file(), media_type='audio', transcript_status='pending'
+                )
+                post = Post.objects.create(author=self.user, head='Voice note', media=media)
+                stranded = timezone.now() - STALE_TRANSCRIPT_PENDING - timedelta(seconds=1)
+                Media.objects.filter(pk=media.pk).update(modified=stranded)
+
+                # Stand in for a worker that has taken the job but not finished: the
+                # row stays 'pending', which is the state the retry guard reads.
+                with mock.patch('apps.blogs.views.transcribe_post_media') as mock_task:
+                    self.client.post(reverse('post-transcribe', args=[post.id]))
+                    self.assertEqual(mock_task.enqueue.call_count, 1)
+
+                    media.refresh_from_db()
+                    self.assertGreater(media.modified, stranded)
+
+                    self.client.post(reverse('post-transcribe', args=[post.id]))
+                    self.assertEqual(mock_task.enqueue.call_count, 1)
+
     def test_post_detail_returns_json_when_requested(self):
         """The post detail page should serve JSON to Accept: application/json."""
         post = Post.objects.create(author=self.user, head='Hello', body='World')

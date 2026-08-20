@@ -846,6 +846,11 @@ class PostViewSet(viewsets.ModelViewSet):
         # forever and the UI spins with no way out; once it's been pending past
         # the staleness window, re-enqueue instead. Re-saving bumps `modified`
         # (auto_now), which resets the window so rapid retries don't pile on jobs.
+        # `modified` must be listed in update_fields for that to happen: Django
+        # only runs a field's pre_save (where auto_now stamps) when update_fields
+        # names it. Omit it and the window is measured from the row's last
+        # unrelated write, so every retry on an older post looks stranded and
+        # enqueues another paid Whisper job.
         media = post.media
         is_stranded_pending = (
             media.transcript_status == 'pending'
@@ -854,7 +859,7 @@ class PostViewSet(viewsets.ModelViewSet):
         try:
             if media.transcript_status != 'pending' or is_stranded_pending:
                 media.transcript_status = 'pending'
-                media.save(update_fields=['transcript_status'])
+                media.save(update_fields=['transcript_status', 'modified'])
                 transcribe_post_media.enqueue(media.pk)
                 media.refresh_from_db()
         except Exception:
