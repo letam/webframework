@@ -38,9 +38,16 @@ class Command(BaseCommand):
         settled_before = timezone.now() - timedelta(minutes=options['min_age_minutes'])
 
         # The asset process_post_media produces for each type: audio → waveform,
-        # video/image → thumbnail. The age gate skips rows still in flight — a
-        # running job re-saves the row, bumping `modified` (auto_now) — so only
-        # media that has settled without its asset is swept.
+        # video/image → thumbnail. `modified` is not a progress signal, so do not
+        # read the age gate as one: processing writes nothing until it succeeds,
+        # and the write it makes then names only the asset field
+        # (`update_fields=['waveform']` / `['thumbnail']`). Django runs a field's
+        # pre_save — where auto_now stamps — only for fields update_fields names,
+        # so `modified` sits untouched through a run either way. The gate is
+        # therefore a plain grace period measured from the row's last write, its
+        # upload usually, sized so the create path's own enqueue has had a chance
+        # to land. A job still running when the window passes gets enqueued again;
+        # the work is idempotent, so that costs duplicated effort, not a bad row.
         missing_asset = (
             Q(media_type='audio', waveform__isnull=True)
             | Q(media_type='video', thumbnail='')
