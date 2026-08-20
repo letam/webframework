@@ -92,17 +92,24 @@ const VideoRecorder = ({ onVideoCaptured, disabled, autoStart = false }: VideoRe
 		return () => {
 			reset()
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [])
+
+	// Revoking the object URL lives here, not in `reset`. The unmount cleanup above
+	// captures render 1's `reset`, whose `videoURL` is still null, so a revoke from
+	// there never ran and the recorded blob stayed pinned for the tab's lifetime.
+	// Everything else `reset` touches is a ref, which is always current. Keying on
+	// the URL also releases a take that a re-record or a second file pick replaced.
+	useEffect(() => {
+		if (!videoURL) return
+		return () => URL.revokeObjectURL(videoURL)
+	}, [videoURL])
 
 	const reset = () => {
 		setIsRecording(false)
 		setRecordingTime(0)
 		setErrorMessage(null)
-		if (videoURL) {
-			URL.revokeObjectURL(videoURL)
-			setVideoURL(null)
-		}
+		// Dropping the URL from state is what revokes it; see the effect above.
+		setVideoURL(null)
 		videoChunksRef.current = []
 		const recorder = mediaRecorderRef.current
 		if (recorder) {

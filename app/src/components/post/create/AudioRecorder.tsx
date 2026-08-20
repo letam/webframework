@@ -287,10 +287,8 @@ const AudioRecorder = ({
 		setShowNormalizingMessage(false)
 		setRecordingTime(0)
 		setErrorMessage(null)
-		if (audioURL) {
-			URL.revokeObjectURL(audioURL)
-			setAudioURL(null)
-		}
+		// Dropping the URL from state is what revokes it; see the effect below.
+		setAudioURL(null)
 		audioChunksRef.current = []
 		const recorder = mediaRecorderRef.current
 		if (recorder) {
@@ -343,11 +341,8 @@ const AudioRecorder = ({
 		try {
 			setStatus('loading')
 			setErrorMessage(null)
-			// Clean up previous audio state
-			if (audioURL) {
-				URL.revokeObjectURL(audioURL)
-				setAudioURL(null)
-			}
+			// Clean up previous audio state; clearing it revokes the old take.
+			setAudioURL(null)
 
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
 			const mediaRecorder = new MediaRecorder(stream, { mimeType: supportedAudioMimeType })
@@ -465,6 +460,15 @@ const AudioRecorder = ({
 			reset()
 		}
 	}, [])
+
+	// Revoking the object URL lives here, not in `reset`. The unmount cleanup above
+	// captures render 1's `reset`, whose `audioURL` is still null, so a revoke from
+	// there never ran and the recorded take stayed pinned for the tab's lifetime.
+	// Everything else `reset` touches is a ref, which is always current.
+	useEffect(() => {
+		if (!audioURL) return
+		return () => URL.revokeObjectURL(audioURL)
+	}, [audioURL])
 
 	return (
 		<div className="flex flex-col h-full">
