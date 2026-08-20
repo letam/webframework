@@ -19,16 +19,20 @@ const ITALIC_PATTERN = new RegExp(`\\*${INNER}\\*`, 'g')
 /**
  * Render `**bold**` / `*italic*` markers as `<strong>` / `<em>`.
  *
- * The input MUST already be HTML-sanitized — this only introduces the two tags
- * above, so it is safe to feed the result to dangerouslySetInnerHTML. Bold runs
- * before italic. Known limitation: a `*` inside a URL can still pair with a
- * later `*` on the same line (the URL linkifier runs afterwards); rare enough to
- * accept, and it matches how ordinary markdown editors behave.
+ * Takes the raw post text and returns UNSANITIZED HTML. Only the markers become
+ * tags; everything between them is copied through untouched, so any markup the
+ * author typed is still sitting in the output. Do not hand this straight to
+ * dangerouslySetInnerHTML. The caller sanitizes once at the end, after this and
+ * the line-break, autolink and hashtag passes have all run, so that what reaches
+ * the DOM is exactly the string the allow-list filtered — see FormatText in
+ * components/post/Post.tsx.
+ *
+ * Bold runs before italic. Known limitation: a `*` inside a URL can still pair
+ * with a later `*` on the same line (the URL linkifier runs afterwards); rare
+ * enough to accept, and it matches how ordinary markdown editors behave.
  */
-export function renderInlineMarkdown(sanitized: string): string {
-	return sanitized
-		.replace(BOLD_PATTERN, '<strong>$1</strong>')
-		.replace(ITALIC_PATTERN, '<em>$1</em>')
+export function renderInlineMarkdown(raw: string): string {
+	return raw.replace(BOLD_PATTERN, '<strong>$1</strong>').replace(ITALIC_PATTERN, '<em>$1</em>')
 }
 
 export interface MarkerResult {
