@@ -100,7 +100,8 @@ export const useComposerDraft = ({
 	// Set when a logout (signed-in id → anonymous) is seen with content still in
 	// the composer, so neither the debounce nor the on-hide flush copies the
 	// signed-out user's words into the shared anonymous slot. Cleared once the
-	// composer returns to empty — a genuinely anonymous compose then saves.
+	// composer returns to empty — a genuinely anonymous compose then saves — or as
+	// soon as someone is signed in again.
 	const anonWriteBlocked = useRef(false)
 	useEffect(() => {
 		if (!enabled) return
@@ -111,6 +112,15 @@ export const useComposerDraft = ({
 		previousIsEmpty.current = isEmpty
 		previousUserId.current = userId
 		previousMedia.current = media
+
+		// The block only ever guards the shared anonymous slot, so being signed in
+		// lifts it: these words have a per-user slot to go to. Without this, a
+		// logout→login with content still in the composer left autosave dead for the
+		// rest of the session — the only other clause that clears the flag requires
+		// the composer to go empty, and it never did.
+		if (userId !== null) {
+			anonWriteBlocked.current = false
+		}
 
 		// Logout: never let the signed-out user's words land in the shared
 		// anonymous slot. Erase it, drop the restore notice, and block further
