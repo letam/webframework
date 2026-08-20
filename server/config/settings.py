@@ -215,8 +215,19 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+# Required in production, exactly like SECRET_KEY above. check_and_create_env_file()
+# used to write this into a production .env and deliberately no longer does, which
+# left the dev default as the silent fallback: unset, a deploy lands on a SQLite
+# file inside the container's ephemeral filesystem, boots healthy, serves zero
+# posts, and loses every write on the next restart. Fail at import instead. The
+# Docker build scopes a throwaway value onto its collectstatic step, which never
+# opens the database.
 DATABASES = {
-    'default': env.dj_db_url('DATABASE_URL', default='sqlite:///db.sqlite3')
+    'default': (
+        env.dj_db_url('DATABASE_URL', default='sqlite:///db.sqlite3')
+        if DEBUG
+        else env.dj_db_url('DATABASE_URL')
+    )
     or {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
@@ -602,7 +613,15 @@ SENTRY_FRONTEND_INGEST_FOR_CSP = env.str('SENTRY_FRONTEND_INGEST_FOR_CSP', defau
 
 # Media files configuration
 MEDIA_URL = env.str('MEDIA_URL', default='/media/')
-MEDIA_ROOT = env.str('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'uploads'))
+# Required in production for the same reason as DATABASE_URL: unset, this resolves
+# to a directory inside the container that is wiped on every restart, taking
+# uploaded avatars with it. The Fly config mounts a volume at /data and serves
+# /media/avatars/ from it — MEDIA_ROOT is what points Django at that volume.
+MEDIA_ROOT = (
+    env.str('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'uploads'))
+    if DEBUG
+    else env.str('MEDIA_ROOT')
+)
 MAX_MEDIA_UPLOAD_BYTES = 100 * 1024 * 1024
 
 # Storage backend configuration

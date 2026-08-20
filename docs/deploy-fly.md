@@ -95,8 +95,12 @@ Creating one from scratch:
 fly apps create <name> --org personal
 fly volumes create myapp_data --app <name> --region yyz --size 1 --yes
 
-# SECRET_KEY has no default in settings.py, so the app cannot boot without it.
-# Generate a fresh one — do not reuse production's.
+# SECRET_KEY, DATABASE_URL and MEDIA_ROOT have no production default in
+# settings.py, so the app cannot boot without them. That is deliberate: the
+# alternatives are a rotating secret, a database on the container's ephemeral
+# filesystem, and uploads written off the mounted volume — each of which would
+# boot healthy and lose data instead of failing. Generate a fresh SECRET_KEY —
+# do not reuse production's.
 fly secrets set --stage --app <name> \
   SECRET_KEY="$(openssl rand -base64 48 | tr -d '\n')" \
   DATABASE_URL='sqlite:////data/db.sqlite3' \

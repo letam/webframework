@@ -54,9 +54,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY server .
 
 # Collect static files
-# SECRET_KEY is only needed to import settings; scope it to this one command
-# rather than the whole stage.
-RUN SECRET_KEY="DUMMY_SECRET_KEY_FOR_BUILD_PROCESS" python manage.py collectstatic --noinput
+# These three are only needed to import settings, which requires them whenever
+# DEBUG is off so a real deploy can't silently fall back to ephemeral container
+# paths. collectstatic opens neither the database nor MEDIA_ROOT, so throwaway
+# values are correct here — and scoping them to this one command keeps them out
+# of the shipped image, the same reason SECRET_KEY is scoped rather than ENV'd.
+RUN SECRET_KEY="DUMMY_SECRET_KEY_FOR_BUILD_PROCESS" \
+    DATABASE_URL="sqlite:///build-only.sqlite3" \
+    MEDIA_ROOT="/tmp/build-only-media" \
+    python manage.py collectstatic --noinput
 
 
 # Build Stage: Frontend
