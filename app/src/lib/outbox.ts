@@ -41,7 +41,16 @@ export interface OutboxSnapshot {
 
 const RETRY_DELAYS_MS = [15_000, 30_000, 60_000, 120_000, 300_000] as const
 
-let snapshot: OutboxSnapshot = { entries: [], flushing: false, syncMode: 'auto' }
+const getInitialSyncMode = (): SyncMode => {
+	if (typeof localStorage === 'undefined') return 'auto'
+	try {
+		return localStorage.getItem('post-sync-mode') === 'local' ? 'local' : 'auto'
+	} catch {
+		return 'auto'
+	}
+}
+
+let snapshot: OutboxSnapshot = { entries: [], flushing: false, syncMode: getInitialSyncMode() }
 let dependencies: OutboxDependencies | null = null
 let retryTimer: number | undefined
 let retryIndex = 0
@@ -218,7 +227,7 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 	}
 }
 
-const runFlush = async (ids: string[]) => {
+const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 	if (ids.length === 0 || !isOnline()) return
 	if (flushLocked || snapshot.flushing) {
 		pendingFlushIds ??= new Set()
@@ -234,6 +243,9 @@ const runFlush = async (ids: string[]) => {
 	}
 	if (!auth) {
 		flushLocked = false
+		if (options?.manual) {
+			toast.error("Couldn't reach the server — your posts are still on this device.")
+		}
 		scheduleRetry()
 		return
 	}
@@ -277,6 +289,7 @@ const drainPendingFlush = async () => {
 		.filter((entry) => entry.status === 'queued' && requested.has(entry.id))
 		.sort((a, b) => a.createdAt - b.createdAt)
 		.map((entry) => entry.id)
+	// A latched manual request intentionally degrades to a background pass here.
 	await runFlush(ids)
 }
 
@@ -290,6 +303,17 @@ export const subscribeOutbox = (callback: () => void) => {
 }
 
 export const getOutboxSnapshot = () => snapshot
+
+export const setSyncMode = (mode: SyncMode) => {
+	if (snapshot.syncMode === mode) return
+	publishSnapshot({ ...snapshot, syncMode: mode })
+	try {
+		localStorage.setItem('post-sync-mode', mode)
+	} catch {
+		// Storage can be unavailable in private or restricted browsing contexts.
+	}
+	if (mode === 'auto') void flushOutbox()
+}
 
 export const loadOutbox = async () => {
 	const entriesById = new Map((await loadOutboxEntries()).map((entry) => [entry.id, entry]))
@@ -313,18 +337,18 @@ export const enqueuePost = async (input: EnqueueInput): Promise<boolean> => {
 	return true
 }
 
-export const flushOutbox = async () => {
-	if (snapshot.syncMode !== 'auto') return
+export const flushOutbox = async (options?: { manual?: boolean }) => {
+	if (snapshot.syncMode !== 'auto' && !options?.manual) return
 	const ids = snapshot.entries
 		.filter((entry) => entry.status === 'queued')
 		.sort((a, b) => a.createdAt - b.createdAt)
 		.map((entry) => entry.id)
-	await runFlush(ids)
+	await runFlush(ids, options)
 }
 
 export const flushEntry = async (id: string) => {
 	resetBackoff()
-	await runFlush([id])
+	await runFlush([id], { manual: true })
 }
 
 export const retryEntry = async (id: string) => {
@@ -332,7 +356,7 @@ export const retryEntry = async (id: string) => {
 	const entry = snapshot.entries.find((candidate) => candidate.id === id)
 	if (!entry || entry.status !== 'failed') return
 	await updateEntry(id, { status: 'queued', attempts: 0, lastError: null })
-	await runFlush([id])
+	await runFlush([id], { manual: true })
 }
 
 export type RemoveEntryResult = 'removed' | 'sending'

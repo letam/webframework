@@ -7,8 +7,12 @@ import type { OutboxEntry } from '@/lib/utils/outboxDb'
 
 const mockUseAuth = vi.hoisted(() => vi.fn())
 const mockUseOutbox = vi.hoisted(() => vi.fn())
+const mockFlushEntry = vi.hoisted(() => vi.fn())
+const mockFlushOutbox = vi.hoisted(() => vi.fn())
+const mockGetOutboxSnapshot = vi.hoisted(() => vi.fn())
 const mockRemoveEntry = vi.hoisted(() => vi.fn())
 const mockRetryEntry = vi.hoisted(() => vi.fn())
+const mockRequestComposerLoad = vi.hoisted(() => vi.fn())
 const mockCreateObjectURL = vi.hoisted(() => vi.fn(() => 'blob:queued-media'))
 const mockRevokeObjectURL = vi.hoisted(() => vi.fn())
 const mockToast = vi.hoisted(() =>
@@ -18,10 +22,18 @@ const mockToast = vi.hoisted(() =>
 vi.mock('@/hooks/useAuth', () => ({ useAuth: mockUseAuth }))
 vi.mock('@/hooks/useOutbox', () => ({ useOutbox: mockUseOutbox }))
 vi.mock('@/lib/outbox', () => ({
+	flushEntry: mockFlushEntry,
+	flushOutbox: mockFlushOutbox,
+	getOutboxSnapshot: mockGetOutboxSnapshot,
 	removeEntry: mockRemoveEntry,
 	retryEntry: mockRetryEntry,
 }))
+vi.mock('@/lib/composerBridge', () => ({ requestComposerLoad: mockRequestComposerLoad }))
 vi.mock('@/components/ui/sonner', () => ({ toast: mockToast }))
+
+const setOnline = (online: boolean) => {
+	Object.defineProperty(navigator, 'onLine', { configurable: true, value: online })
+}
 
 const makeEntry = (overrides: Partial<OutboxEntry> = {}): OutboxEntry => ({
 	id: '9d41d3cc-9626-4fb2-99c4-73e670860e3f',
@@ -44,6 +56,7 @@ const makeEntry = (overrides: Partial<OutboxEntry> = {}): OutboxEntry => ({
 describe('OutboxCard', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
+		setOnline(true)
 		Object.defineProperty(URL, 'createObjectURL', {
 			configurable: true,
 			value: mockCreateObjectURL,
@@ -57,8 +70,13 @@ describe('OutboxCard', () => {
 			username: 'tam',
 			avatar: null,
 		})
-		mockRemoveEntry.mockResolvedValue(undefined)
+		mockUseOutbox.mockReturnValue({ entries: [], flushing: false, syncMode: 'auto' })
+		mockGetOutboxSnapshot.mockReturnValue({ entries: [], flushing: false, syncMode: 'auto' })
+		mockFlushEntry.mockResolvedValue(undefined)
+		mockFlushOutbox.mockResolvedValue(undefined)
+		mockRemoveEntry.mockResolvedValue('removed')
 		mockRetryEntry.mockResolvedValue(undefined)
+		mockRequestComposerLoad.mockReturnValue(true)
 	})
 
 	it('renders queued and draft states with the current author presentation', () => {
@@ -75,6 +93,81 @@ describe('OutboxCard', () => {
 
 		expect(screen.getByText('Posting…')).toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+	})
+
+	it('uses the local-mode chip copy for queued entries', () => {
+		mockUseOutbox.mockReturnValue({ entries: [], flushing: false, syncMode: 'local' })
+
+		render(<OutboxCard entry={makeEntry()} />)
+
+		expect(screen.getByText('On this device')).toBeInTheDocument()
+		expect(screen.queryByText('Queued')).not.toBeInTheDocument()
+	})
+
+	it('posts one queued entry immediately', async () => {
+		const user = userEvent.setup()
+		const entry = makeEntry()
+		render(<OutboxCard entry={entry} />)
+
+		await user.click(screen.getByRole('button', { name: 'Post now' }))
+
+		expect(mockFlushEntry).toHaveBeenCalledWith(entry.id)
+	})
+
+	it('keeps Post now local while offline', async () => {
+		setOnline(false)
+		const user = userEvent.setup()
+		render(<OutboxCard entry={makeEntry()} />)
+
+		await user.click(screen.getByRole('button', { name: 'Post now' }))
+
+		expect(mockFlushEntry).not.toHaveBeenCalled()
+		expect(mockToast).toHaveBeenCalledWith("You're offline.")
+	})
+
+	it('loads an editable entry into the composer and removes the stored copy', async () => {
+		const user = userEvent.setup()
+		const entry = makeEntry({ status: 'failed' })
+		mockGetOutboxSnapshot.mockReturnValue({ entries: [entry], flushing: false, syncMode: 'auto' })
+		render(<OutboxCard entry={entry} />)
+
+		await user.click(screen.getByRole('button', { name: 'Edit' }))
+
+		expect(mockRequestComposerLoad).toHaveBeenCalledWith(entry)
+		await waitFor(() => expect(mockRemoveEntry).toHaveBeenCalledWith(entry.id))
+	})
+
+	it('keeps an entry when the composer is occupied', async () => {
+		mockRequestComposerLoad.mockReturnValue(false)
+		const user = userEvent.setup()
+		const entry = makeEntry()
+		mockGetOutboxSnapshot.mockReturnValue({ entries: [entry], flushing: false, syncMode: 'auto' })
+		render(<OutboxCard entry={entry} />)
+
+		await user.click(screen.getByRole('button', { name: 'Edit' }))
+
+		expect(mockRemoveEntry).not.toHaveBeenCalled()
+		expect(mockToast).toHaveBeenCalledWith('Finish or clear the composer first.')
+	})
+
+	it('refuses to edit an entry a flush has since picked up', async () => {
+		const user = userEvent.setup()
+		const entry = makeEntry()
+		mockGetOutboxSnapshot.mockReturnValue({
+			entries: [{ ...entry, status: 'sending' }],
+			flushing: true,
+			syncMode: 'auto',
+		})
+		render(<OutboxCard entry={entry} />)
+
+		await user.click(screen.getByRole('button', { name: 'Edit' }))
+
+		expect(mockRequestComposerLoad).not.toHaveBeenCalled()
+		expect(mockRemoveEntry).not.toHaveBeenCalled()
+		expect(mockToast).toHaveBeenCalledWith(
+			"This post is already being sent, so it can't be edited."
+		)
 	})
 
 	it('shows the pinned failure copy and retries the entry', async () => {
@@ -129,7 +222,11 @@ describe('OutboxCard', () => {
 describe('OutboxList', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
+		setOnline(true)
 		mockUseAuth.mockReturnValue({ isAuthenticated: false, username: null, avatar: null })
+		mockFlushOutbox.mockResolvedValue(undefined)
+		mockRemoveEntry.mockResolvedValue('removed')
+		mockRequestComposerLoad.mockReturnValue(true)
 	})
 
 	it('renders visible entries newest first', () => {
@@ -138,6 +235,7 @@ describe('OutboxList', () => {
 				makeEntry({ id: 'old', createdAt: 10, text: 'Older queued post' }),
 				makeEntry({ id: 'new', createdAt: 20, text: 'Newer queued post' }),
 			],
+			syncMode: 'auto',
 		})
 		render(<OutboxList />)
 
@@ -147,8 +245,43 @@ describe('OutboxList', () => {
 		])
 	})
 
+	it('shows a local-mode header and manually posts every visible entry', async () => {
+		const user = userEvent.setup()
+		mockUseOutbox.mockReturnValue({
+			entries: [makeEntry({ id: 'one' }), makeEntry({ id: 'two' })],
+			syncMode: 'local',
+		})
+		render(<OutboxList />)
+
+		expect(screen.getByText('On this device — 2')).toBeInTheDocument()
+		await user.click(screen.getByRole('button', { name: 'Post all' }))
+
+		expect(mockFlushOutbox).toHaveBeenCalledWith({ manual: true })
+	})
+
+	it('does not show the local header in auto mode', () => {
+		mockUseOutbox.mockReturnValue({ entries: [makeEntry()], syncMode: 'auto' })
+
+		render(<OutboxList />)
+
+		expect(screen.queryByText(/On this device —/)).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Post all' })).not.toBeInTheDocument()
+	})
+
+	it('does not post all while offline', async () => {
+		setOnline(false)
+		const user = userEvent.setup()
+		mockUseOutbox.mockReturnValue({ entries: [makeEntry()], syncMode: 'local' })
+		render(<OutboxList />)
+
+		await user.click(screen.getByRole('button', { name: 'Post all' }))
+
+		expect(mockFlushOutbox).not.toHaveBeenCalled()
+		expect(mockToast).toHaveBeenCalledWith("You're offline.")
+	})
+
 	it('renders nothing when there are no visible entries', () => {
-		mockUseOutbox.mockReturnValue({ entries: [] })
+		mockUseOutbox.mockReturnValue({ entries: [], syncMode: 'local' })
 		render(<OutboxList />)
 
 		expect(screen.queryByTestId('outbox-list')).not.toBeInTheDocument()

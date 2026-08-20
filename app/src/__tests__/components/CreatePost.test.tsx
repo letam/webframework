@@ -4,9 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CreatePost from '@/components/post/create/CreatePost'
 import { toast } from '@/components/ui/sonner'
 import { saveComposerDraft } from '@/lib/utils/composerDraft'
+import { requestComposerLoad } from '@/lib/composerBridge'
+import type { OutboxEntry } from '@/lib/utils/outboxDb'
 
 const mockUseAuth = vi.hoisted(() => vi.fn())
+const mockUseOutbox = vi.hoisted(() => vi.fn())
 const mockEnqueuePost = vi.hoisted(() => vi.fn())
+const mockSetSyncMode = vi.hoisted(() => vi.fn())
 const mockConvertWavToWebM = vi.hoisted(() => vi.fn())
 const mockToast = vi.hoisted(() =>
 	Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn(), info: vi.fn() })
@@ -16,9 +20,14 @@ vi.mock('@/hooks/useAuth', () => ({
 	useAuth: mockUseAuth,
 }))
 
+vi.mock('@/hooks/useOutbox', () => ({
+	useOutbox: mockUseOutbox,
+}))
+
 vi.mock('@/lib/outbox', () => ({
 	enqueuePost: mockEnqueuePost,
 	MAX_QUEUED_MEDIA_BYTES: 100 * 1024 * 1024,
+	setSyncMode: mockSetSyncMode,
 }))
 
 // jsdom has no IndexedDB, and what these tests are about is whether the composer
@@ -68,6 +77,24 @@ const setOnline = (online: boolean) => {
 	Object.defineProperty(navigator, 'onLine', { configurable: true, value: online })
 }
 
+const makeEntry = (overrides: Partial<OutboxEntry> = {}): OutboxEntry => ({
+	id: crypto.randomUUID(),
+	createdAt: Date.now(),
+	author: 7,
+	status: 'queued',
+	attempts: 0,
+	lastError: null,
+	text: 'Restored from the outbox',
+	visibility: 'private',
+	isDraft: false,
+	linkPreviewsEnabled: true,
+	autoTranscribe: false,
+	mediaType: null,
+	media: null,
+	mediaName: null,
+	...overrides,
+})
+
 describe('CreatePost', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
@@ -84,10 +111,93 @@ describe('CreatePost', () => {
 			isAuthResolved: true,
 			userId: 7,
 		})
+		mockUseOutbox.mockReturnValue({ syncMode: 'auto' })
 		mockEnqueuePost.mockResolvedValue(true)
 		mockConvertWavToWebM.mockResolvedValue(
 			new Blob(['converted'], { type: 'audio/webm;codecs=opus' })
 		)
+	})
+
+	it('queues an online post in local mode with the local-only toast', async () => {
+		mockUseOutbox.mockReturnValue({ syncMode: 'local' })
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn()
+		render(<CreatePost onPostCreated={onPostCreated} />)
+
+		await user.type(screen.getByPlaceholderText("What's on your mind?"), 'Keep this local')
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+
+		await waitFor(() => expect(mockEnqueuePost).toHaveBeenCalledTimes(1))
+		expect(mockEnqueuePost).toHaveBeenCalledWith(
+			expect.objectContaining({ text: 'Keep this local' })
+		)
+		expect(onPostCreated).not.toHaveBeenCalled()
+		expect(mockToast).toHaveBeenCalledWith('Saved on this device.')
+	})
+
+	it('uses the local-only toast for drafts too', async () => {
+		mockUseOutbox.mockReturnValue({ syncMode: 'local' })
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+
+		await user.type(screen.getByPlaceholderText("What's on your mind?"), 'Local draft')
+		await user.click(screen.getByRole('button', { name: 'Draft' }))
+
+		await waitFor(() =>
+			expect(mockEnqueuePost).toHaveBeenCalledWith(expect.objectContaining({ isDraft: true }))
+		)
+		expect(mockToast).toHaveBeenCalledWith('Saved on this device.')
+	})
+
+	it('renders the auto-sync toggle and changes mode from its radio menu', async () => {
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+
+		await user.click(screen.getByRole('button', { name: 'Auto-sync' }))
+		expect(screen.getByText('Posts go online as soon as possible.')).toBeInTheDocument()
+		expect(screen.getByText('Posts wait here until you send them.')).toBeInTheDocument()
+		await user.click(screen.getByText('Stay on this device'))
+
+		expect(mockSetSyncMode).toHaveBeenCalledWith('local')
+	})
+
+	it('loads an outbox entry into an empty composer with final media bytes', async () => {
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		const media = new Blob(['final-image'], { type: 'image/png' })
+
+		let loaded = false
+		act(() => {
+			loaded = requestComposerLoad(
+				makeEntry({ media, mediaType: 'image', mediaName: 'restored.png' })
+			)
+		})
+
+		expect(loaded).toBe(true)
+		expect(screen.getByPlaceholderText("What's on your mind?")).toHaveValue(
+			'Restored from the outbox'
+		)
+		expect(screen.getByText('restored.png')).toBeInTheDocument()
+
+		await userEvent.click(screen.getByRole('button', { name: 'Post' }))
+		await waitFor(() => expect(onPostCreated).toHaveBeenCalledTimes(1))
+		expect(onPostCreated).toHaveBeenCalledWith(
+			expect.objectContaining({
+				text: 'Restored from the outbox',
+				visibility: 'private',
+				media: expect.objectContaining({ name: 'restored.png', type: 'image/png' }),
+			})
+		)
+	})
+
+	it('refuses to replace content already in the composer', async () => {
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+		const composer = screen.getByPlaceholderText("What's on your mind?")
+		await user.type(composer, 'Already writing')
+
+		expect(requestComposerLoad(makeEntry())).toBe(false)
+		expect(composer).toHaveValue('Already writing')
 	})
 
 	it('submits the selected visibility', async () => {

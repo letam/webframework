@@ -596,3 +596,26 @@ Phase 2:
 - The queued card's status/Draft chip row moved from the header cluster to below the text and
   media preview, so status sits next to the error line it explains; media previews made the
   header placement cramped. The image alt text carries the stored filename.
+
+Phase 3:
+
+- The spec pinned Edit as disabled-with-tooltip while the composer is occupied. A live disabled
+  state needs reactive cross-component occupancy tracking (composer state observed from every
+  card), so occupancy is instead checked at click time via the `composerBridge` loader's return
+  value, with the toast `Finish or clear the composer first.` on refusal — the same
+  confirm-time-check idiom `removeEntry`'s sending-guard already uses.
+- Edit re-reads the entry from the engine snapshot at click time. The rendered card can predate
+  a flush pass that has since marked the entry `sending`; loading that content into the composer
+  would duplicate a post already publishing. A sending entry gets the pinned can't-edit toast, a
+  vanished one is a silent no-op.
+- Indicator priority: the local-mode HardDrive state sits *below* offline, flushing, and failed —
+  a manual "Post all" in local mode shows the spinner, and failures keep winning. The spec only
+  pinned "offline wins"; the rest follows the phase-1 ordering rationale (most actionable first).
+- The auth-verify abort inside a *manual* flush now toasts "Couldn't reach the server — your
+  posts are still on this device." — silently doing nothing on an explicit click reads as a
+  broken button. Background passes stay silent, and a latched manual request replayed by
+  `drainPendingFlush` intentionally degrades to a silent background pass.
+- Manual actions while offline (`Post now`, `Post all`) toast "You're offline." and skip the
+  flush instead of burning a doomed attempt.
+- Draft-ness is not restored on Edit (spec-pinned): the composer has no draft slot; the user
+  re-chooses at submit.

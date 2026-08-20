@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useCallback, useState, useRef } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,20 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Mic, Video, Image, Loader2, Upload, Globe, Link2, Lock, Bold, Italic } from 'lucide-react'
+import {
+	Mic,
+	Video,
+	Image,
+	Loader2,
+	Upload,
+	Globe,
+	Link2,
+	Lock,
+	Bold,
+	Italic,
+	Cloud,
+	CloudOff,
+} from 'lucide-react'
 import { AudioRecorderModal } from './AudioRecorder'
 import { VideoRecorderModal } from './VideoRecorder'
 import MediaPreview from './MediaPreview'
@@ -21,9 +34,12 @@ import { getSettings } from '@/lib/utils/settings'
 import { applyMarkdownShortcut, toggleMarker } from '@/lib/utils/richText'
 import { modifierKeyLabel } from '@/lib/utils/browser'
 import { useAuth } from '@/hooks/useAuth'
+import { useOutbox } from '@/hooks/useOutbox'
 import { useComposerDraft } from '@/hooks/useComposerDraft'
 import type { ComposerDraft } from '@/lib/utils/composerDraft'
-import { enqueuePost, MAX_QUEUED_MEDIA_BYTES } from '@/lib/outbox'
+import { enqueuePost, MAX_QUEUED_MEDIA_BYTES, setSyncMode, type SyncMode } from '@/lib/outbox'
+import { registerComposerLoader } from '@/lib/composerBridge'
+import type { OutboxEntry } from '@/lib/utils/outboxDb'
 
 interface CreatePostProps {
 	onPostCreated: (post: CreatePostRequest) => Promise<void> | void
@@ -73,6 +89,7 @@ const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): stri
 
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const { isAuthenticated, isAuthResolved, userId } = useAuth()
+	const { syncMode } = useOutbox()
 	const [postText, setPostText] = useState('')
 	const [mediaType, setMediaType] = useState<'text' | 'audio' | 'video' | 'image'>('text')
 	const [visibility, setVisibility] = useState<PostVisibility>('public')
@@ -96,6 +113,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const expanded = isFocused || canPost || !!submitStatus
 	const VisibilityIcon =
 		VISIBILITY_OPTIONS.find((option) => option.value === visibility)?.icon ?? Globe
+	const SyncModeIcon = syncMode === 'auto' ? Cloud : CloudOff
 	const modKey = modifierKeyLabel()
 
 	// Read once on mount: autosave should not start or stop mid-compose because
@@ -112,6 +130,31 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				: mediaType === 'image'
 					? imageFile
 					: null
+
+	const loadOutboxEntry = useCallback(
+		(entry: OutboxEntry) => {
+			if (postText.length > 0 || !hasNoMedia) return false
+
+			setPostText(entry.text)
+			setVisibility(entry.visibility ?? 'public')
+			if (entry.media && entry.mediaType) {
+				const file = new File([entry.media], entry.mediaName ?? 'restored', {
+					type: entry.media.type,
+				})
+				setMediaType(entry.mediaType)
+				if (entry.mediaType === 'audio') setAudioFile(file)
+				if (entry.mediaType === 'video') setVideoFile(file)
+				if (entry.mediaType === 'image') setImageFile(file)
+			} else {
+				setMediaType('text')
+			}
+			textareaRef.current?.focus()
+			return true
+		},
+		[hasNoMedia, postText]
+	)
+
+	useEffect(() => registerComposerLoader(loadOutboxEntry), [loadOutboxEntry])
 
 	const restoreDraft = useCallback((stored: ComposerDraft) => {
 		setPostText(stored.text)
@@ -348,9 +391,11 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 		resetComposer()
 		toast(
-			isDraft
-				? "Queued — will save to drafts when you're back online."
-				: "Queued — will post when you're back online."
+			syncMode === 'local'
+				? 'Saved on this device.'
+				: isDraft
+					? "Queued — will save to drafts when you're back online."
+					: "Queued — will post when you're back online."
 		)
 	}
 
@@ -374,7 +419,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			return
 		}
 
-		if (!navigator.onLine) {
+		if (syncMode === 'local' || !navigator.onLine) {
 			setSubmitStatus('preparing')
 			try {
 				const prepared = await prepareMediaFile()
@@ -626,6 +671,50 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 										: 'Posting...'}
 							</span>
 						)}
+						<TooltipProvider delayDuration={300}>
+							<Tooltip>
+								<DropdownMenu>
+									<DropdownMenuTrigger asChild>
+										<TooltipTrigger asChild>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												className="h-8 w-8 rounded-full text-muted-foreground"
+												disabled={!!submitStatus}
+												aria-label="Auto-sync"
+											>
+												<SyncModeIcon className="h-4 w-4" />
+											</Button>
+										</TooltipTrigger>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end" className="w-72">
+										<DropdownMenuRadioGroup
+											value={syncMode}
+											onValueChange={(value) => setSyncMode(value as SyncMode)}
+										>
+											<DropdownMenuRadioItem value="auto" className="items-start gap-2">
+												<span className="grid gap-0.5">
+													<span>Sync automatically</span>
+													<span className="text-xs text-muted-foreground">
+														Posts go online as soon as possible.
+													</span>
+												</span>
+											</DropdownMenuRadioItem>
+											<DropdownMenuRadioItem value="local" className="items-start gap-2">
+												<span className="grid gap-0.5">
+													<span>Stay on this device</span>
+													<span className="text-xs text-muted-foreground">
+														Posts wait here until you send them.
+													</span>
+												</span>
+											</DropdownMenuRadioItem>
+										</DropdownMenuRadioGroup>
+									</DropdownMenuContent>
+								</DropdownMenu>
+								<TooltipContent>Auto-sync</TooltipContent>
+							</Tooltip>
+						</TooltipProvider>
 						{isAuthenticated && expanded && (
 							<TooltipProvider delayDuration={300}>
 								<Tooltip>

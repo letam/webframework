@@ -27,6 +27,32 @@ test.describe('Offline posts', () => {
 		}, GROUND_RULES)
 	})
 
+	test('keeps an online post local until Post now is clicked', async ({ page }) => {
+		const postText = `Kept on device ${Date.now()}`
+		await page.goto('/')
+
+		await page.getByRole('button', { name: 'Auto-sync' }).click()
+		await page.getByText('Stay on this device', { exact: true }).click()
+		await page.locator('[data-composer-input]').fill(postText)
+		await page.getByRole('button', { name: 'Post', exact: true }).click()
+
+		const outbox = page.getByTestId('outbox-list')
+		await expect(outbox.getByText(postText)).toBeVisible()
+		await expect(outbox.getByText('On this device', { exact: true })).toBeVisible()
+
+		await page.reload()
+		const restoredOutbox = page.getByTestId('outbox-list')
+		await expect(restoredOutbox.getByText(postText)).toBeVisible()
+		await expect(restoredOutbox.getByText('On this device', { exact: true })).toBeVisible()
+
+		await restoredOutbox.getByRole('button', { name: 'Post now' }).click()
+
+		await expect(restoredOutbox).not.toBeVisible({ timeout: 15_000 })
+		await expect(page.locator('[data-testid^="post-"]').filter({ hasText: postText })).toBeVisible({
+			timeout: 15_000,
+		})
+	})
+
 	test('persists a queued text post and syncs it after reconnect', async ({ page }) => {
 		const postText = `Queued offline ${Date.now()}`
 		await page.route(isBackendCall, (route) => route.abort())
@@ -34,7 +60,7 @@ test.describe('Offline posts', () => {
 		await setNavigatorOnline(page, false)
 
 		await page.locator('[data-composer-input]').fill(postText)
-		await page.getByRole('button', { name: 'Post' }).click()
+		await page.getByRole('button', { name: 'Post', exact: true }).click()
 
 		const outbox = page.getByTestId('outbox-list')
 		await expect(outbox.getByText(postText)).toBeVisible()
@@ -69,7 +95,7 @@ test.describe('Offline posts', () => {
 			mimeType: 'image/png',
 			buffer: Buffer.from(PNG_1X1, 'base64'),
 		})
-		await page.getByRole('button', { name: 'Post' }).click()
+		await page.getByRole('button', { name: 'Post', exact: true }).click()
 
 		const preview = page.getByTestId('outbox-media-preview')
 		await expect(preview).toBeVisible()

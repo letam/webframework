@@ -39,7 +39,7 @@ describe('SyncStatusIndicator', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		mockUseOnlineStatus.mockReturnValue(true)
-		mockUseOutbox.mockReturnValue({ entries: [], flushing: false })
+		mockUseOutbox.mockReturnValue({ entries: [], flushing: false, syncMode: 'auto' })
 	})
 
 	it('shows the singular offline queued state', () => {
@@ -94,10 +94,45 @@ describe('SyncStatusIndicator', () => {
 	})
 
 	it('shows the online pre-flush lull', () => {
-		mockUseOutbox.mockReturnValue({ entries: [makeEntry(), makeEntry()], flushing: false })
+		mockUseOutbox.mockReturnValue({
+			entries: [makeEntry(), makeEntry()],
+			flushing: false,
+			syncMode: 'auto',
+		})
 		renderIndicator()
 
 		expect(screen.getByLabelText('2 queued.')).toHaveTextContent('2')
+	})
+
+	it('shows the local-mode pending state with a hard-drive icon', () => {
+		mockUseOutbox.mockReturnValue({
+			entries: [makeEntry(), makeEntry()],
+			flushing: false,
+			syncMode: 'local',
+		})
+		const { container } = renderIndicator()
+
+		expect(
+			screen.getByLabelText('Auto-sync is off — posts stay on this device.')
+		).toHaveTextContent('2')
+		expect(container.querySelector('.lucide-hard-drive')).toBeInTheDocument()
+	})
+
+	it('keeps the offline state ahead of local mode', () => {
+		mockUseOnlineStatus.mockReturnValue(false)
+		mockUseOutbox.mockReturnValue({
+			entries: [makeEntry()],
+			flushing: false,
+			syncMode: 'local',
+		})
+		renderIndicator()
+
+		expect(
+			screen.getByLabelText("You're offline — 1 post queued. It'll go out when you're back online.")
+		).toBeInTheDocument()
+		expect(
+			screen.queryByLabelText('Auto-sync is off — posts stay on this device.')
+		).not.toBeInTheDocument()
 	})
 
 	it('is hidden while online and empty', () => {

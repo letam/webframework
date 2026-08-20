@@ -1,11 +1,11 @@
-import { Cloud, Loader2, TriangleAlert, WifiOff } from 'lucide-react'
+import { Cloud, HardDrive, Loader2, TriangleAlert, WifiOff } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
 import { useOutbox } from '@/hooks/useOutbox'
 
 export const SyncStatusIndicator = () => {
 	const online = useOnlineStatus()
-	const { entries, flushing } = useOutbox()
+	const { entries, flushing, syncMode } = useOutbox()
 	const count = entries.length
 	const failedCount = entries.filter((entry) => entry.status === 'failed').length
 
@@ -32,6 +32,9 @@ export const SyncStatusIndicator = () => {
 		Icon = TriangleAlert
 		label = "Some queued posts couldn't be sent."
 		visibleCount = failedCount
+	} else if (syncMode === 'local' && count > 0) {
+		Icon = HardDrive
+		label = 'Auto-sync is off — posts stay on this device.'
 	} else if (count > 0) {
 		label = `${count} queued.`
 	} else {

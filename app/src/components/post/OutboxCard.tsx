@@ -14,7 +14,9 @@ import {
 } from '@/components/ui/alert-dialog'
 import { toast } from '@/components/ui/sonner'
 import { useAuth } from '@/hooks/useAuth'
-import { removeEntry, retryEntry } from '@/lib/outbox'
+import { useOutbox } from '@/hooks/useOutbox'
+import { flushEntry, getOutboxSnapshot, removeEntry, retryEntry, type SyncMode } from '@/lib/outbox'
+import { requestComposerLoad } from '@/lib/composerBridge'
 import type { OutboxEntry } from '@/lib/utils/outboxDb'
 import { formatShortTime } from '@/lib/utils/time'
 import { identityGradient } from '@/lib/utils/identity'
@@ -24,14 +26,15 @@ interface OutboxCardProps {
 	entry: OutboxEntry
 }
 
-const statusLabel = (entry: OutboxEntry) => {
+const statusLabel = (entry: OutboxEntry, syncMode: SyncMode) => {
 	if (entry.status === 'sending') return 'Posting…'
 	if (entry.status === 'failed') return "Couldn't post"
-	return 'Queued'
+	return syncMode === 'local' ? 'On this device' : 'Queued'
 }
 
 export const OutboxCard = ({ entry }: OutboxCardProps) => {
 	const { isAuthenticated, username, avatar } = useAuth()
+	const { syncMode } = useOutbox()
 	const [removeOpen, setRemoveOpen] = useState(false)
 	const [mediaUrl, setMediaUrl] = useState<string | null>(null)
 	const identity = isAuthenticated ? (username ?? 'you') : 'anonymous'
@@ -56,6 +59,32 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 			return
 		}
 		toast('Removed.')
+	}
+
+	const handlePostNow = () => {
+		if (!navigator.onLine) {
+			toast("You're offline.")
+			return
+		}
+		void flushEntry(entry.id)
+	}
+
+	const handleEdit = async () => {
+		// Re-read at click time: the rendered entry can predate a pass that has
+		// since picked it up, and loading a sending entry would put its content in
+		// the composer while the send still publishes it. No await sits between
+		// this check and removeEntry's own, so the two cannot disagree.
+		const current = getOutboxSnapshot().entries.find((candidate) => candidate.id === entry.id)
+		if (!current) return
+		if (current.status === 'sending') {
+			toast("This post is already being sent, so it can't be edited.")
+			return
+		}
+		if (!requestComposerLoad(current)) {
+			toast('Finish or clear the composer first.')
+			return
+		}
+		await removeEntry(entry.id)
 	}
 
 	return (
@@ -117,7 +146,7 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 					)}
 				>
 					{entry.status === 'sending' && <Loader2 className="h-3 w-3 animate-spin" />}
-					{statusLabel(entry)}
+					{statusLabel(entry, syncMode)}
 				</span>
 				{entry.isDraft && (
 					<span className="rounded-full border px-1.5 py-0.5 text-[11px] font-medium leading-none text-muted-foreground">
@@ -131,6 +160,16 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 			)}
 
 			<div className="mt-2 flex justify-end gap-1">
+				{entry.status === 'queued' && (
+					<Button type="button" variant="ghost" size="sm" onClick={handlePostNow}>
+						Post now
+					</Button>
+				)}
+				{entry.status !== 'sending' && (
+					<Button type="button" variant="ghost" size="sm" onClick={() => void handleEdit()}>
+						Edit
+					</Button>
+				)}
 				{entry.status === 'failed' && (
 					<Button type="button" variant="ghost" size="sm" onClick={() => void retryEntry(entry.id)}>
 						Retry

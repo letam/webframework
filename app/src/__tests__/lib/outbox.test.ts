@@ -6,11 +6,14 @@ import {
 	__resetOutboxForTests,
 	configureOutbox,
 	enqueuePost,
+	flushEntry,
 	flushOutbox,
 	getOutboxSnapshot,
 	handleOutboxOnline,
 	removeEntry,
 	retryEntry,
+	setSyncMode,
+	subscribeOutbox,
 	type OutboxAuthState,
 } from '@/lib/outbox'
 import type { PostsPage } from '@/lib/api/posts'
@@ -80,12 +83,46 @@ const enqueueText = (overrides: Partial<Parameters<typeof enqueuePost>[0]> = {})
 		...overrides,
 	})
 
+describe('outbox sync mode initialization', () => {
+	afterEach(() => {
+		localStorage.removeItem('post-sync-mode')
+		vi.restoreAllMocks()
+	})
+
+	it.each([
+		['local', 'local'],
+		['auto', 'auto'],
+		['unexpected', 'auto'],
+	] as const)('initializes %s storage as %s mode', async (stored, expected) => {
+		localStorage.setItem('post-sync-mode', stored)
+		vi.resetModules()
+
+		const freshOutbox = await import('@/lib/outbox')
+
+		expect(freshOutbox.getOutboxSnapshot().syncMode).toBe(expected)
+		freshOutbox.__resetOutboxForTests()
+	})
+
+	it('falls back to auto when storage cannot be read', async () => {
+		vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+			throw new Error('blocked')
+		})
+		vi.resetModules()
+
+		const freshOutbox = await import('@/lib/outbox')
+
+		expect(freshOutbox.getOutboxSnapshot().syncMode).toBe('auto')
+		freshOutbox.__resetOutboxForTests()
+	})
+})
+
 describe('outbox sync engine', () => {
 	let queryClient: QueryClient
 	let auth: OutboxAuthState
 
 	beforeEach(() => {
 		vi.clearAllMocks()
+		localStorage.removeItem('post-sync-mode')
 		storedEntries.clear()
 		__resetOutboxForTests()
 		setOnline(false)
@@ -102,8 +139,114 @@ describe('outbox sync engine', () => {
 
 	afterEach(() => {
 		__resetOutboxForTests()
+		localStorage.removeItem('post-sync-mode')
 		setOnline(true)
 		vi.useRealTimers()
+	})
+
+	it('persists mode changes and publishes a reactive snapshot', () => {
+		const initial = getOutboxSnapshot()
+		const listener = vi.fn()
+		const unsubscribe = subscribeOutbox(listener)
+
+		setSyncMode('local')
+
+		expect(getOutboxSnapshot()).not.toBe(initial)
+		expect(getOutboxSnapshot().syncMode).toBe('local')
+		expect(localStorage.getItem('post-sync-mode')).toBe('local')
+		expect(listener).toHaveBeenCalledTimes(1)
+
+		setSyncMode('local')
+		expect(listener).toHaveBeenCalledTimes(1)
+		unsubscribe()
+	})
+
+	it('resets tests to auto without reading storage', () => {
+		setSyncMode('local')
+		const storageRead = vi.spyOn(Storage.prototype, 'getItem')
+
+		__resetOutboxForTests()
+
+		expect(getOutboxSnapshot().syncMode).toBe('auto')
+		expect(storageRead).not.toHaveBeenCalled()
+	})
+
+	it('suppresses automatic passes and backoff while local', async () => {
+		vi.useFakeTimers()
+		setSyncMode('local')
+		setOnline(true)
+		vi.mocked(postsApi.createPost).mockRejectedValue(new TypeError('offline'))
+
+		await enqueueText()
+		await Promise.resolve()
+		expect(postsApi.createPost).not.toHaveBeenCalled()
+
+		await flushOutbox()
+		expect(postsApi.createPost).not.toHaveBeenCalled()
+
+		await flushOutbox({ manual: true })
+		expect(postsApi.createPost).toHaveBeenCalledTimes(1)
+		await vi.advanceTimersByTimeAsync(300_000)
+		expect(postsApi.createPost).toHaveBeenCalledTimes(1)
+	})
+
+	it('manually posts all queued entries while local', async () => {
+		setSyncMode('local')
+		await enqueueText({ text: 'First local post' })
+		await enqueueText({ text: 'Second local post' })
+		vi.mocked(postsApi.createPost)
+			.mockResolvedValueOnce(makePost({ id: 101 }))
+			.mockResolvedValueOnce(makePost({ id: 102 }))
+		setOnline(true)
+
+		await flushOutbox({ manual: true })
+
+		expect(postsApi.createPost).toHaveBeenCalledTimes(2)
+		expect(getOutboxSnapshot().entries).toEqual([])
+	})
+
+	it('manually posts one queued entry while local', async () => {
+		setSyncMode('local')
+		await enqueueText()
+		const entryId = getOutboxSnapshot().entries[0].id
+		vi.mocked(postsApi.createPost).mockResolvedValueOnce(makePost({ id: 103 }))
+		setOnline(true)
+
+		await flushEntry(entryId)
+
+		expect(postsApi.createPost).toHaveBeenCalledTimes(1)
+		expect(getOutboxSnapshot().entries).toEqual([])
+	})
+
+	it('flushes automatically when local mode switches back to auto', async () => {
+		setSyncMode('local')
+		setOnline(true)
+		await enqueueText()
+		vi.mocked(postsApi.createPost).mockResolvedValueOnce(makePost({ id: 104 }))
+
+		setSyncMode('auto')
+
+		await vi.waitFor(() => expect(getOutboxSnapshot().entries).toEqual([]))
+		expect(postsApi.createPost).toHaveBeenCalledTimes(1)
+	})
+
+	it('shows the pinned error when a manual pass cannot verify auth', async () => {
+		setSyncMode('local')
+		auth = { isAuthenticated: false, userId: null, isAuthResolved: false }
+		configureOutbox({
+			queryClient,
+			getAuthState: () => auth,
+			refreshAuthStatus: vi.fn(async () => false),
+		})
+		await enqueueText({ author: 'unknown' })
+		setOnline(true)
+
+		await flushOutbox({ manual: true })
+
+		expect(postsApi.createPost).not.toHaveBeenCalled()
+		expect(mockToast.error).toHaveBeenCalledWith(
+			"Couldn't reach the server — your posts are still on this device."
+		)
 	})
 
 	it('removes a successful entry and prepends the server post to matching caches', async () => {
