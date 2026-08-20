@@ -10,6 +10,15 @@ interface AuthState {
 	 * the user id (e.g. composer drafts) must wait this out, or they act on the
 	 * pre-resolve `userId === null` and mistake a signed-in user for anonymous. */
 	isAuthLoading: boolean
+	/** True once /auth/status/ has actually answered. Distinct from
+	 * `!isAuthLoading`, which also goes true when the check *failed* — and a
+	 * failed check leaves `userId` at its null default, which is
+	 * indistinguishable from a genuine anonymous visitor. Anything that would
+	 * write the current user's data somewhere keyed on that id must gate on this
+	 * one instead; being wrong there puts a signed-in user's content in the
+	 * shared anonymous slot. Once true it stays true: a later failure does not
+	 * invalidate the last answer we got. */
+	isAuthResolved: boolean
 	userId: number | null
 	username: string | null
 	avatar: string | null
@@ -33,6 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 	const [authState, setAuthState] = useState<AuthState>({
 		isAuthenticated: false,
 		isAuthLoading: true,
+		isAuthResolved: false,
 		userId: null,
 		username: null,
 		avatar: null,
@@ -48,6 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 				const newAuthState = {
 					isAuthenticated: data.is_authenticated,
 					isAuthLoading: false,
+					isAuthResolved: true,
 					userId: data.user_id,
 					username: data.username,
 					avatar: data.avatar ?? null,
@@ -81,6 +92,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 			// outcome (ok, non-2xx, or thrown) — otherwise a failed initial check
 			// would leave consumers waiting forever. Only touch state if still
 			// loading, to avoid a redundant re-render on the happy path.
+			//
+			// `isAuthResolved` deliberately stays false here. The UI can render a
+			// signed-out shell on a failed check and recover when the user acts;
+			// storage keyed on the user id cannot, because the null it would key
+			// on is a default rather than an answer.
 			setAuthState((prev) => (prev.isAuthLoading ? { ...prev, isAuthLoading: false } : prev))
 		}
 	}, [queryClient])

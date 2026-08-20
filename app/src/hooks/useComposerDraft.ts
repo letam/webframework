@@ -70,10 +70,10 @@ export const useComposerDraft = ({
 	const storageKey = draftKeyForUser(userId)
 	const restoredKeys = useRef(new Set<string>())
 
-	// Restore. Keyed on the user. `enabled` stays false until auth resolves (the
-	// consumer gates it on `!isAuthLoading`), so this reads the correct per-user
-	// slot on its first run rather than racing the anonymous slot; it re-runs if
-	// the user id later changes (a login mid-compose).
+	// Restore. Keyed on the user. `enabled` stays false until /auth/status/ has
+	// answered (the consumer gates it on `isAuthResolved`), so this reads the
+	// correct per-user slot on its first run rather than racing the anonymous
+	// slot; it re-runs if the user id later changes (a login mid-compose).
 	useEffect(() => {
 		if (!enabled || restoredKeys.current.has(storageKey)) return
 		restoredKeys.current.add(storageKey)

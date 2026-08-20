@@ -71,7 +71,7 @@ const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): stri
 }
 
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
-	const { isAuthenticated, isAuthLoading, userId } = useAuth()
+	const { isAuthenticated, isAuthResolved, userId } = useAuth()
 	const [postText, setPostText] = useState('')
 	const [mediaType, setMediaType] = useState<'text' | 'audio' | 'video' | 'image'>('text')
 	const [visibility, setVisibility] = useState<PostVisibility>('public')
@@ -147,10 +147,13 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		clear: clearStoredDraft,
 		acknowledgeRestore,
 	} = useComposerDraft({
-		// Hold off until auth resolves: before that, userId is null (indistinguishable
-		// from a real anonymous user), so saving would route a signed-in user's words
-		// to the shared anonymous slot.
-		enabled: draftsEnabled && !isAuthLoading,
+		// Hold off until auth actually answers: until then userId is null, which is
+		// indistinguishable from a real anonymous user, so saving would route a
+		// signed-in user's words to the shared anonymous slot. `isAuthResolved`
+		// rather than `!isAuthLoading` because the loading gate also opens when the
+		// check *failed*, and a failed check is exactly the case where the null is a
+		// default rather than an answer.
+		enabled: draftsEnabled && isAuthResolved,
 		userId,
 		text: postText,
 		visibility,
