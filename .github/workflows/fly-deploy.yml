@@ -20,7 +20,11 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
       # --config is required: the root fly.toml is a stale reference snapshot
       # (see CLAUDE.md "Deployment"). fly-sqlite.toml is the production config.
-      - run: flyctl deploy --remote-only --config admin/configs/fly-sqlite.toml
+      # --app is required with it: unlike the root fly.toml, that config carries
+      # the literal placeholder `app = 'FLY_APP_NAME'` so it can be reused for
+      # any app, so flyctl has no real target unless one is passed. This mirrors
+      # the `fly-deploy-app-sqlite` just recipe, which takes the name the same way.
+      - run: flyctl deploy --remote-only --config admin/configs/fly-sqlite.toml --app webframework
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
   # If using storage volume, i.e. to persist SQLite database, then uncomment to activate the following job:
