@@ -1444,6 +1444,37 @@ class LinkPreviewImageEndpointTests(ViewTestCase):
         self.assertEqual(public_response['Cache-Control'], 'private, max-age=86400')
         self.assertGreater(len(public_content), 0)
 
+    def test_api_preview_image_url_is_fetchable_by_token_holder(self):
+        """An unlisted post's serialized image URL should work for a token holder."""
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                post = Post.objects.create(
+                    author=self.user,
+                    body='Link',
+                    visibility=VISIBILITY_UNLISTED,
+                )
+                preview = LinkPreview.objects.create(
+                    post=post,
+                    url='https://example.com/article',
+                    status='ok',
+                )
+                preview.image.save('preview.jpg', ContentFile(self._jpeg_bytes()), save=True)
+
+                detail = self.anon_client.get(
+                    reverse('post-detail', args=[post.id]),
+                    {'token': post.share_token},
+                )
+                self.assertEqual(detail.status_code, 200)
+                image_url = detail.json()['link_previews'][0]['image']
+
+                # The URL the API hands out must be usable as-is. Without the
+                # token the gated endpoint 404s, so serving a tokenless URL to a
+                # token holder breaks every preview image on the shared post.
+                self.assertIn(f'token={post.share_token}', image_url)
+                image_response = self.anon_client.get(image_url)
+
+        self.assertEqual(image_response.status_code, 200)
+
 
 class LinkPreviewDeletionTests(BaseTestCase):
     """Tests for preview image cleanup on post deletion."""

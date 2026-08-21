@@ -178,6 +178,15 @@ class LinkPreviewSerializer(serializers.ModelSerializer):
             return None
 
         url = reverse('link-preview-image', args=[obj.pk])
+        # The endpoint gates on Post.is_visible_to, so an unlisted post's image
+        # needs the same token its share page appends -- without it a recipient
+        # holding the link gets a 404 for every preview image. `obj.post` is
+        # free here: the viewset prefetches `link_previews`, which populates the
+        # forward FK cache on each preview.
+        post = obj.post
+        if post.visibility == VISIBILITY_UNLISTED and post.share_token:
+            url = f'{url}?token={post.share_token}'
+
         request = self.context.get('request')
         if request:
             return request.build_absolute_uri(url)
