@@ -314,6 +314,11 @@ def _safe_get(url: str, *, max_bytes: int) -> httpx.Response | None:
                 # (Host) and certificate verification (sni_hostname). httpx only
                 # auto-fills Host from the URL when it is absent, so our explicit
                 # header wins and the IP is never sent as the Host.
+                # sni_hostname is deliberately a str. httpcore passes the extension
+                # through untouched -- the `.decode('ascii')` on the adjacent line of
+                # its _connect() applies to the origin host, not to this value -- and
+                # the str is load-bearing: without it SNI falls back to the pinned IP
+                # literal and the TLS handshake fails outright.
                 connect_url = httpx.URL(current_url).copy_with(host=connect_ip)
 
                 with client.stream(
