@@ -12,10 +12,12 @@ from urllib.parse import parse_qs, quote, urljoin, urlparse
 
 import httpx
 from django.core.files.base import ContentFile
+from django.db import transaction
 from django.utils import timezone
 from PIL import Image
 
 from .models import LinkPreview
+from .utils import flatten_to_rgb
 
 logger = logging.getLogger(__name__)
 
@@ -224,49 +226,78 @@ def _address_is_safe(address: str) -> bool:
     )
 
 
-def _url_is_safe(url: str) -> bool:
+def _resolve_pinned_target(url: str) -> tuple[str, str] | None:
+    """Validate `url` against the SSRF policy and pin it to one resolved IP.
+
+    Returns ``(connect_ip, host_header)`` — the concrete IP literal to open the
+    connection to, and the original hostname to carry as the ``Host`` header and
+    the TLS SNI/verification name — or ``None`` if the URL fails any check.
+
+    Resolving here and connecting to the returned IP literal (never the name
+    again) is what closes the DNS-rebinding hole. The old code validated the
+    resolved addresses and then handed the *hostname* back to httpx, which
+    resolved it a second time at connect time: a 0-TTL record that answered a
+    public address for the check and ``127.0.0.1`` / ``169.254.169.254`` / a 6PN
+    address microseconds later sailed straight through. Every resolved address
+    must be safe (fail closed), and each redirect hop is re-resolved and
+    re-pinned by calling this again.
+    """
     parsed = urlparse(url)
     if parsed.scheme not in {'http', 'https'}:
-        return False
+        return None
     if parsed.username is not None or parsed.password is not None:
-        return False
+        return None
     try:
         port = parsed.port
     except ValueError:
-        return False
+        return None
     if port is not None and port not in {80, 443}:
-        return False
+        return None
 
     hostname = parsed.hostname
     if not hostname:
-        return False
+        return None
 
+    # A literal-IP host has no name to rebind: validate it as-is and connect to it.
     try:
-        return _address_is_safe(hostname)
+        ipaddress.ip_address(hostname)
     except ValueError:
         pass
+    else:
+        return (hostname, hostname) if _address_is_safe(hostname) else None
 
     try:
         addresses = socket.getaddrinfo(hostname, port or 443, type=socket.SOCK_STREAM)
     except OSError:
-        return False
+        return None
 
+    resolved_ips: list[str] = []
     for address in addresses:
         try:
-            ip_address = address[4][0]
+            ip_literal = address[4][0]
         except (IndexError, TypeError):
-            return False
+            return None
         try:
-            if not _address_is_safe(ip_address):
-                return False
+            if not _address_is_safe(ip_literal):
+                return None
         except ValueError:
-            return False
+            return None
+        resolved_ips.append(ip_literal)
 
-    return True
+    if not resolved_ips:
+        return None
+    # Every resolved address passed; connect to the first, pinned to that IP.
+    return resolved_ips[0], hostname
 
 
 def _safe_get(url: str, *, max_bytes: int) -> httpx.Response | None:
-    """Fetch a URL after SSRF checks, returning None for any refusal or failure."""
+    """Fetch a URL after SSRF checks, returning None for any refusal or failure.
+
+    Each hop is resolved once and the request is sent to the pinned IP literal,
+    with the original hostname carried in the ``Host`` header and the TLS SNI, so
+    the connection cannot be rebound to an internal address between check and
+    connect. Redirects are followed manually, re-pinning every hop.
+    """
     try:
         current_url = url
         with httpx.Client(
@@ -275,15 +306,35 @@ def _safe_get(url: str, *, max_bytes: int) -> httpx.Response | None:
             headers={'User-Agent': USER_AGENT, 'Accept-Language': 'en'},
         ) as client:
             for _redirect_count in range(MAX_REDIRECTS + 1):
-                if not _url_is_safe(current_url):
+                pinned = _resolve_pinned_target(current_url)
+                if pinned is None:
                     return None
+                connect_ip, host_header = pinned
+                # Connect to the validated IP; keep the hostname for vhost routing
+                # (Host) and certificate verification (sni_hostname). httpx only
+                # auto-fills Host from the URL when it is absent, so our explicit
+                # header wins and the IP is never sent as the Host.
+                # sni_hostname is deliberately a str. httpcore passes the extension
+                # through untouched -- the `.decode('ascii')` on the adjacent line of
+                # its _connect() applies to the origin host, not to this value -- and
+                # the str is load-bearing: without it SNI falls back to the pinned IP
+                # literal and the TLS handshake fails outright.
+                connect_url = httpx.URL(current_url).copy_with(host=connect_ip)
 
-                with client.stream('GET', current_url) as response:
+                with client.stream(
+                    'GET',
+                    connect_url,
+                    headers={'Host': host_header},
+                    extensions={'sni_hostname': host_header},
+                ) as response:
                     if response.status_code in REDIRECT_STATUSES:
                         location = response.headers.get('location')
                         if not location:
                             return None
-                        current_url = urljoin(str(response.url), location)
+                        # Resolve against the logical URL (original hostname), not
+                        # the pinned-IP URL httpx sees, so a relative redirect keeps
+                        # the real host and the next hop re-pins from scratch.
+                        current_url = urljoin(current_url, location)
                         continue
 
                     content = bytearray()
@@ -297,11 +348,14 @@ def _safe_get(url: str, *, max_bytes: int) -> httpx.Response | None:
                     headers = response.headers.copy()
                     headers.pop('content-encoding', None)
                     headers.pop('content-length', None)
+                    # Rebuild against the logical URL so callers that resolve
+                    # relative links (og:image, redirect Location) see the real
+                    # hostname, not the IP literal we connected to.
                     return httpx.Response(
                         status_code=response.status_code,
                         headers=headers,
                         content=bytes(content),
-                        request=response.request,
+                        request=httpx.Request('GET', current_url),
                     )
     except Exception:
         logger.info('Failed to fetch link preview URL %s', url, exc_info=True)
@@ -713,14 +767,7 @@ def download_preview_image(preview: LinkPreview, image_url: str) -> None:
     try:
         with Image.open(BytesIO(response.content)) as source_image:
             source_image.thumbnail((640, 640))
-            if source_image.mode in {'RGBA', 'LA'} or (
-                source_image.mode == 'P' and 'transparency' in source_image.info
-            ):
-                rgba_image = source_image.convert('RGBA')
-                normalized = Image.new('RGB', rgba_image.size, 'white')
-                normalized.paste(rgba_image, mask=rgba_image.getchannel('A'))
-            else:
-                normalized = source_image.convert('RGB')
+            normalized = flatten_to_rgb(source_image)
 
             output = BytesIO()
             normalized.save(output, format='JPEG', quality=80)
@@ -806,19 +853,44 @@ def fetch_preview_for(preview: LinkPreview, *, keep_existing_on_failure=False) -
     return True
 
 
+def _delete_stored_images(storage, image_names) -> None:
+    for name in image_names:
+        try:
+            storage.delete(name)
+        except Exception:
+            logger.error('Error deleting link preview image %s', name, exc_info=True)
+
+
+def _delete_previews_deferring_images(previews) -> None:
+    """Delete LinkPreview rows now, freeing their stored images on commit.
+
+    ``LinkPreview.delete()`` removes the storage object synchronously, so calling
+    it inside the viewset's atomic block (both callers do) means a rollback would
+    resurrect the row while its image is already gone. Deleting the rows through
+    the queryset keeps the removal inside the transaction and skips the per-row
+    storage delete; the files are freed from ``on_commit``, so they survive a
+    rollback and vanish only once the delete is durable. ``on_commit`` runs
+    immediately when there is no open transaction, so this is correct outside
+    ``atomic()`` too.
+    """
+    image_names = [name for name in previews.values_list('image', flat=True) if name]
+    previews.delete()
+    if image_names:
+        storage = LinkPreview._meta.get_field('image').storage
+        transaction.on_commit(lambda: _delete_stored_images(storage, image_names))
+
+
 def sync_link_previews(post) -> bool:
     """Synchronize a post's LinkPreview rows with the URLs in its text."""
     if not post.link_previews_enabled:
-        for preview in post.link_previews.all():
-            preview.delete()
+        _delete_previews_deferring_images(post.link_previews.all())
         return False
 
     urls = extract_urls(f'{post.head}\n{post.body}')
     stale_previews = post.link_previews.all()
     if urls:
         stale_previews = stale_previews.exclude(url__in=urls)
-    for preview in stale_previews:
-        preview.delete()
+    _delete_previews_deferring_images(stale_previews)
 
     existing_previews = {preview.url: preview for preview in post.link_previews.all()}
     for position, url in enumerate(urls):

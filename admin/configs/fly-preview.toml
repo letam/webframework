@@ -53,6 +53,11 @@ console_command = '/code/manage.py shell'
   guest_path = '/code/static'
   url_prefix = '/static/'
 
+# Only avatars — public profile images with no visibility gate — are served
+# statically. Post media and link-preview images are intentionally NOT mapped
+# here: mapping all of /media/ let the Fly proxy serve private/unlisted/draft
+# bytes around Post.is_visible_to(). Everything under /media/ except avatars now
+# falls through to Django's gated stream/thumbnail/link-preview views.
 [[statics]]
-  guest_path = '/data/uploads'
-  url_prefix = '/media/'
+  guest_path = '/data/uploads/avatars'
+  url_prefix = '/media/avatars/'

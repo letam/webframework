@@ -11,7 +11,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from apps.blogs.utils import is_valid_image
+from apps.blogs.utils import flatten_to_rgb, is_valid_image
 
 from .utils import get_avatar_url
 
@@ -32,20 +32,6 @@ def _delete_stored_avatar(storage, name):
         logger.exception('Failed to delete avatar file %s', name)
 
 
-def _flatten_to_rgb(image):
-    """Return an RGB image, flattening transparency onto white."""
-    if image.mode == 'RGB':
-        return image
-
-    if image.mode in {'RGBA', 'LA'} or (image.mode == 'P' and 'transparency' in image.info):
-        rgba = image.convert('RGBA')
-        background = Image.new('RGB', rgba.size, (255, 255, 255))
-        background.paste(rgba, mask=rgba.getchannel('A'))
-        return background
-
-    return image.convert('RGB')
-
-
 def _process_avatar(uploaded_file):
     """Normalize an uploaded avatar image to a square 512px JPEG."""
     with Image.open(uploaded_file) as image:
@@ -56,7 +42,7 @@ def _process_avatar(uploaded_file):
         top = (height - side) // 2
         image = image.crop((left, top, left + side, top + side))
         image = image.resize((AVATAR_SIZE, AVATAR_SIZE), Image.Resampling.LANCZOS)
-        image = _flatten_to_rgb(image)
+        image = flatten_to_rgb(image)
 
         output = BytesIO()
         image.save(output, format='JPEG', quality=85)

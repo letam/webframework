@@ -9,7 +9,7 @@ from django.conf import settings as django_settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured
 from django.core.files.base import ContentFile
-from django.test import SimpleTestCase, override_settings
+from django.test import Client, SimpleTestCase, override_settings
 from django.urls import reverse
 from django.utils.module_loading import import_string
 from rest_framework.test import APIClient
@@ -79,10 +79,44 @@ class PresignUploadTests(ViewTestCase):
         self.assertEqual(response.status_code, 400)
 
     def test_missing_fields_return_400(self):
-        """Requests without content_type or file_name should be a 400, not a 500."""
+        """Requests without content_type, file_name or content_length are a 400, not a 500."""
         self.assertEqual(self._presign({}).status_code, 400)
         self.assertEqual(self._presign({'content_type': 'audio/mpeg'}).status_code, 400)
         self.assertEqual(self._presign({'file_name': 'a.mp3'}).status_code, 400)
+        self.assertEqual(
+            self._presign({'content_type': 'audio/mpeg', 'file_name': 'a.mp3'}).status_code,
+            400,
+        )
+
+    def test_non_integer_content_length_is_rejected(self):
+        """A non-integer (or boolean) size is a malformed request, not a 1-byte upload."""
+        for bad in ('1024', 12.5, True, None, [1024]):
+            with self.subTest(content_length=bad):
+                response = self._presign(
+                    {'content_type': 'audio/mpeg', 'file_name': 'clip.mp3', 'content_length': bad}
+                )
+                self.assertEqual(response.status_code, 400)
+
+    def test_zero_or_oversized_content_length_is_rejected(self):
+        """Sizes must be positive and within the media ceiling; the edge enforces it too."""
+        for bad in (0, -1, django_settings.MAX_MEDIA_UPLOAD_BYTES + 1):
+            with self.subTest(content_length=bad):
+                response = self._presign(
+                    {'content_type': 'audio/mpeg', 'file_name': 'clip.mp3', 'content_length': bad}
+                )
+                self.assertEqual(response.status_code, 400)
+
+    @mock.patch('apps.uploads.views.generate_presigned_put_url')
+    def test_content_length_at_the_ceiling_is_signed_into_the_url(self, mock_presign):
+        """The exact byte count reaches the signer so R2 can enforce it at the edge."""
+        mock_presign.return_value = 'https://example.com/signed'
+        size = django_settings.MAX_MEDIA_UPLOAD_BYTES
+        response = self._presign(
+            {'content_type': 'audio/mpeg', 'file_name': 'clip.mp3', 'content_length': size}
+        )
+        self.assertEqual(response.status_code, 200)
+        # (file_path, content_type, content_length) — the size is passed through.
+        self.assertEqual(mock_presign.call_args.args[2], size)
 
     def test_non_media_content_type_is_rejected(self):
         """Only audio, video and image content types may be uploaded."""
@@ -94,7 +128,11 @@ class PresignUploadTests(ViewTestCase):
         """Browser-recorded types like 'audio/webm;codecs=opus' are valid."""
         mock_presign.return_value = 'https://example.com/signed'
         response = self._presign(
-            {'content_type': 'audio/webm;codecs=opus', 'file_name': 'recording.webm'}
+            {
+                'content_type': 'audio/webm;codecs=opus',
+                'file_name': 'recording.webm',
+                'content_length': 1024,
+            }
         )
         self.assertEqual(response.status_code, 200)
 
@@ -103,7 +141,11 @@ class PresignUploadTests(ViewTestCase):
         """Client-supplied directories must not leak into the S3 key."""
         mock_presign.return_value = 'https://example.com/signed'
         response = self._presign(
-            {'content_type': 'audio/mpeg', 'file_name': '../../../etc/passwd.mp3'}
+            {
+                'content_type': 'audio/mpeg',
+                'file_name': '../../../etc/passwd.mp3',
+                'content_length': 1024,
+            }
         )
         self.assertEqual(response.status_code, 200)
         file_path = response.json()['file_path']
@@ -120,7 +162,9 @@ class PresignUploadTests(ViewTestCase):
     def test_anonymous_upload_is_keyed_to_anonymous_user(self, mock_presign):
         """Unauthenticated uploads go under the dedicated anonymous user's prefix."""
         mock_presign.return_value = 'https://example.com/signed'
-        response = self._presign({'content_type': 'audio/mpeg', 'file_name': 'clip.mp3'})
+        response = self._presign(
+            {'content_type': 'audio/mpeg', 'file_name': 'clip.mp3', 'content_length': 1024}
+        )
         self.assertEqual(response.status_code, 200)
 
         anonymous = User.objects.get(username='anonymous')
@@ -130,7 +174,7 @@ class PresignUploadTests(ViewTestCase):
     def test_presign_is_rate_limited(self, mock_presign):
         """Presign requests beyond the per-IP limit get a 429."""
         mock_presign.return_value = 'https://example.com/signed'
-        payload = {'content_type': 'audio/mpeg', 'file_name': 'clip.mp3'}
+        payload = {'content_type': 'audio/mpeg', 'file_name': 'clip.mp3', 'content_length': 1024}
         for _ in range(30):
             self._presign(payload)
 
@@ -218,3 +262,85 @@ class S3ConfigurationTests(SimpleTestCase):
         """
         backend = import_string(django_settings.S3_MEDIA_STORAGE_BACKEND)
         self.assertTrue(issubclass(backend, GuardedS3Boto3Storage))
+
+
+class PostDetailRateLimitTests(ViewTestCase):
+    """The share page is HTML, so being throttled has to look like HTML too.
+
+    Time is frozen for the same reason as the auth suite's rate-limit tests: the
+    limiter buckets on `int(time.time() / window)`, so a run that straddles a
+    boundary starts counting again and the request meant to be throttled sails
+    through. See RateLimitTests in apps/auth/tests.py.
+    """
+
+    POST_DETAIL_LIMIT = 120
+
+    def setUp(self):
+        """Publish a post, freeze the rate-limit window, and take a fresh client."""
+        super().setUp()
+        self.author = User.objects.create_user(username='sharer', password='testpass123')
+        self.post = Post.objects.create(author=self.author, head='Shared', body='Body')
+        self.url = reverse('post_detail', args=[self.post.id])
+        self.client = Client()
+        frozen_time = mock.patch('apps.ratelimit._now', return_value=1_800_000_000.0)
+        frozen_time.start()
+        self.addCleanup(frozen_time.stop)
+
+    def _spend_the_budget(self):
+        """Use up the window's allowance so the next request is throttled.
+
+        Requested as JSON deliberately: the counter is keyed on scope and IP
+        alone, so these still fill the same bucket, and the JSON branch skips
+        view recording and template rendering — 120 rendered pages per test is a
+        slow way to arrive at the same state.
+        """
+        for _ in range(self.POST_DETAIL_LIMIT):
+            response = self.client.get(self.url, HTTP_ACCEPT='application/json')
+            self.assertEqual(response.status_code, 200, 'Requests within the limit pass through')
+
+    def test_throttled_browser_request_gets_an_html_page(self):
+        """A reader who reloads too fast should get a page, not a JSON blob."""
+        self._spend_the_budget()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 429)
+        self.assertIn('text/html', response['Content-Type'])
+        self.assertContains(response, 'Too many requests', status_code=429)
+
+    def test_throttled_json_request_still_gets_json(self):
+        """Clients on the JSON contract keep getting JSON when throttled."""
+        self._spend_the_budget()
+
+        response = self.client.get(self.url, HTTP_ACCEPT='application/json')
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response['Content-Type'], 'application/json')
+        self.assertIn('error', json.loads(response.content))
+
+    def test_a_throttled_reader_is_told_when_to_come_back(self):
+        """Frozen on a window boundary, so the whole 60-second window remains."""
+        self._spend_the_budget()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response['Retry-After'], '60')
+
+    def test_rejecting_a_request_touches_no_database(self):
+        """A rejection has to be cheaper than the request it replaces.
+
+        This is the reason the 429 template is standalone rather than extending
+        shared/base.html: that base includes a header evaluating
+        `user.is_authenticated`, which forces the lazy `request.user` and — for
+        any request carrying a sessionid, as this signed-in client does — buys a
+        session SELECT on the exact path that exists to shed load. Rendering the
+        page is free; going to the database for it is not.
+        """
+        self.client.force_login(self.author)
+        self._spend_the_budget()
+
+        with self.assertNumQueries(0):
+            response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 429)
+        self.assertContains(response, 'Too many requests', status_code=429)

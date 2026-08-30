@@ -15,7 +15,6 @@ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/
 import { toast } from '@/components/ui/sonner'
 import { useAuth } from '@/hooks/useAuth'
 import { getMediaUrl, getPost, transcribePost } from '@/lib/api/posts'
-import { getMimeTypeFromPath } from '@/lib/utils/file'
 import { getSettings } from '@/lib/utils/settings'
 import { renderInlineMarkdown } from '@/lib/utils/richText'
 import { parseDurationString } from '@/lib/utils/media'
@@ -52,7 +51,12 @@ const FormatText: React.FC<{
 	className?: string
 	onTagClick?: (tag: string) => void
 }> = ({ children, className, onTagClick }) => {
-	const content = renderInlineMarkdown(DOMPurify.sanitize(children))
+	// Assemble the display HTML from the raw post text — inline markdown, then line
+	// breaks, autolinks, and hashtags — and sanitize the finished string ONCE against
+	// a strict allow-list. Vetting the final HTML (rather than the input, before these
+	// transforms run) guarantees what reaches the DOM is exactly what was filtered, so
+	// a future change to any transform can't smuggle markup past the sanitizer.
+	const html = renderInlineMarkdown(children)
 		.replace(/\n/g, '<br/>')
 		.replace(/((?:https?:\/\/|www\.)[^\s<>"']+)/g, (_match, url) => {
 			const href = url.startsWith('www.') ? `http://${url}` : url
@@ -63,6 +67,11 @@ const FormatText: React.FC<{
 				? `${prefix}<button type="button" data-tag="${tag}" class="hashtag">#${tag}</button>`
 				: `${prefix}<span class="hashtag">#${tag}</span>`
 		)
+
+	const content = DOMPurify.sanitize(html, {
+		ALLOWED_TAGS: ['strong', 'em', 'br', 'a', 'button', 'span'],
+		ALLOWED_ATTR: ['href', 'target', 'rel', 'class', 'type', 'data-tag'],
+	})
 
 	const handleTagClick = (event: React.MouseEvent<HTMLDivElement>) => {
 		const target = (event.target as HTMLElement).closest('[data-tag]')
@@ -108,9 +117,7 @@ export const Post: React.FC<PostProps> = ({
 	const mediaAltText = post.media ? post.media.alt_text : undefined
 	const imageDisplayUrl =
 		post.media?.media_type === 'image' && post.media.thumbnail ? post.media.thumbnail : mediaUrl
-	const mimeType = post.media
-		? getMimeTypeFromPath(post.media.file || post.media.s3_file_key)
-		: undefined
+	const mimeType = post.media?.mime_type
 	const mediaDuration = post.media ? parseDurationString(post.media.duration) : undefined
 
 	const handleTranscribe = async (id: number) => {
@@ -298,7 +305,7 @@ export const Post: React.FC<PostProps> = ({
 								<button type="button" className="block w-full" aria-label="Open image preview">
 									<img
 										src={imageDisplayUrl}
-										alt={mediaAltText}
+										alt={mediaAltText ?? ''}
 										className="h-auto w-full cursor-zoom-in rounded-md"
 									/>
 								</button>
@@ -311,7 +318,7 @@ export const Post: React.FC<PostProps> = ({
 								<div className="flex max-h-[85vh] flex-col items-center gap-3">
 									<img
 										src={imageDisplayUrl}
-										alt={mediaAltText}
+										alt={mediaAltText ?? ''}
 										className="max-h-[78vh] max-w-full rounded-md object-contain"
 									/>
 									<div className="flex w-full items-center gap-3 px-1 text-sm text-white">

@@ -11,8 +11,13 @@ type PullToRefreshProps = {
 
 /**
  * Lightweight pull-to-refresh interaction for touch devices.
- * When the user pulls down from the top of the page past the threshold
- * we trigger a hard refresh (full page reload) unless a custom handler is provided.
+ *
+ * When the user pulls down from the top of the page past the threshold we call
+ * `onRefresh` — callers should pass one that refetches data (a soft refresh)
+ * rather than relying on the `window.location.reload()` fallback, which discards
+ * the SPA and its query cache. Touch listeners are scoped to the content element
+ * and gestures that begin inside an overlay are ignored, so a drag inside a
+ * dialog or popover can never be mistaken for a page pull.
  */
 const PullToRefresh: React.FC<PullToRefreshProps> = ({
 	children,
@@ -30,7 +35,8 @@ const PullToRefresh: React.FC<PullToRefreshProps> = ({
 	const progressBarRef = useRef<HTMLDivElement | null>(null)
 
 	useEffect(() => {
-		if (typeof window === 'undefined') {
+		const contentEl = contentRef.current
+		if (contentEl === null) {
 			return
 		}
 
@@ -40,6 +46,16 @@ const PullToRefresh: React.FC<PullToRefreshProps> = ({
 		}
 
 		const handleTouchStart = (event: TouchEvent) => {
+			// Ignore gestures that begin inside an overlay. Radix dialogs lock body
+			// scroll at 0 and portal their content out of this subtree, so a drag
+			// inside a record/preview/tag modal would otherwise satisfy `scrollY <= 0`
+			// and be read as a page pull — releasing it reloaded the whole SPA.
+			const target = event.target as Element | null
+			if (target?.closest('[role="dialog"], [data-radix-popper-content-wrapper]')) {
+				startYRef.current = null
+				return
+			}
+
 			if (window.scrollY <= 0) {
 				startYRef.current = event.touches[0]?.clientY ?? null
 				isDraggingRef.current = false
@@ -86,34 +102,40 @@ const PullToRefresh: React.FC<PullToRefreshProps> = ({
 				return
 			}
 
-			if (pullDistanceRef.current >= threshold) {
+			const shouldRefresh = pullDistanceRef.current >= threshold
+
+			// Spring the content back first. With a custom `onRefresh` (a soft
+			// query invalidation, no navigation) the old code left the content
+			// pinned at the pull distance because it only reset on the else branch.
+			startYRef.current = null
+			isDraggingRef.current = false
+			setIsDragging(false)
+			setDistance(0)
+
+			if (shouldRefresh) {
 				if (onRefresh) {
 					onRefresh()
 				} else {
 					window.location.reload()
 				}
-			} else {
-				setDistance(0)
 			}
-
-			startYRef.current = null
-			isDraggingRef.current = false
-			setIsDragging(false)
 		}
 
 		const options: AddEventListenerOptions = { passive: true }
 		const moveOptions: AddEventListenerOptions = { passive: false }
 
-		window.addEventListener('touchstart', handleTouchStart, options)
-		window.addEventListener('touchmove', handleTouchMove, moveOptions)
-		window.addEventListener('touchend', finishGesture, options)
-		window.addEventListener('touchcancel', finishGesture, options)
+		// Scoped to the content element, not `window`: touches inside a portaled
+		// Radix overlay never reach here, so an in-modal drag can't start a pull.
+		contentEl.addEventListener('touchstart', handleTouchStart, options)
+		contentEl.addEventListener('touchmove', handleTouchMove, moveOptions)
+		contentEl.addEventListener('touchend', finishGesture, options)
+		contentEl.addEventListener('touchcancel', finishGesture, options)
 
 		return () => {
-			window.removeEventListener('touchstart', handleTouchStart, options)
-			window.removeEventListener('touchmove', handleTouchMove, moveOptions)
-			window.removeEventListener('touchend', finishGesture, options)
-			window.removeEventListener('touchcancel', finishGesture, options)
+			contentEl.removeEventListener('touchstart', handleTouchStart, options)
+			contentEl.removeEventListener('touchmove', handleTouchMove, moveOptions)
+			contentEl.removeEventListener('touchend', finishGesture, options)
+			contentEl.removeEventListener('touchcancel', finishGesture, options)
 		}
 	}, [maxPullDistance, onRefresh, threshold])
 

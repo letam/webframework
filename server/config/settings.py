@@ -70,37 +70,44 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def check_and_create_env_file():
-    """Create a default .env file for local or production-like startup."""
-    # NOTE: In production containers and gunicorn, the working directory is
-    # the server project root. During local development from the repo root,
-    # the server child directory is present.
-    is_server_child_dir_present = (Path.cwd() / 'server').exists()
-    if is_server_child_dir_present:
-        env_file = 'server/.env'
-    else:
-        env_file = '.env'
+    """Bootstrap a development ``server/.env`` when one is missing.
 
-    if not Path(env_file).is_file():
-        logger.debug('Required .env file not found.')
-        from django.core.management.utils import get_random_secret_key
+    This is a local-developer convenience only. It deliberately never fabricates
+    a production secret: a real deploy must supply ``SECRET_KEY`` through the
+    environment (a Fly secret), and if it doesn't, ``SECRET_KEY = env('SECRET_KEY')``
+    below fails loudly at import — which is what ``docs/deploy-fly.md`` promises.
+    Two guards keep this helper out of production:
 
-        with open(env_file, 'a') as f:
-            f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
-            if is_server_child_dir_present:
-                f.write('DEBUG=True\n')
-                f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
-                f.write('USE_LOCAL_FILE_STORAGE=True\n')
-                f.write('MEDIA_ROOT=server/uploads\n')
-                logger.debug(
-                    'Created .env file at server/.env with default values for development.'
-                )
-                logger.warning('Please edit the .env file for production environment.')
-            else:
-                f.write('DEBUG=False\n')
-                f.write('DATABASE_URL=sqlite:////data/db.sqlite3\n')
-                f.write('MEDIA_ROOT=/data/uploads\n')
-                logger.debug('Created .env file at .env with default values for production.')
-        logger.debug('')
+    - If ``SECRET_KEY`` is already in the environment (a Fly secret, the Docker
+      build's dummy key, or CI), there is nothing to bootstrap — return without
+      writing a file, so a generated key is never baked into an image layer.
+    - Only the repo-root/dev layout (the ``server/`` child dir is present)
+      auto-creates an ``.env``. A production container's working directory is the
+      server root, so this returns there and boot fails loudly on a missing key
+      instead of silently inventing one that rotates on every rebuild.
+    """
+    if os.environ.get('SECRET_KEY'):
+        return
+
+    # A production container runs from the server root, where `server/` is not a
+    # child dir; only the repo-root dev layout bootstraps an .env.
+    if not (Path.cwd() / 'server').exists():
+        return
+
+    env_file = Path('server/.env')
+    if env_file.is_file():
+        return
+
+    from django.core.management.utils import get_random_secret_key
+
+    logger.debug('No server/.env found; creating development defaults.')
+    with open(env_file, 'a') as f:
+        f.write('SECRET_KEY=' + get_random_secret_key() + '\n')
+        f.write('DEBUG=True\n')
+        f.write('DATABASE_URL=sqlite:///server/db.sqlite3\n')
+        f.write('USE_LOCAL_FILE_STORAGE=True\n')
+        f.write('MEDIA_ROOT=server/uploads\n')
+    logger.warning('Created development server/.env — edit it before deploying.')
 
 
 check_and_create_env_file()
@@ -208,8 +215,19 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+# Required in production, exactly like SECRET_KEY above. check_and_create_env_file()
+# used to write this into a production .env and deliberately no longer does, which
+# left the dev default as the silent fallback: unset, a deploy lands on a SQLite
+# file inside the container's ephemeral filesystem, boots healthy, serves zero
+# posts, and loses every write on the next restart. Fail at import instead. The
+# Docker build scopes a throwaway value onto its collectstatic step, which never
+# opens the database.
 DATABASES = {
-    'default': env.dj_db_url('DATABASE_URL', default='sqlite:///db.sqlite3')
+    'default': (
+        env.dj_db_url('DATABASE_URL', default='sqlite:///db.sqlite3')
+        if DEBUG
+        else env.dj_db_url('DATABASE_URL')
+    )
     or {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
@@ -342,6 +360,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Logging
 # https://docs.djangoproject.com/en/5.1/topics/logging/
+#
+# LOGGING is deliberately assigned twice. The dict near the top of this module is
+# applied immediately via logging.config.dictConfig() so the `server` / `server.apps`
+# console loggers exist during settings import. This second value is what Django
+# reads at startup and applies itself; DEFAULT_LOGGING sets disable_existing_loggers
+# to False, so the `server` loggers configured above survive. Removing the earlier
+# block would drop that console logging — the two are not redundant.
 
 LOGGING = copy.deepcopy(DEFAULT_LOGGING)
 
@@ -496,10 +521,12 @@ REST_FRAMEWORK = {
     ],
     # Baseline abuse protection. Counters live in the default (local-memory)
     # cache, so rates are per process and approximate — good enough to blunt
-    # bulk abuse, not a hard global guarantee.
+    # bulk abuse, not a hard global guarantee. The IP-keyed throttles identify a
+    # client by Fly's trusted `Fly-Client-IP` header (see apps/throttling.py), so
+    # a rotated `X-Forwarded-For` can no longer mint a fresh bucket per request.
     'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
+        'apps.throttling.IpAnonRateThrottle',
+        'apps.throttling.IpUserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '300/hour',
@@ -507,6 +534,9 @@ REST_FRAMEWORK = {
         'transcribe': '10/hour',
         'views': '120/min',
     },
+    # Defense in depth for any throttle that still uses DRF's default get_ident:
+    # Fly is the single proxy hop, so trust exactly one X-Forwarded-For entry.
+    'NUM_PROXIES': 1,
 }
 
 # Background tasks (django-tasks, a backport of Django 6's django.tasks).
@@ -583,7 +613,15 @@ SENTRY_FRONTEND_INGEST_FOR_CSP = env.str('SENTRY_FRONTEND_INGEST_FOR_CSP', defau
 
 # Media files configuration
 MEDIA_URL = env.str('MEDIA_URL', default='/media/')
-MEDIA_ROOT = env.str('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'uploads'))
+# Required in production for the same reason as DATABASE_URL: unset, this resolves
+# to a directory inside the container that is wiped on every restart, taking
+# uploaded avatars with it. The Fly config mounts a volume at /data and serves
+# /media/avatars/ from it — MEDIA_ROOT is what points Django at that volume.
+MEDIA_ROOT = (
+    env.str('MEDIA_ROOT', default=os.path.join(BASE_DIR, 'uploads'))
+    if DEBUG
+    else env.str('MEDIA_ROOT')
+)
 MAX_MEDIA_UPLOAD_BYTES = 100 * 1024 * 1024
 
 # Storage backend configuration
@@ -682,6 +720,7 @@ else:
                 "'sha256-GWweojyzwwt2WuqsMmaOTzMtCkOvLHnP8sc9dK1mDVo='",  # shared/base.html
                 "'sha256-IRlJG500ORUkBOhtvOMpg7SkjvGWHfulUZyeuTyhpVE='",  # blogs/post_detail.html
                 "'sha256-c2svKMHHIytNvecMVUzr4RNy61AT1b0sYT937DFULOk='",  # shared/header.html
+                "'sha256-v1embGqtcODRQZIc/2fDHxTufPf+4ME9OkfDU3ps8Hc='",  # blogs/rate_limited.html
             ],
             'connect-src': [SELF, 'http://127.0.0.1:8000'],
         }

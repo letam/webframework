@@ -28,6 +28,14 @@ def run_admin_password_migration():
     migration.remove_default_admin_password(django_apps, None)
 
 
+def run_anonymous_password_migration():
+    """Run migration 0006's data function against the current database."""
+    migration = importlib.import_module(
+        'apps.users.migrations.0006_anonymous_user_unusable_password'
+    )
+    migration.set_anonymous_password_unusable(django_apps, None)
+
+
 class InitialUsersTests(TestCase):
     """Tests for the users created (and not created) by migrations."""
 
@@ -38,6 +46,26 @@ class InitialUsersTests(TestCase):
     def test_migrations_create_anonymous_user(self):
         """The dedicated user for anonymous posts is created by migrations."""
         self.assertTrue(User.objects.filter(username='anonymous').exists())
+
+    def test_migrations_leave_anonymous_password_unusable(self):
+        """The anonymous account cannot be logged into after migrations run."""
+        anonymous = User.objects.get(username='anonymous')
+        self.assertFalse(anonymous.has_usable_password())
+
+
+class AnonymousPasswordMigrationTests(TestCase):
+    """Tests for the migration that locks the anonymous account's password."""
+
+    def test_usable_anonymous_password_is_revoked(self):
+        """An anonymous account left with a usable password gets locked out."""
+        anonymous = User.objects.get(username='anonymous')
+        anonymous.set_password('somehow-set')
+        anonymous.save(update_fields=['password'])
+
+        run_anonymous_password_migration()
+
+        anonymous.refresh_from_db()
+        self.assertFalse(anonymous.has_usable_password())
 
 
 class RemoveDefaultAdminPasswordTests(TestCase):
@@ -96,6 +124,15 @@ class InitUsersCommandTests(TestCase):
 
         self.assertEqual(User.objects.filter(username='boss').count(), 1)
         self.assertEqual(User.objects.filter(username='anonymous').count(), 1)
+
+    def test_command_creates_anonymous_with_unusable_password(self):
+        """When the command creates the anonymous user, it cannot be logged into."""
+        User.objects.filter(username='anonymous').delete()
+
+        with mock.patch.dict(os.environ, self.ENV):
+            call_command('init_users')
+
+        self.assertFalse(User.objects.get(username='anonymous').has_usable_password())
 
 
 class AvatarUploadTests(TestCase):

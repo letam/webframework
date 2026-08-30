@@ -40,7 +40,6 @@ const Feed: React.FC = () => {
 		matchMode,
 		setMatchMode,
 		filteredPosts,
-		filteredPostCount,
 		postCountLabel,
 		addFiltersFromText,
 		removeFilter,
@@ -60,11 +59,11 @@ const Feed: React.FC = () => {
 	)
 
 	const handlePostCreated = async (postData: CreatePostRequest) => {
-		try {
-			await addPost(postData)
-		} catch (error) {
-			console.error('Failed to create post:', error)
-		}
+		// Let a failed create reject. CreatePost.submitPost keeps the composer text
+		// and the saved draft on rejection and toasts the error; swallowing here made
+		// a failed post look successful and wiped the one unposted recording autosave
+		// exists to protect.
+		await addPost(postData)
 	}
 
 	const handleTagClick = useCallback(
@@ -138,7 +137,6 @@ const Feed: React.FC = () => {
 					onTagsSubmit={applyTagFilters}
 					disabled={isLoading}
 					filters={filters}
-					filteredPostCount={filteredPostCount}
 				/>
 
 				<ActiveFiltersList
@@ -152,6 +150,11 @@ const Feed: React.FC = () => {
 			{!isLoading && postCountLabel && (
 				<div className="text-sm text-muted-foreground mb-4 text-center animate-rise-in">
 					{postCountLabel}
+					{hasNextPage && (
+						<span className="block text-xs text-muted-foreground/70">
+							Filtering only the posts loaded so far — scroll down to load and filter more.
+						</span>
+					)}
 				</div>
 			)}
 
@@ -204,6 +207,11 @@ const Feed: React.FC = () => {
 						<p className="mt-1 text-sm text-muted-foreground">
 							Be the first to say something — text, voice, or video.
 						</p>
+					</div>
+				) : hasNextPage ? (
+					<div className="max-w-lg mx-auto px-4 text-center py-12 text-muted-foreground animate-rise-in">
+						No loaded posts match the current filters.
+						{isFetchingNextPage ? ' Loading more…' : ' Scroll down to load and search more posts.'}
 					</div>
 				) : (
 					<div className="max-w-lg mx-auto px-4 text-center py-12 text-muted-foreground animate-rise-in">

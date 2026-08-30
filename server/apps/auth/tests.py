@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.cache import caches
-from django.test import Client, TestCase, override_settings
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 
-from apps.ratelimit import RATE_LIMIT_CACHE_ALIAS
+from apps.ratelimit import RATE_LIMIT_CACHE_ALIAS, _seconds_until_window_ends
 
 User = get_user_model()
 
@@ -20,8 +20,10 @@ class AuthViewsTestCase(TestCase):
     def setUp(self):
         """Create a client and reset shared rate-limit state."""
         self.client = Client()
+        self.csrf_url = '/auth/csrf/'
         self.signup_url = '/auth/signup/'
         self.login_url = '/auth/login/'
+        self.logout_url = '/auth/logout/'
         self.status_url = '/auth/status/'
         # Rate-limit counters live in a process-global cache; reset them per test.
         caches[RATE_LIMIT_CACHE_ALIAS].clear()
@@ -128,6 +130,69 @@ class AuthViewsTestCase(TestCase):
         self.assertTrue(status_data['is_authenticated'])
         self.assertEqual(status_data['username'], 'testuser')
 
+    def test_csrf_returns_a_token(self):
+        """The endpoint the fetch wrapper primes itself from must hand back a token.
+
+        Every write path depends on this: with no token the frontend cannot make
+        a single non-GET request, so a regression here silently breaks the app.
+        """
+        response = self.client.get(self.csrf_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['token'])
+
+    def test_login_success(self):
+        """Valid credentials authenticate the session and echo the user id.
+
+        The happy path of the login endpoint had no coverage — only the failed
+        attempts exercised by the rate-limit tests.
+        """
+        user = User.objects.create_user(username='returning', password='testpass123')
+
+        response = self.client.post(
+            self.login_url,
+            data=json.dumps({'username': 'returning', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        # The view returns the bare user id (safe=False), not a wrapping object.
+        self.assertEqual(response.json(), user.id)
+
+        # The session now carries the login, as /auth/status/ reports.
+        status_data = self.client.get(self.status_url).json()
+        self.assertTrue(status_data['is_authenticated'])
+        self.assertEqual(status_data['user_id'], user.id)
+        self.assertEqual(status_data['username'], 'returning')
+
+    def test_login_wrong_password_leaves_session_anonymous(self):
+        """A bad password is a 400 and must not authenticate the session."""
+        User.objects.create_user(username='returning', password='testpass123')
+
+        response = self.client.post(
+            self.login_url,
+            data=json.dumps({'username': 'returning', 'password': 'wrong-password'}),
+            content_type='application/json',
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(self.client.get(self.status_url).json()['is_authenticated'])
+
+    def test_logout_clears_session(self):
+        """A POST logout drops the authenticated session back to anonymous."""
+        User.objects.create_user(username='returning', password='testpass123')
+        self.client.post(
+            self.login_url,
+            data=json.dumps({'username': 'returning', 'password': 'testpass123'}),
+            content_type='application/json',
+        )
+        self.assertTrue(self.client.get(self.status_url).json()['is_authenticated'])
+
+        response = self.client.post(self.logout_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(self.client.get(self.status_url).json()['is_authenticated'])
+
     def test_logout_rejects_get(self):
         """Logging out via GET would allow logout-by-link CSRF; only POST/DELETE."""
         response = self.client.get('/auth/logout/')
@@ -179,3 +244,51 @@ class RateLimitTests(TestCase):
 
         response = self.client.post('/auth/signup/', '{}', content_type='application/json')
         self.assertEqual(response.status_code, 429, "The 11th attempt should be throttled")
+
+    def test_a_throttled_response_says_when_to_come_back(self):
+        """Retry-After is what turns a 429 into something a client can act on.
+
+        Without it a well-behaved client or crawler has no cadence to back off
+        to and keeps retrying at its own, which is the load being shed. The
+        frozen clock sits exactly on a window boundary, so the whole 300-second
+        login window is still to run.
+        """
+        data = json.dumps({'username': 'nobody', 'password': 'wrong-password'})
+        for _ in range(11):
+            response = self.client.post('/auth/login/', data, content_type='application/json')
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response['Retry-After'], '300')
+
+
+class RetryAfterTests(SimpleTestCase):
+    """The wait handed to clients has to be honest about the fixed window.
+
+    Windows are fixed rather than sliding — every counter in one expires
+    together at the next multiple of the window — so the wait is arithmetic, not
+    an estimate, and it shrinks as the window runs out.
+    """
+
+    def test_the_wait_is_what_is_left_of_the_window(self):
+        """Someone throttled 45s into a 60s window waits the remaining 15."""
+        self.assertEqual(_seconds_until_window_ends(1_800_000_045.0, 60), 15)
+
+    def test_a_full_window_remains_at_the_boundary(self):
+        """First request of a window is never the throttled one, but be exact."""
+        self.assertEqual(_seconds_until_window_ends(1_800_000_000.0, 60), 60)
+
+    def test_a_partial_second_rounds_up_rather_than_down(self):
+        """Rounding down would send the client back a hair too early.
+
+        It would be rejected again, and told to wait again — a retry loop paid
+        for by the server the header exists to protect.
+        """
+        self.assertEqual(_seconds_until_window_ends(1_800_000_059.5, 60), 1)
+
+    def test_the_wait_is_never_zero(self):
+        """Retry-After: 0 is an invitation to retry immediately.
+
+        A float landing exactly on the boundary would otherwise produce it.
+        """
+        self.assertEqual(_seconds_until_window_ends(1_800_000_060.0, 60), 60)
+        self.assertGreaterEqual(_seconds_until_window_ends(1_800_000_059.999999, 60), 1)

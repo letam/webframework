@@ -21,6 +21,7 @@ class Command(BaseCommand):
         """Add command-line options."""
         parser.add_argument('--stale-days', type=int, default=30)
         parser.add_argument('--min-retry-age-minutes', type=int, default=60)
+        parser.add_argument('--stuck-pending-minutes', type=int, default=15)
         parser.add_argument('--max-attempts', type=int, default=4)
         parser.add_argument('--limit', type=int, default=200)
 
@@ -30,8 +31,22 @@ class Command(BaseCommand):
         limit = options['limit']
         max_attempts = options['max_attempts']
         retry_before = now - timedelta(minutes=options['min_retry_age_minutes'])
+        stuck_before = now - timedelta(minutes=options['stuck_pending_minutes'])
         stale_before = now - timedelta(days=options['stale_days'])
 
+        # Previews stranded at 'pending' — their fetch task never ran (e.g. a
+        # worker that died between sync_link_previews and fetch_link_previews) —
+        # never advance on their own, so nothing renders on the post. Sweep the
+        # ones past the stuck window; `created` is the enqueue time (a pending row
+        # is never re-saved), so it measures how long the fetch has been missing.
+        stuck_previews = list(
+            LinkPreview.objects.filter(
+                post__link_previews_enabled=True,
+                status='pending',
+                fetch_attempts__lt=max_attempts,
+                created__lt=stuck_before,
+            ).order_by('created')[:limit]
+        )
         failed_previews = list(
             LinkPreview.objects.filter(
                 post__link_previews_enabled=True,
@@ -48,6 +63,11 @@ class Command(BaseCommand):
             ).order_by('fetched_at')[:limit]
         )
 
+        recovered_ok = 0
+        for preview in stuck_previews:
+            if self._fetch_preview(preview):
+                recovered_ok += 1
+
         retried_ok = 0
         for preview in failed_previews:
             if self._fetch_preview(preview):
@@ -59,6 +79,7 @@ class Command(BaseCommand):
                 refreshed_updated += 1
 
         self.stdout.write(
+            f'recovered {len(stuck_previews)} stuck ({recovered_ok} now ok), '
             f'retried {len(failed_previews)} ({retried_ok} now ok), '
             f'refreshed {len(stale_previews)} ({refreshed_updated} updated)'
         )

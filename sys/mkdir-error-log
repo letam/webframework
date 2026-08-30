@@ -2,7 +2,7 @@
 
 # Create error log file for app
 
-[[ $(id -u) != 0 ]] && 2>&1 echo "Error: Must be run as sudo/root." && exit 1
+[[ $(id -u) != 0 ]] && echo "Error: Must be run as sudo/root." >&2 && exit 1
 
 #app_name=wut.sh
 

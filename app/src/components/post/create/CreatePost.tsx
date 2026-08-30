@@ -71,7 +71,7 @@ const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): stri
 }
 
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
-	const { isAuthenticated, userId } = useAuth()
+	const { isAuthenticated, isAuthResolved, userId } = useAuth()
 	const [postText, setPostText] = useState('')
 	const [mediaType, setMediaType] = useState<'text' | 'audio' | 'video' | 'image'>('text')
 	const [visibility, setVisibility] = useState<PostVisibility>('public')
@@ -147,7 +147,13 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		clear: clearStoredDraft,
 		acknowledgeRestore,
 	} = useComposerDraft({
-		enabled: draftsEnabled,
+		// Hold off until auth actually answers: until then userId is null, which is
+		// indistinguishable from a real anonymous user, so saving would route a
+		// signed-in user's words to the shared anonymous slot. `isAuthResolved`
+		// rather than `!isAuthLoading` because the loading gate also opens when the
+		// check *failed*, and a failed check is exactly the case where the null is a
+		// default rather than an answer.
+		enabled: draftsEnabled && isAuthResolved,
 		userId,
 		text: postText,
 		visibility,
@@ -197,6 +203,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	const handleAudioFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
+		// Reset the input so picking the same file again (e.g. after clearing) re-fires onChange.
+		e.target.value = ''
 		if (file?.type.startsWith('audio/')) {
 			setAudioFile(file)
 			setAudioBlob(null)
@@ -208,6 +216,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	const handleUploadFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
+		// Reset the input so picking the same file again (e.g. after clearing) re-fires onChange.
+		e.target.value = ''
 		if (!file) {
 			toast.error('Please select a valid file')
 			return
@@ -236,6 +246,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
+		// Reset the input so picking the same file again (e.g. after clearing) re-fires onChange.
+		e.target.value = ''
 		if (file?.type.startsWith('image/')) {
 			setImageFile(file)
 			setMediaType('image')

@@ -23,11 +23,14 @@ export const videoMimeTypes = [
 ]
 
 export function getSupportedVideoMimeTypes() {
+	// Guard: this module is pulled into every feed render (Post.tsx imports
+	// parseDurationString below), and a browser/webview without MediaRecorder
+	// would otherwise throw here at import time — a blank page React never mounts.
+	if (typeof MediaRecorder === 'undefined') return []
 	return videoMimeTypes.filter((mimeType) => MediaRecorder.isTypeSupported(mimeType))
 }
 
 export const supportedVideoMimeType = getSupportedVideoMimeTypes()[0]
-console.log('INFO: supportedVideoMimeType', supportedVideoMimeType)
 
 export const audioMimeTypes = [
 	'audio/webm;codecs=opus',
@@ -39,11 +42,11 @@ export const audioMimeTypes = [
 ]
 
 export function getSupportedAudioMimeTypes() {
+	if (typeof MediaRecorder === 'undefined') return []
 	return audioMimeTypes.filter((mimeType) => MediaRecorder.isTypeSupported(mimeType))
 }
 
 export const supportedAudioMimeType = getSupportedAudioMimeTypes()[0]
-console.log('INFO: supportedAudioMimeType', supportedAudioMimeType)
 export const mimeTypes = [...videoMimeTypes, ...audioMimeTypes]
 
 /**

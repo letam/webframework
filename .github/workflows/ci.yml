@@ -60,7 +60,9 @@ jobs:
       # (typescript-eslint can't load TS 7 yet). Gating it here is what keeps that
       # second install justified. See CLAUDE.md, "Two TypeScript versions".
       - run: bun run lint
-      - run: bunx vitest run
+      # `bun run test` is `vitest run` (single pass, not watch) — the same command
+      # a dev runs locally, so CI and local can't diverge.
+      - run: bun run test
       - run: bun run build
 
   e2e:
@@ -114,6 +116,17 @@ jobs:
           sed -i "s|<!-- TIMESTAMP -->|<!-- TIMESTAMP: $(date +'%Y-%m-%d %H:%M:%S %Z') -->|" \
             "$dist/index.html"
           uv run python server/manage.py test apps.blogs.tests.test_csp_hashes
+      # Cache the downloaded browser binaries, keyed on the lockfile so a
+      # @playwright/test bump re-downloads. --with-deps still runs on a cache
+      # hit (it also installs apt libs, which aren't cached), but skips the
+      # ~100 MB browser download.
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('app/bun.lock') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
       - run: bunx playwright install --with-deps chromium
         working-directory: app
       - name: Configure frontend dev env
@@ -124,3 +137,15 @@ jobs:
           EOF
       - run: bun run test:e2e
         working-directory: app
+      # On failure, keep the HTML report plus traces/screenshots so a red run is
+      # debuggable without re-running locally. `if: failure()` scopes the upload
+      # to failed runs; a green run leaves no artifact.
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            app/playwright-report/
+            app/test-results/
+          retention-days: 7

@@ -9,11 +9,42 @@ from rest_framework import serializers
 from apps.uploads.s3 import generate_presigned_get_url
 from apps.users.utils import get_avatar_url
 
-from .models import Comment, LinkPreview, Media, Post
+from .models import VISIBILITY_UNLISTED, Comment, LinkPreview, Media, Post
 
 logger = logging.getLogger(__name__)
 
 User = get_user_model()
+
+# Mirrors the frontend's getMimeTypeFromPath (app/src/lib/utils/file.ts): the SPA
+# used to derive a media file's MIME type and extension from the raw storage path.
+# Those raw paths are no longer serialized (they bypassed the visibility gate), so
+# the server derives both here from the same extension map.
+_MEDIA_MIME_TYPES = {
+    'mp3': 'audio/mpeg',
+    'wav': 'audio/wav',
+    'ogg': 'audio/ogg',
+    'mp4': 'video/mp4',
+    'webm': 'video/webm',
+}
+
+
+def _media_source_name(media):
+    """Return the stored file name backing a media row (local file or S3 key)."""
+    if media.file:
+        return media.file.name
+    return media.s3_file_key or ''
+
+
+def _media_extension(name):
+    """Return the lowercased extension of a media file name, or '' when absent."""
+    if '.' not in name:
+        return ''
+    return name.rsplit('.', 1)[1].lower()
+
+
+def _media_mime_type(name):
+    """Map a media file name to a MIME type, mirroring the frontend's default."""
+    return _MEDIA_MIME_TYPES.get(_media_extension(name), 'application/octet-stream')
 
 
 class UserNameSerializer(serializers.ModelSerializer):
@@ -50,18 +81,22 @@ class MediaSerializer(serializers.ModelSerializer):
 
     signed_url = serializers.SerializerMethodField()
     thumbnail = serializers.SerializerMethodField()
+    mime_type = serializers.SerializerMethodField()
+    extension = serializers.SerializerMethodField()
 
     class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
         """Serializer metadata."""
 
         model = Media
+        # Raw storage paths (file/mp3_file/s3_file_key) are deliberately not
+        # serialized: they resolve to /media/ URLs the Fly proxy serves around the
+        # visibility gate. Playback goes through the gated stream endpoint via
+        # signed_url; the SPA only needed the raw paths to derive mime_type and the
+        # download extension, which are now provided directly.
         fields = [
             'id',
             'created',
             'modified',
-            'file',
-            'mp3_file',
-            's3_file_key',
             'media_type',
             'duration',
             'thumbnail',
@@ -70,6 +105,8 @@ class MediaSerializer(serializers.ModelSerializer):
             'transcript_status',
             'alt_text',
             'signed_url',
+            'mime_type',
+            'extension',
         ]
 
     def get_signed_url(self, obj):
@@ -85,14 +122,30 @@ class MediaSerializer(serializers.ModelSerializer):
             return None
 
     def get_thumbnail(self, obj):
-        """Return a storage URL for a generated or uploaded thumbnail."""
+        """Return the gated thumbnail endpoint URL when a thumbnail exists."""
         if not obj.thumbnail:
             return None
-        try:
-            return obj.thumbnail.storage.url(obj.thumbnail.name)
-        except Exception:
-            logger.exception('Failed to generate thumbnail URL for media %s', obj.pk)
+
+        post = getattr(obj, 'post', None)
+        if post is None:
             return None
+
+        url = reverse('media_thumbnail', args=[post.id])
+        if post.visibility == VISIBILITY_UNLISTED and post.share_token:
+            url = f'{url}?token={post.share_token}'
+
+        request = self.context.get('request')
+        if request:
+            return request.build_absolute_uri(url)
+        return url
+
+    def get_mime_type(self, obj):
+        """Return the media file's MIME type, derived from its stored name."""
+        return _media_mime_type(_media_source_name(obj))
+
+    def get_extension(self, obj):
+        """Return the media file's extension for building a download filename."""
+        return _media_extension(_media_source_name(obj))
 
 
 class LinkPreviewSerializer(serializers.ModelSerializer):
@@ -125,13 +178,22 @@ class LinkPreviewSerializer(serializers.ModelSerializer):
             return None
 
         url = reverse('link-preview-image', args=[obj.pk])
+        # The endpoint gates on Post.is_visible_to, so an unlisted post's image
+        # needs the same token its share page appends -- without it a recipient
+        # holding the link gets a 404 for every preview image. `obj.post` is
+        # free here: the viewset prefetches `link_previews`, which populates the
+        # forward FK cache on each preview.
+        post = obj.post
+        if post.visibility == VISIBILITY_UNLISTED and post.share_token:
+            url = f'{url}?token={post.share_token}'
+
         request = self.context.get('request')
         if request:
             return request.build_absolute_uri(url)
         return url
 
 
-class PostSerializer(serializers.HyperlinkedModelSerializer):
+class PostSerializer(serializers.ModelSerializer):
     """Serializer for post read responses."""
 
     author = UserNameSerializer(read_only=True)
@@ -225,10 +287,13 @@ class PostCreateSerializer(serializers.ModelSerializer):
         """Serializer metadata."""
 
         model = Post
+        # `media` is intentionally omitted: the create view builds the Media row
+        # itself and pops the incoming media payload (a rich dict, not a pk)
+        # before validation. Declaring it here would generate a writable pk field
+        # that rejects that payload the moment the pop was ever removed.
         fields = [
             'head',
             'body',
-            'media',
             'visibility',
             'is_draft',
             'link_previews_enabled',

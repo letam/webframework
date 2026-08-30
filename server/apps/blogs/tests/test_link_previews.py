@@ -20,6 +20,7 @@ from PIL import Image
 from rest_framework.test import APIClient
 
 from ..link_previews import (
+    MAX_REDIRECTS,
     _safe_get,
     detect_kind,
     extract_urls,
@@ -121,11 +122,11 @@ class LinkPreviewSsrfTests(BaseTestCase):
     """Tests for the SSRF guard around outbound fetches."""
 
     class FakeStream:
-        """Context manager returning a tiny successful HTTPX response."""
+        """Context manager returning a preset (or default 'ok') HTTPX response."""
 
-        def __init__(self, url):
-            """Store a canned response for the URL."""
-            self.response = httpx.Response(
+        def __init__(self, url, response=None):
+            """Store the response to hand back — a canned one, or a tiny 200."""
+            self.response = response or httpx.Response(
                 200,
                 headers={'content-type': 'text/html'},
                 content=b'ok',
@@ -141,10 +142,18 @@ class LinkPreviewSsrfTests(BaseTestCase):
             return False
 
     class FakeClient:
-        """Minimal stand-in for httpx.Client."""
+        """Minimal stand-in for httpx.Client that records how it was called.
 
-        def __init__(self):
-            """Initialize call tracking."""
+        `responses`, when given, are returned in call order (the last one repeats
+        if the code makes more calls than were queued), which lets a test drive a
+        redirect chain. Each call is recorded with the connect URL and the `Host`
+        header / `sni_hostname` extension, so a test can assert the request went to
+        the pinned IP with the hostname preserved for routing and TLS.
+        """
+
+        def __init__(self, responses=None):
+            """Initialize call tracking and the optional canned response queue."""
+            self.responses = responses
             self.stream_calls = []
 
         def __enter__(self):
@@ -155,10 +164,29 @@ class LinkPreviewSsrfTests(BaseTestCase):
             """Exit without suppressing exceptions."""
             return False
 
-        def stream(self, method, url):
-            """Record the call and return a fake stream."""
-            self.stream_calls.append((method, url))
-            return LinkPreviewSsrfTests.FakeStream(url)
+        def stream(self, method, url, *, headers=None, extensions=None):
+            """Record the call and return the next (or default) fake stream."""
+            self.stream_calls.append(
+                {
+                    'method': method,
+                    'url': str(url),
+                    'headers': dict(headers or {}),
+                    'extensions': dict(extensions or {}),
+                }
+            )
+            response = None
+            if self.responses is not None:
+                index = min(len(self.stream_calls) - 1, len(self.responses) - 1)
+                response = self.responses[index]
+            return LinkPreviewSsrfTests.FakeStream(url, response)
+
+    @staticmethod
+    def _resolves_to(ip):
+        """Patch getaddrinfo so every lookup returns a single `ip`."""
+        return mock.patch(
+            'apps.blogs.link_previews.socket.getaddrinfo',
+            return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, '', (ip, 443))],
+        )
 
     def test_safe_get_refuses_local_and_invalid_targets(self):
         """Unsafe schemes, literals, and local hostnames should never be requested."""
@@ -193,29 +221,87 @@ class LinkPreviewSsrfTests(BaseTestCase):
 
         self.assertEqual(fake_client.stream_calls, [])
 
-    def test_safe_get_allows_public_resolution_and_reads_response(self):
-        """A public resolved address should pass the gate and call the HTTP client."""
+    def test_safe_get_connects_to_the_pinned_ip_not_the_hostname(self):
+        """A public resolution passes the gate and connects to the resolved IP.
+
+        This is the anti-rebinding property: the request goes to the IP literal
+        the guard validated, so httpx cannot resolve the name a second time to a
+        different (internal) address. The hostname still rides along as the `Host`
+        header and TLS SNI so vhost routing and certificate verification work.
+        """
         fake_client = self.FakeClient()
         with (
-            mock.patch(
-                'apps.blogs.link_previews.socket.getaddrinfo',
-                return_value=[
-                    (
-                        socket.AF_INET,
-                        socket.SOCK_STREAM,
-                        6,
-                        '',
-                        ('93.184.216.34', 443),
-                    )
-                ],
-            ),
+            self._resolves_to('93.184.216.34'),
             mock.patch('apps.blogs.link_previews.httpx.Client', return_value=fake_client),
         ):
             response = _safe_get('https://example.com/', max_bytes=16)
 
         self.assertIsNotNone(response)
         self.assertEqual(response.content, b'ok')
-        self.assertEqual(fake_client.stream_calls, [('GET', 'https://example.com/')])
+        self.assertEqual(len(fake_client.stream_calls), 1)
+        call = fake_client.stream_calls[0]
+        self.assertEqual(call['method'], 'GET')
+        self.assertEqual(call['url'], 'https://93.184.216.34/')
+        self.assertEqual(call['headers'].get('Host'), 'example.com')
+        self.assertEqual(call['extensions'].get('sni_hostname'), 'example.com')
+
+    def test_safe_get_stops_at_a_redirect_to_a_link_local_address(self):
+        """A 302 into the network is refused, and never connected to.
+
+        The DNS-rebinding class expressed as a redirect: the public first hop is
+        validated and fetched, its Location points at the metadata IP, and the
+        guard must re-pin that new hop and refuse it — without opening a socket to
+        it. The fake client would happily serve the internal target; the guard is
+        what stops the second call from ever being made.
+        """
+        redirect = httpx.Response(
+            302,
+            headers={'location': 'http://169.254.169.254/latest/meta-data/'},
+            request=httpx.Request('GET', 'https://example.com/'),
+        )
+        fake_client = self.FakeClient(responses=[redirect])
+        with (
+            self._resolves_to('93.184.216.34'),
+            mock.patch('apps.blogs.link_previews.httpx.Client', return_value=fake_client),
+        ):
+            self.assertIsNone(_safe_get('https://example.com/', max_bytes=1024))
+
+        # Exactly one connection — the public first hop. The link-local target was
+        # refused at validation (it is an IP literal), before any socket to it.
+        self.assertEqual(len(fake_client.stream_calls), 1)
+        self.assertEqual(fake_client.stream_calls[0]['url'], 'https://93.184.216.34/')
+
+    def test_safe_get_gives_up_after_max_redirects(self):
+        """An endless redirect chain is abandoned, not followed forever."""
+        loop = httpx.Response(
+            302,
+            headers={'location': 'https://example.com/next'},
+            request=httpx.Request('GET', 'https://example.com/'),
+        )
+        fake_client = self.FakeClient(responses=[loop])
+        with (
+            self._resolves_to('93.184.216.34'),
+            mock.patch('apps.blogs.link_previews.httpx.Client', return_value=fake_client),
+        ):
+            self.assertIsNone(_safe_get('https://example.com/', max_bytes=1024))
+
+        # The initial request plus MAX_REDIRECTS hops, then it stops.
+        self.assertEqual(len(fake_client.stream_calls), MAX_REDIRECTS + 1)
+
+    def test_safe_get_refuses_an_oversized_body(self):
+        """A body past the cap is dropped rather than buffered without bound."""
+        oversized = httpx.Response(
+            200,
+            headers={'content-type': 'text/html'},
+            content=b'x' * 100,
+            request=httpx.Request('GET', 'https://example.com/'),
+        )
+        fake_client = self.FakeClient(responses=[oversized])
+        with (
+            self._resolves_to('93.184.216.34'),
+            mock.patch('apps.blogs.link_previews.httpx.Client', return_value=fake_client),
+        ):
+            self.assertIsNone(_safe_get('https://example.com/', max_bytes=16))
 
     def test_safe_get_does_not_double_decode_gzip_responses(self):
         """Streamed bodies are already decompressed; rebuilding must not decode again."""
@@ -237,7 +323,7 @@ class LinkPreviewSsrfTests(BaseTestCase):
                 return False
 
         fake_client = self.FakeClient()
-        fake_client.stream = lambda method, url: GzipStream()
+        fake_client.stream = lambda method, url, **kwargs: GzipStream()
         with (
             mock.patch(
                 'apps.blogs.link_previews.socket.getaddrinfo',
@@ -1011,10 +1097,14 @@ class LinkPreviewApiTests(ViewTestCase):
                 preview.image.save('toggle.jpg', ContentFile(b'image bytes'), save=True)
                 image_path = preview.image.path
 
-                response = self.client.patch(
-                    reverse('post-detail', args=[post.id]),
-                    {'link_previews_enabled': 'false'},
-                )
+                # sync_link_previews now frees the stored images via
+                # transaction.on_commit, so run those callbacks to observe the
+                # deletion.
+                with self.captureOnCommitCallbacks(execute=True):
+                    response = self.client.patch(
+                        reverse('post-detail', args=[post.id]),
+                        {'link_previews_enabled': 'false'},
+                    )
 
                 self.assertEqual(response.status_code, 200)
                 self.assertFalse(response.data['link_previews_enabled'])
@@ -1166,7 +1256,7 @@ class RefreshLinkPreviewsCommandTests(BaseTestCase):
 
         self.assertEqual(
             output.getvalue().strip(),
-            'retried 1 (1 now ok), refreshed 1 (1 updated)',
+            'recovered 0 stuck (0 now ok), retried 1 (1 now ok), refreshed 1 (1 updated)',
         )
         self.assertEqual(
             [call.args[0].pk for call in mock_fetch.call_args_list],
@@ -1219,8 +1309,63 @@ class RefreshLinkPreviewsCommandTests(BaseTestCase):
 
         self.assertEqual(
             output.getvalue().strip(),
-            'retried 0 (0 now ok), refreshed 1 (0 updated)',
+            'recovered 0 stuck (0 now ok), retried 0 (0 now ok), refreshed 1 (0 updated)',
         )
+
+    def test_command_recovers_stranded_pending_rows(self):
+        """A preview stuck at 'pending' past the window is swept; a fresh one waits.
+
+        A pending preview means its fetch task was enqueued but never ran (a
+        worker that died between sync and fetch). Nothing else advances it, so the
+        sweep is its only recovery — bounded by age, the attempt cap, and the
+        post's previews-enabled flag.
+        """
+        stranded = LinkPreview.objects.create(
+            post=self.post, url='https://stranded.example.com', status='pending'
+        )
+        fresh_pending = LinkPreview.objects.create(
+            post=self.post, url='https://fresh-pending.example.com', status='pending'
+        )
+        capped_pending = LinkPreview.objects.create(
+            post=self.post,
+            url='https://capped-pending.example.com',
+            status='pending',
+            fetch_attempts=4,
+        )
+        disabled_pending = LinkPreview.objects.create(
+            post=self.disabled_post, url='https://disabled-pending.example.com', status='pending'
+        )
+        # Backdate created past the stuck window; auto_now_add can't be set on create.
+        LinkPreview.objects.filter(
+            pk__in=[stranded.pk, capped_pending.pk, disabled_pending.pk]
+        ).update(created=self.now - timedelta(minutes=20))
+        output = StringIO()
+
+        def fake_fetch(preview, *, keep_existing_on_failure=False):
+            """Mark the preview fetched without making network requests."""
+            preview.fetch_attempts += 1
+            preview.fetched_at = timezone.now()
+            preview.status = 'ok'
+            preview.save(update_fields=['fetch_attempts', 'fetched_at', 'status'])
+            return True
+
+        with mock.patch(
+            'apps.blogs.management.commands.refresh_link_previews.fetch_preview_for',
+            side_effect=fake_fetch,
+        ) as mock_fetch:
+            call_command('refresh_link_previews', stdout=output)
+
+        # Only the stranded pending is swept: fresh is within the window, capped is
+        # at max attempts, disabled belongs to a previews-disabled post.
+        self.assertEqual([call.args[0].pk for call in mock_fetch.call_args_list], [stranded.pk])
+        self.assertTrue(
+            output.getvalue().strip().startswith('recovered 1 stuck (1 now ok)'),
+            output.getvalue(),
+        )
+        stranded.refresh_from_db()
+        self.assertEqual(stranded.status, 'ok')
+        fresh_pending.refresh_from_db()
+        self.assertEqual(fresh_pending.status, 'pending')
 
 
 class LinkPreviewImageEndpointTests(ViewTestCase):
@@ -1298,6 +1443,37 @@ class LinkPreviewImageEndpointTests(ViewTestCase):
         self.assertEqual(public_response.status_code, 200)
         self.assertEqual(public_response['Cache-Control'], 'private, max-age=86400')
         self.assertGreater(len(public_content), 0)
+
+    def test_api_preview_image_url_is_fetchable_by_token_holder(self):
+        """An unlisted post's serialized image URL should work for a token holder."""
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                post = Post.objects.create(
+                    author=self.user,
+                    body='Link',
+                    visibility=VISIBILITY_UNLISTED,
+                )
+                preview = LinkPreview.objects.create(
+                    post=post,
+                    url='https://example.com/article',
+                    status='ok',
+                )
+                preview.image.save('preview.jpg', ContentFile(self._jpeg_bytes()), save=True)
+
+                detail = self.anon_client.get(
+                    reverse('post-detail', args=[post.id]),
+                    {'token': post.share_token},
+                )
+                self.assertEqual(detail.status_code, 200)
+                image_url = detail.json()['link_previews'][0]['image']
+
+                # The URL the API hands out must be usable as-is. Without the
+                # token the gated endpoint 404s, so serving a tokenless URL to a
+                # token holder breaks every preview image on the shared post.
+                self.assertIn(f'token={post.share_token}', image_url)
+                image_response = self.anon_client.get(image_url)
+
+        self.assertEqual(image_response.status_code, 200)
 
 
 class LinkPreviewDeletionTests(BaseTestCase):

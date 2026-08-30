@@ -7,6 +7,7 @@ import {
 	draftKeyForUser,
 	loadComposerDraft,
 	saveComposerDraft,
+	updateComposerDraftFields,
 } from '@/lib/utils/composerDraft'
 
 /** Text edits settle before hitting disk; a keystroke is not worth a write. */
@@ -69,9 +70,10 @@ export const useComposerDraft = ({
 	const storageKey = draftKeyForUser(userId)
 	const restoredKeys = useRef(new Set<string>())
 
-	// Restore. Keyed on the user, because auth resolves after mount: the first
-	// pass reads the anonymous slot, and a second runs once a real user id
-	// arrives.
+	// Restore. Keyed on the user. `enabled` stays false until /auth/status/ has
+	// answered (the consumer gates it on `isAuthResolved`), so this reads the
+	// correct per-user slot on its first run rather than racing the anonymous
+	// slot; it re-runs if the user id later changes (a login mid-compose).
 	useEffect(() => {
 		if (!enabled || restoredKeys.current.has(storageKey)) return
 		restoredKeys.current.add(storageKey)
@@ -90,20 +92,75 @@ export const useComposerDraft = ({
 		}
 	}, [enabled, storageKey, userId])
 
-	// Save.
+	// Save. Also the single place that erases the stored draft, so a clear and a
+	// write can never race one another.
+	const previousIsEmpty = useRef(isEmpty)
+	const previousUserId = useRef(userId)
+	const previousMedia = useRef<Blob | null>(media)
+	// Set when a logout (signed-in id → anonymous) is seen with content still in
+	// the composer, so neither the debounce nor the on-hide flush copies the
+	// signed-out user's words into the shared anonymous slot. Cleared once the
+	// composer returns to empty — a genuinely anonymous compose then saves — or as
+	// soon as someone is signed in again.
+	const anonWriteBlocked = useRef(false)
 	useEffect(() => {
-		if (!enabled || isEmpty) return
+		if (!enabled) return
 
-		const write = () => void saveComposerDraft(userId, toRecord(text, visibility, mediaType, media))
+		const wasEmpty = previousIsEmpty.current
+		const previousId = previousUserId.current
+		const mediaChanged = media !== previousMedia.current
+		previousIsEmpty.current = isEmpty
+		previousUserId.current = userId
+		previousMedia.current = media
 
-		// Media lands immediately — a recording is the one thing that cannot be
-		// recreated, and the tab may not survive another 600ms. Text waits for a
-		// pause in typing.
-		if (media) {
-			write()
+		// The block only ever guards the shared anonymous slot, so being signed in
+		// lifts it: these words have a per-user slot to go to. Without this, a
+		// logout→login with content still in the composer left autosave dead for the
+		// rest of the session — the only other clause that clears the flag requires
+		// the composer to go empty, and it never did.
+		if (userId !== null) {
+			anonWriteBlocked.current = false
+		}
+
+		// Logout: never let the signed-out user's words land in the shared
+		// anonymous slot. Erase it, drop the restore notice, and block further
+		// writes until the composer is cleared.
+		if (previousId !== null && userId === null) {
+			anonWriteBlocked.current = true
+			setRestored(null)
+			void clearComposerDraft(null)
 			return
 		}
-		const timer = setTimeout(write, TEXT_DEBOUNCE_MS)
+
+		// Clearing the composer to empty must erase the stored draft, or deleting
+		// all text/media would resurrect the last non-empty draft on the next
+		// mount. Act only on a real non-empty→empty transition, never the initial
+		// empty mount (which would race the restore read).
+		if (isEmpty) {
+			anonWriteBlocked.current = false
+			if (!wasEmpty) void clearComposerDraft(userId)
+			return
+		}
+
+		if (anonWriteBlocked.current) return
+
+		// A newly attached or swapped recording lands immediately — it is the one
+		// thing that cannot be recreated, and the tab may not survive another 600ms.
+		if (mediaChanged && media) {
+			void saveComposerDraft(userId, toRecord(text, visibility, mediaType, media))
+			return
+		}
+
+		// Everything else waits for a pause in typing. When a recording is already
+		// attached, a caption keystroke updates only the text fields and reuses the
+		// Blob already on disk — never re-serializing a 40 MB take per character.
+		const timer = setTimeout(() => {
+			if (media) {
+				void updateComposerDraftFields(userId, { text, visibility, mediaType })
+			} else {
+				void saveComposerDraft(userId, toRecord(text, visibility, mediaType, media))
+			}
+		}, TEXT_DEBOUNCE_MS)
 		return () => clearTimeout(timer)
 	}, [enabled, isEmpty, userId, media, text, visibility, mediaType])
 
@@ -114,6 +171,9 @@ export const useComposerDraft = ({
 
 		const flush = () => {
 			if (document.visibilityState !== 'hidden') return
+			// Same logout guard as the save effect: don't let an on-hide flush copy a
+			// signed-out user's words into the shared anonymous slot.
+			if (anonWriteBlocked.current) return
 			const current = latest.current
 			if (current.isEmpty) return
 			void saveComposerDraft(

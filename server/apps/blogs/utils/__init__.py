@@ -1,7 +1,7 @@
 """Media utility exports."""
 
 from .convert_to_mp3 import convert_to_mp3
-from .images import is_valid_image
+from .images import flatten_to_rgb, is_valid_image
 from .media import (
     MediaProbeError,
     get_field_file_duration,
@@ -19,6 +19,7 @@ from .media_processing import (
 __all__ = [
     'MediaProbeError',
     'convert_to_mp3',
+    'flatten_to_rgb',
     'generate_audio_waveform',
     'get_field_file_duration',
     'generate_image_rendition',

@@ -5,15 +5,17 @@ import subprocess
 import tempfile
 from array import array
 from datetime import timedelta
-from io import BytesIO
+from io import BytesIO, StringIO
 from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.test import override_settings
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APIClient
 
@@ -91,8 +93,12 @@ class MediaPipelineTests(ViewTestCase):
         self.assertEqual(post.media.s3_file_key, self.key)
         self.assertEqual(post.media.duration, expected_duration)
         self.assertEqual(response.data['media']['signed_url'], 'https://example.com/signed-get')
-        # The frontend derives MIME type and download extension from the key.
-        self.assertEqual(response.data['media']['s3_file_key'], self.key)
+        # Raw storage paths are no longer serialized; the server derives the MIME
+        # type and download extension the frontend needs from the stored key.
+        self.assertNotIn('s3_file_key', response.data['media'])
+        self.assertNotIn('file', response.data['media'])
+        self.assertEqual(response.data['media']['mime_type'], 'audio/mpeg')
+        self.assertEqual(response.data['media']['extension'], 'mp3')
 
     def test_media_and_s3_file_key_are_mutually_exclusive(self):
         """A create request cannot include both upload styles."""
@@ -358,7 +364,10 @@ class MediaPipelineTests(ViewTestCase):
                 data = PostSerializer(post).data
 
         self.assertEqual(data['media']['waveform'], [0, 50, 100])
-        self.assertTrue(data['media']['thumbnail'].startswith('/media/post/'))
+        # The thumbnail is served through the gated endpoint, not a raw /media/ URL.
+        self.assertEqual(data['media']['thumbnail'], reverse('media_thumbnail', args=[post.id]))
+        self.assertEqual(data['media']['mime_type'], 'audio/mpeg')
+        self.assertEqual(data['media']['extension'], 'mp3')
 
     def test_process_post_media_routes_by_media_type(self):
         """The media processing task should dispatch to the matching media handler."""
@@ -744,6 +753,67 @@ class MediaPipelineTests(ViewTestCase):
         self.assertEqual(response.status_code, 202)
         mock_transcribe.assert_not_called()
 
+    def test_transcribe_reenqueues_a_stranded_pending(self):
+        """A transcription stuck 'pending' past the staleness window is retried.
+
+        Without this, a worker that died mid-transcription leaves the media at
+        'pending' forever and the idempotency guard makes every retry a no-op, so
+        the UI spins with no way out.
+        """
+        from apps.blogs.views import STALE_TRANSCRIPT_PENDING
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(
+                    file=self._audio_file(), media_type='audio', transcript_status='pending'
+                )
+                post = Post.objects.create(author=self.user, head='Voice note', media=media)
+                # Backdate past the staleness window; update() bypasses auto_now.
+                stranded = timezone.now() - STALE_TRANSCRIPT_PENDING - timedelta(seconds=1)
+                Media.objects.filter(pk=media.pk).update(modified=stranded)
+
+                with mock.patch(
+                    'apps.blogs.tasks.transcribe_audio', return_value='recovered'
+                ) as mock_transcribe:
+                    response = self.client.post(reverse('post-transcribe', args=[post.id]))
+
+        self.assertEqual(response.status_code, 202)
+        mock_transcribe.assert_called_once()
+        media.refresh_from_db()
+        self.assertEqual(media.transcript_status, 'done')
+        self.assertEqual(media.transcript, 'recovered')
+
+    def test_transcribe_retry_inside_the_window_does_not_reenqueue(self):
+        """Re-enqueueing a stranded transcription must reset its staleness window.
+
+        The window is read off `modified`, so the re-save has to bump it. Django
+        stamps an auto_now field only when update_fields names it — omit it there
+        and every retry on a post older than the window looks stranded again,
+        turning an impatient second click into another paid Whisper run.
+        """
+        from apps.blogs.views import STALE_TRANSCRIPT_PENDING
+
+        with tempfile.TemporaryDirectory() as media_root:
+            with override_settings(MEDIA_ROOT=media_root, USE_LOCAL_FILE_STORAGE=True):
+                media = Media.objects.create(
+                    file=self._audio_file(), media_type='audio', transcript_status='pending'
+                )
+                post = Post.objects.create(author=self.user, head='Voice note', media=media)
+                stranded = timezone.now() - STALE_TRANSCRIPT_PENDING - timedelta(seconds=1)
+                Media.objects.filter(pk=media.pk).update(modified=stranded)
+
+                # Stand in for a worker that has taken the job but not finished: the
+                # row stays 'pending', which is the state the retry guard reads.
+                with mock.patch('apps.blogs.views.transcribe_post_media') as mock_task:
+                    self.client.post(reverse('post-transcribe', args=[post.id]))
+                    self.assertEqual(mock_task.enqueue.call_count, 1)
+
+                    media.refresh_from_db()
+                    self.assertGreater(media.modified, stranded)
+
+                    self.client.post(reverse('post-transcribe', args=[post.id]))
+                    self.assertEqual(mock_task.enqueue.call_count, 1)
+
     def test_post_detail_returns_json_when_requested(self):
         """The post detail page should serve JSON to Accept: application/json."""
         post = Post.objects.create(author=self.user, head='Hello', body='World')
@@ -794,7 +864,7 @@ class StreamPostMediaRangeTests(ViewTestCase):
         response = self.client.get(self.url, HTTP_RANGE='bytes=2-5')
 
         self.assertEqual(response.status_code, 206)
-        self.assertEqual(response.content, b'2345')
+        self.assertEqual(b''.join(response.streaming_content), b'2345')
         self.assertEqual(response['Content-Length'], '4')
         self.assertEqual(response['Content-Range'], f'bytes 2-5/{len(self.CONTENT)}')
 
@@ -803,7 +873,7 @@ class StreamPostMediaRangeTests(ViewTestCase):
         response = self.client.get(self.url, HTTP_RANGE='bytes=-4')
 
         self.assertEqual(response.status_code, 206)
-        self.assertEqual(response.content, b'6789')
+        self.assertEqual(b''.join(response.streaming_content), b'6789')
         self.assertEqual(response['Content-Range'], f'bytes 6-9/{len(self.CONTENT)}')
 
     def test_open_ended_range_returns_remaining_bytes(self):
@@ -811,7 +881,7 @@ class StreamPostMediaRangeTests(ViewTestCase):
         response = self.client.get(self.url, HTTP_RANGE='bytes=3-')
 
         self.assertEqual(response.status_code, 206)
-        self.assertEqual(response.content, b'3456789')
+        self.assertEqual(b''.join(response.streaming_content), b'3456789')
         self.assertEqual(response['Content-Range'], f'bytes 3-9/{len(self.CONTENT)}')
 
     def test_unsatisfiable_range_returns_416(self):
@@ -820,3 +890,56 @@ class StreamPostMediaRangeTests(ViewTestCase):
 
         self.assertEqual(response.status_code, 416)
         self.assertEqual(response['Content-Range'], f'bytes */{len(self.CONTENT)}')
+
+    def test_range_response_streams_rather_than_buffering(self):
+        """The 206 body must stream, not buffer the whole slice into one bytes.
+
+        A browser opens media with ``bytes=0-`` (the whole file); buffering that
+        into RAM is what let two viewers OOM the box.
+        """
+        response = self.client.get(self.url, HTTP_RANGE='bytes=0-')
+
+        self.assertEqual(response.status_code, 206)
+        self.assertTrue(response.streaming)
+        self.assertEqual(b''.join(response.streaming_content), self.CONTENT)
+
+
+class ReprocessMediaCommandTests(ViewTestCase):
+    """Tests for the reprocess_media recovery command.
+
+    process_post_media writes no status, so a dropped enqueue leaves media
+    without its derived asset forever; this command is the only path back.
+    """
+
+    def _audio(self):
+        return SimpleUploadedFile('clip.mp3', b'not real audio', content_type='audio/mpeg')
+
+    def _settle(self, *media, minutes=30):
+        """Backdate `modified` (auto_now) so the age gate treats rows as settled."""
+        Media.objects.filter(pk__in=[m.pk for m in media]).update(
+            modified=timezone.now() - timedelta(minutes=minutes)
+        )
+
+    def test_only_settled_media_missing_its_asset_is_reenqueued(self):
+        """Audio without a waveform and video without a poster are swept; in-flight isn't."""
+        needs_waveform = Media.objects.create(file=self._audio(), media_type='audio')
+        has_waveform = Media.objects.create(
+            file=self._audio(), media_type='audio', waveform=[0, 1, 2]
+        )
+        needs_poster = Media.objects.create(file=self._audio(), media_type='video')
+        in_flight = Media.objects.create(file=self._audio(), media_type='audio')
+        # Everything but in_flight has settled; in_flight keeps its fresh
+        # `modified`, standing in for a job still running.
+        self._settle(needs_waveform, has_waveform, needs_poster)
+        output = StringIO()
+
+        with mock.patch(
+            'apps.blogs.management.commands.reprocess_media.process_post_media'
+        ) as mock_task:
+            call_command('reprocess_media', stdout=output)
+
+        enqueued = {call.args[0] for call in mock_task.enqueue.call_args_list}
+        self.assertEqual(enqueued, {needs_waveform.pk, needs_poster.pk})
+        self.assertNotIn(has_waveform.pk, enqueued)
+        self.assertNotIn(in_flight.pk, enqueued)
+        self.assertEqual(output.getvalue().strip(), 'reprocessing 2 media')

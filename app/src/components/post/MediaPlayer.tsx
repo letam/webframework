@@ -2,7 +2,6 @@ import type React from 'react'
 import { useState, useRef, useEffect } from 'react'
 import { Play, Pause, SkipBack, SkipForward } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { isDesktop, isFirefox } from '@/lib/utils/browser'
 import { cn } from '@/lib/utils'
 
 interface AudioControlsProps {
@@ -268,25 +267,23 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 	const [isPlaying, setIsPlaying] = useState(false)
 	const [isLoading, setIsLoading] = useState(false)
 	const [showLoading, setShowLoading] = useState(false)
-	const [isLoaded, setIsLoaded] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [duration, setDuration] = useState<number>(initialDuration || 0)
 	const [currentTime, setCurrentTime] = useState<number>(0)
 	const audioRef = useRef<HTMLAudioElement | null>(null)
-	const audioBlobRef = useRef<Blob | null>(null)
 	const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-	const progressIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 
+	// Reset when the source changes. Playback streams straight from `audioUrl`
+	// (see togglePlayback), so there is no blob or object URL to release — only
+	// playback state and the element's own src.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: executed when audioUrl changes
 	useEffect(() => {
 		setIsPlaying(false)
 		setError(null)
 		setIsLoading(false)
 		setShowLoading(false)
-		setIsLoaded(false)
 		setDuration(initialDuration || 0)
 		setCurrentTime(0)
-		audioBlobRef.current = null
 		const player = audioRef.current
 
 		return () => {
@@ -297,9 +294,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 			}
 			if (loadingTimeoutRef.current) {
 				clearTimeout(loadingTimeoutRef.current)
-			}
-			if (progressIntervalRef.current) {
-				clearInterval(progressIntervalRef.current)
 			}
 		}
 	}, [audioUrl])
@@ -322,36 +316,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 			}
 		}
 	}, [isLoading])
-
-	const loadAudio = async () => {
-		if (audioBlobRef.current) {
-			// Audio is already cached
-			if (audioRef.current) {
-				audioRef.current.src = URL.createObjectURL(audioBlobRef.current)
-			}
-			return
-		}
-
-		setIsLoading(true)
-		setError(null)
-
-		try {
-			const response = await fetch(audioUrl)
-			if (!response.ok) {
-				throw new Error(`HTTP error! status: ${response.status}`)
-			}
-			const blob = await response.blob()
-			audioBlobRef.current = blob
-
-			if (audioRef.current) {
-				audioRef.current.src = URL.createObjectURL(blob)
-			}
-		} catch (err) {
-			const errorMessage = err instanceof Error ? err.message : 'Failed to load audio'
-			setError(`Failed to load audio: ${errorMessage}`)
-			setIsLoading(false)
-		}
-	}
 
 	const handleError = (e: React.SyntheticEvent<HTMLAudioElement, Event>) => {
 		const audio = e.target as HTMLAudioElement
@@ -382,14 +346,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 
 	const handleTimeUpdate = () => {
 		if (audioRef.current) {
-			const currentTime = audioRef.current.currentTime
-			setCurrentTime(currentTime)
-			// If we're very close to the end, let the ended event handle it
-			if (currentTime >= duration - 0.1) {
-				if (progressIntervalRef.current) {
-					clearInterval(progressIntervalRef.current)
-				}
-			}
+			setCurrentTime(audioRef.current.currentTime)
 		}
 	}
 
@@ -401,7 +358,6 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 			setDuration(audioDuration + 0.1)
 		}
 		setIsLoading(false)
-		setIsLoaded(true)
 		setError(null)
 	}
 
@@ -414,65 +370,55 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 		setCurrentTime(nextTime)
 	}
 
-	const togglePlayback = async () => {
-		if (audioRef.current) {
-			if (isPlaying) {
-				audioRef.current.pause()
-				setIsPlaying(false)
-				if (progressIntervalRef.current) {
-					clearInterval(progressIntervalRef.current)
-				}
-			} else {
-				const isAutoplayDisabled = isDesktop() && isFirefox() // TODO: get value directly from browser API
+	const togglePlayback = () => {
+		const player = audioRef.current
+		if (!player) {
+			return
+		}
 
-				if (!isLoaded && !isAutoplayDisabled) {
-					await loadAudio()
-				}
+		if (isPlaying) {
+			player.pause()
+			setIsPlaying(false)
+			return
+		}
 
-				// Reset all other audio playback first
-				for (const audio of document.querySelectorAll('audio')) {
-					if (audio !== audioRef.current) {
-						audio.pause()
-					}
-				}
+		// Stream from the URL and let the <audio> element range-request. Setting
+		// src and calling play() synchronously — no `await` before play() — keeps
+		// the click's user activation live, so Firefox doesn't block playback. The
+		// old fetch-to-blob path broke that chain, which is the only reason it
+		// needed a browser-sniffing workaround; it also held the whole file in
+		// memory and leaked an object URL per play.
+		if (!player.src) {
+			player.src = audioUrl
+		}
+		setIsLoading(true)
 
-				// Play this audio
-				audioRef.current
-					.play()
-					.then(() => {
-						setIsPlaying(true)
-						setError(null)
-						// Use a shorter interval for smoother progress updates
-						progressIntervalRef.current = setInterval(handleTimeUpdate, 50)
-					})
-					.catch((error) => {
-						console.error('Audio playback error:', error)
-						setIsPlaying(false)
-						setError(`Failed to play audio: ${error.message}`)
-					})
-
-				if (!isLoaded && isAutoplayDisabled) {
-					await loadAudio()
-				}
+		// Reset all other audio playback first.
+		for (const audio of document.querySelectorAll('audio')) {
+			if (audio !== player) {
+				audio.pause()
 			}
 		}
+
+		player
+			.play()
+			.then(() => {
+				setIsPlaying(true)
+				setIsLoading(false)
+				setError(null)
+			})
+			.catch((error) => {
+				console.error('Audio playback error:', error)
+				setIsPlaying(false)
+				setIsLoading(false)
+				setError(`Failed to play audio: ${error.message}`)
+			})
 	}
 
 	const handleEnded = () => {
 		setIsPlaying(false)
 		setCurrentTime(duration) // Set to exact duration
-		if (progressIntervalRef.current) {
-			clearInterval(progressIntervalRef.current)
-		}
 	}
-
-	useEffect(() => {
-		return () => {
-			if (progressIntervalRef.current) {
-				clearInterval(progressIntervalRef.current)
-			}
-		}
-	}, [])
 
 	return (
 		<div className="mt-4 bg-accent/10 rounded-md p-3 relative">
@@ -513,10 +459,8 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
 							size="sm"
 							onClick={() => {
 								setError(null)
-								setIsLoading(true)
-								setIsLoaded(false)
-								audioBlobRef.current = null
 								if (audioRef.current) {
+									audioRef.current.removeAttribute('src')
 									audioRef.current.load()
 								}
 							}}
@@ -541,16 +485,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, thumbnail })
 	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [isLoading, setIsLoading] = useState(false)
-	const [isLoaded, setIsLoaded] = useState(false)
-	const videoBlobRef = useRef<Blob | null>(null)
 
+	// Reset when the source changes. Playback streams straight from `videoUrl`
+	// (see togglePlayback), so there is no blob or object URL to release.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: executed when videoUrl changes
 	useEffect(() => {
 		setIsPlaying(false)
 		setError(null)
 		setIsLoading(false)
-		setIsLoaded(false)
-		videoBlobRef.current = null
 		const player = videoRef.current
 
 		// Cleanup function
@@ -562,36 +504,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, thumbnail })
 			}
 		}
 	}, [videoUrl])
-
-	const loadVideo = async () => {
-		if (videoBlobRef.current) {
-			// Video is already cached
-			if (videoRef.current) {
-				videoRef.current.src = URL.createObjectURL(videoBlobRef.current)
-			}
-			return
-		}
-
-		setIsLoading(true)
-		setError(null)
-
-		try {
-			const response = await fetch(videoUrl)
-			if (!response.ok) {
-				throw new Error(`HTTP error! status: ${response.status}`)
-			}
-			const blob = await response.blob()
-			videoBlobRef.current = blob
-
-			if (videoRef.current) {
-				videoRef.current.src = URL.createObjectURL(blob)
-			}
-		} catch (err) {
-			const errorMessage = err instanceof Error ? err.message : 'Failed to load video'
-			setError(`Failed to load video: ${errorMessage}`)
-			setIsLoading(false)
-		}
-	}
 
 	const handleError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
 		const video = e.target as HTMLVideoElement
@@ -622,41 +534,50 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, thumbnail })
 
 	const handleLoadedMetadata = () => {
 		setIsLoading(false)
-		setIsLoaded(true)
 		setError(null)
 	}
 
-	const togglePlayback = async () => {
-		if (videoRef.current) {
-			if (isPlaying) {
-				videoRef.current.pause()
-				setIsPlaying(false)
-			} else {
-				if (!isLoaded) {
-					await loadVideo()
-				}
+	const togglePlayback = () => {
+		const player = videoRef.current
+		if (!player) {
+			return
+		}
 
-				// Reset all other video playback first
-				for (const video of document.querySelectorAll('video')) {
-					if (video !== videoRef.current) {
-						video.pause()
-					}
-				}
+		if (isPlaying) {
+			player.pause()
+			setIsPlaying(false)
+			return
+		}
 
-				// Play this video
-				videoRef.current
-					.play()
-					.then(() => {
-						setIsPlaying(true)
-						setError(null)
-					})
-					.catch((error) => {
-						console.error('Video playback error:', error)
-						setIsPlaying(false)
-						setError(`Failed to play video: ${error.message}`)
-					})
+		// Stream from the URL and let the <video> element range-request. Set src
+		// and call play() synchronously so the click's user activation is still
+		// live (see the AudioPlayer note); the old fetch-to-blob path downloaded
+		// the whole file into memory and leaked an object URL per play.
+		if (!player.src) {
+			player.src = videoUrl
+		}
+		setIsLoading(true)
+
+		// Reset all other video playback first.
+		for (const video of document.querySelectorAll('video')) {
+			if (video !== player) {
+				video.pause()
 			}
 		}
+
+		player
+			.play()
+			.then(() => {
+				setIsPlaying(true)
+				setIsLoading(false)
+				setError(null)
+			})
+			.catch((error) => {
+				console.error('Video playback error:', error)
+				setIsPlaying(false)
+				setIsLoading(false)
+				setError(`Failed to play video: ${error.message}`)
+			})
 	}
 
 	const handleEnded = () => {
@@ -707,10 +628,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ videoUrl, thumbnail })
 							size="sm"
 							onClick={() => {
 								setError(null)
-								setIsLoading(true)
-								setIsLoaded(false)
-								videoBlobRef.current = null
 								if (videoRef.current) {
+									videoRef.current.removeAttribute('src')
 									videoRef.current.load()
 								}
 							}}

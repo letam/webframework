@@ -27,6 +27,37 @@ feed keyboard shortcuts, and two of the UX bugs. The ops half of this file grew 
 which is a dated pin rather than a permanent one — and the ops list is re-ordered so the
 one thing blocking error visibility (`SENTRY_DSN`) sits at the top.
 
+**Update 2026-08-12.** A triage pass re-checked the *open* rows against the code rather than
+against this file's description of them, and found four sized wrong — corrections are
+annotated inline below (⚠️), in the same not-deleted style as the shipped rows. The habit
+worth keeping: a row describes the work as understood on the day it was written, and drifts
+as the code moves under it. Re-read the code before sizing anything here. Django is also no
+longer on a release candidate as of `23d45ef` — see Tech debt & pins.
+
+---
+
+## Next up (ranked 2026-08-12)
+
+Above all three, and not a feature: **`SENTRY_DSN`** (Ops backlog). Until it is on, anything
+these three break is invisible.
+
+1. **Recording robustness pass** — the whole open recording row under "Open UX bugs & small
+   fixes", built as one piece. It is the core input path of an audio/video product and the
+   least-hardened thing in the app; see that row for what is actually missing.
+2. **`file_size` + orphaned-media cleanup + the Fly cron, as a single pass** — these are one
+   problem wearing three hats (knowing what is really in R2), and the storage-usage display
+   falls out of it nearly free at the end. See the Ops backlog "Scheduled jobs" row and
+   "Display storage usage".
+3. **Feed perf — measure before building** — one React Profiler session either closes the
+   "feed feels heavy" row or names a specific fix. Cheapest available resolution of a
+   months-old unknown.
+
+Deprioritized on evidence in this pass: offline / local-first (see the correction on that
+section), self-hosted Whisper (pure cost saving; the OpenAI path works), richer reactions
+(this file's own "only if it doesn't clutter" is the right call). Still correctly deferred:
+shorts, iPhone re-encode, and volume normalization — all three need real device testing, so
+there is nothing to gain by starting them at a desk.
+
 ---
 
 ## P1 — Post privacy  ✅ Shipped 2026-07-09 (da97de9)
@@ -163,6 +194,15 @@ default", import/export, even a fully client-side encrypted variant). Big lift; 
 2. Offline composer: queue posts in IndexedDB, sync on reconnect.
 3. Import/export of one's own data (ties into the export button above).
 
+> **⚠️ Correction 2026-08-12 — stage 1 is not a re-enable.** There is no parked PWA plugin to
+> turn back on: nothing in `app/vite.config.ts` or `app/package.json` references vite-plugin-pwa,
+> Workbox, or a service worker. Whatever was parked is gone from the tree, so stage 1 is a
+> from-scratch add and must be sized as one.
+>
+> **The priority also dropped.** Composer autosave (shipped 2026-08-04, `b785a68`) already
+> answers the concrete pain this thread kept circling — not losing a recording to a refresh.
+> What remains here is the genuinely large and genuinely optional part.
+
 ## P3 — Federation / cross-posting
 
 "Turn the app into a social media node": cross-post to other platforms (API, MCP, or
@@ -199,6 +239,13 @@ ActivityPub only if the node idea gets serious.
 - **Post folders / Things-clone mode** — tags + folders + export; save lists (plus a
   browser extension to add items).
 - **Display storage usage** to the user; show file size of media.
+
+  > **⚠️ Correction 2026-08-12 — this is a migration, not a display task.** `Media`
+  > (`server/apps/blogs/models.py`) carries duration, waveform, thumbnail, transcript and
+  > alt text, but no size. `FileField.size` costs an R2 round-trip per file, so any total
+  > across a user's media means a stored `file_size` column plus a backfill over existing
+  > rows. Build it in the same pass as orphaned-media cleanup below — same question, same
+  > walk over the same objects.
 - **WebRTC live chat / P2P**; wake-word voice control; Apple Watch input. (Parked —
   revisit only if the core is done.)
 
@@ -212,9 +259,22 @@ ActivityPub only if the node idea gets serious.
   (~600px container; detailed measurements in the vault note `web-framework.md`).
   ✅ Shipped 2026-07-10 (c6f318a).
 - Dark mode as the default theme.
+  ✅ **Resolved 2026-08-12 — no work needed; closing the row.** `app/src/App.tsx` mounts
+  `<ThemeProvider defaultTheme="system">`, so a user whose OS is dark already lands in dark.
+  Hard-defaulting to dark would *override* the OS preference for light users, which is worse
+  than what ships. Reopen only if the ask was specifically "dark even when the OS says light".
 - Recording: graceful mic/camera permission denial; behavior on incoming call;
   "Post" during recording should stop the recording and submit; iPhone audio preview;
   Safari media quirks.
+
+  > **⚠️ Sizing note 2026-08-12 — handled, but undifferentiated.** Denial does not crash: both
+  > recorders catch it and toast. But each has exactly one message for every failure —
+  > `AudioRecorder.tsx:389` ("Unable to access microphone. Please check permissions.") and
+  > `VideoRecorder.tsx:213` — so a denied permission, no attached device, and a camera already
+  > held by another app all read identically, and none of the three suggest a way out. The work
+  > is branching on the `getUserMedia` error name (`NotAllowedError` / `NotFoundError` /
+  > `NotReadableError`) with recovery copy per case, then the rest of this row. **This is item 1
+  > in "Next up" — build the whole row at once.**
 
 ## Ops backlog
 
@@ -259,6 +319,15 @@ ActivityPub only if the node idea gets serious.
 - Scheduled jobs on Fly (cron) — e.g. orphaned-media cleanup (a known gap: presigned
   PUTs rejected at post-create are never deleted from R2). Link preview refresh is ready to
   schedule with `uv run python server/manage.py refresh_link_previews`.
+
+  > **Sizing note 2026-08-12.** The asymmetry in that sentence is real and easy to misread:
+  > `refresh_link_previews` exists and only needs a schedule, but there is **no cleanup command
+  > to schedule** — `server/apps/*/management/commands/` holds only `refresh_link_previews` and
+  > `init_users`. So this row is two unequal halves: wire up Fly cron (small), and write the
+  > cleanup command (not small — it has to diff R2 keys against `Media.s3_file_key` and delete
+  > only what no row claims, which is exactly the walk `file_size` needs). Until it exists the
+  > orphans accumulate silently and you pay for them; nothing surfaces the size of the pile.
+  > **This is item 2 in "Next up", together with `file_size`.**
 - External uptime monitoring (beyond `/healthz/`).
 - **Postgres** — not a task, a standing option. SQLite-on-volume is fine at this scale, but it
   pins the app to the single machine that owns the volume, so it is what a second machine (or

@@ -10,6 +10,7 @@ import {
 	draftKeyForUser,
 	loadComposerDraft,
 	saveComposerDraft,
+	updateComposerDraftFields,
 } from '@/lib/utils/composerDraft'
 
 const draft = (overrides: Partial<Parameters<typeof saveComposerDraft>[1]> = {}) => ({
@@ -152,6 +153,40 @@ describe('composer draft storage', () => {
 
 		expect((await loadComposerDraft(7))?.text).toBe('second')
 	})
+
+	it('updates only the text fields, keeping the media descriptors intact', async () => {
+		await saveComposerDraft(7, {
+			...draft({ text: 'draft', visibility: 'public', mediaType: 'video' }),
+			mediaName: 'clip.mp4',
+			mediaIsFile: true,
+		})
+
+		await updateComposerDraftFields(7, {
+			text: 'a caption, typed later',
+			visibility: 'private',
+			mediaType: 'video',
+		})
+
+		const stored = await loadComposerDraft(7)
+		expect(stored?.text).toBe('a caption, typed later')
+		expect(stored?.visibility).toBe('private')
+		// The recording and its descriptors survive the text-only rewrite.
+		expect(stored?.mediaName).toBe('clip.mp4')
+		expect(stored?.mediaIsFile).toBe(true)
+		expect(stored?.mediaOmitted).toBe(false)
+	})
+
+	it('writes a text-only record when there is nothing stored yet', async () => {
+		await updateComposerDraftFields(7, {
+			text: 'first keystrokes',
+			visibility: 'public',
+			mediaType: 'text',
+		})
+
+		const stored = await loadComposerDraft(7)
+		expect(stored?.text).toBe('first keystrokes')
+		expect(stored?.media).toBeNull()
+	})
 })
 
 describe('when storage is unavailable', () => {
@@ -164,6 +199,9 @@ describe('when storage is unavailable', () => {
 
 	it('saves, loads, and clears without throwing', async () => {
 		await expect(saveComposerDraft(7, draft())).resolves.toBeUndefined()
+		await expect(
+			updateComposerDraftFields(7, { text: 'x', visibility: 'public', mediaType: 'text' })
+		).resolves.toBeUndefined()
 		await expect(loadComposerDraft(7)).resolves.toBeNull()
 		await expect(clearComposerDraft(7)).resolves.toBeUndefined()
 	})

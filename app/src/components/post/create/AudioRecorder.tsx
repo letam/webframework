@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useImperativeHandle } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Square, Pause, Play, Loader2, Mic } from 'lucide-react'
 import { cn } from '@/lib/utils'
 // webm-duration-fix (and its Node polyfills) is only needed once a recording
@@ -39,12 +39,20 @@ export const AudioRecorderModal: React.FC<AudioRecorderModalProps> = ({
 	)
 }
 
-type RecordingStatus = 'idle' | 'loading' | 'recording' | 'paused' | 'normalizing' | 'ready'
+type RecordingStatus =
+	| 'idle'
+	| 'loading'
+	| 'recording'
+	| 'paused'
+	| 'normalizing'
+	| 'ready'
+	| 'error'
 
 interface StatusMessageProps {
 	status: RecordingStatus
 	showNormalizingMessage: boolean
 	recordingTime?: number
+	errorMessage?: string | null
 }
 
 const formatTime = (seconds: number): string => {
@@ -53,7 +61,37 @@ const formatTime = (seconds: number): string => {
 	return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
-const StatusMessage = ({ status, showNormalizingMessage, recordingTime }: StatusMessageProps) => {
+// Map a getUserMedia rejection to a message that tells the user what to fix.
+const micErrorMessage = (error: unknown): string => {
+	if (error instanceof DOMException) {
+		if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
+			return 'Microphone access was blocked. Allow it in your browser settings, then try again.'
+		}
+		if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+			return 'No microphone was found. Connect one and try again.'
+		}
+		if (error.name === 'NotReadableError') {
+			return 'Your microphone is in use by another app. Close it and try again.'
+		}
+	}
+	return 'Unable to access microphone. Please check permissions and try again.'
+}
+
+const StatusMessage = ({
+	status,
+	showNormalizingMessage,
+	recordingTime,
+	errorMessage,
+}: StatusMessageProps) => {
+	if (status === 'error') {
+		return (
+			<div className="flex items-center justify-center px-4 text-center text-base">
+				<span className="text-muted-foreground">
+					{errorMessage ?? 'Unable to access microphone. Please check permissions and try again.'}
+				</span>
+			</div>
+		)
+	}
 	if (status === 'loading') {
 		return (
 			<div className="flex items-center justify-center gap-2 text-base">
@@ -131,24 +169,12 @@ const normalizeAudio = async (audioBlob: Blob): Promise<Blob> => {
 				maxAmplitude = Math.max(maxAmplitude, Math.abs(channelData[i]))
 			}
 
-			console.log('Original max amplitude:', maxAmplitude) // DEBUG
-
 			// Apply normalization if needed
 			const gain = maxAmplitude > 0 ? 0.8 / maxAmplitude : 1
-			console.log('Applied gain:', gain) // DEBUG
 
 			for (let i = 0; i < channelData.length; i++) {
 				normalizedData[i] = channelData[i] * gain
 			}
-
-			// DEBUG
-			// Verify the new max amplitude
-			let newMaxAmplitude = 0
-			for (let i = 0; i < normalizedData.length; i++) {
-				newMaxAmplitude = Math.max(newMaxAmplitude, Math.abs(normalizedData[i]))
-			}
-			console.log('New max amplitude:', newMaxAmplitude)
-			// END DEBUG
 		}
 
 		const offlineContext = new OfflineAudioContext(
@@ -172,20 +198,12 @@ const normalizeAudio = async (audioBlob: Blob): Promise<Blob> => {
 	}
 }
 
-export interface AudioRecorderRef {
-	stopRecording: () => void
-	getStatus: () => RecordingStatus
-	reset: () => void
-	startRecording: () => Promise<void>
-}
-
 interface AudioRecorderProps {
 	onAudioCaptured: (audioBlob: Blob) => void
 	disabled?: boolean
 	submitStatus?: '' | 'preparing' | 'compressing' | 'submitting'
 	isProcessing?: boolean
 	autoStart?: boolean
-	ref?: React.Ref<AudioRecorderRef>
 }
 
 const AudioRecorder = ({
@@ -194,12 +212,16 @@ const AudioRecorder = ({
 	submitStatus = '',
 	isProcessing = false,
 	autoStart = false,
-	ref,
 }: AudioRecorderProps) => {
 	const [status, setStatus] = useState<RecordingStatus>('idle')
 	const [showNormalizingMessage, setShowNormalizingMessage] = useState(false)
 	const [audioURL, setAudioURL] = useState<string | null>(null)
 	const [recordingTime, setRecordingTime] = useState<number>(0)
+	const [errorMessage, setErrorMessage] = useState<string | null>(null)
+	// Guards the auto-start effect so a denied getUserMedia can't spin an infinite
+	// retry loop: startRecording sends status back through 'error', but even a
+	// bounce through 'idle' must not re-fire auto-start after the first attempt.
+	const hasAutoStartedRef = useRef(false)
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const audioChunksRef = useRef<Blob[]>([])
 	const normalizingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -254,7 +276,8 @@ const AudioRecorder = ({
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: auto-start should only respond to the external trigger and current status
 	useEffect(() => {
-		if (autoStart && status === 'idle') {
+		if (autoStart && status === 'idle' && !hasAutoStartedRef.current) {
+			hasAutoStartedRef.current = true
 			startRecording()
 		}
 	}, [autoStart, status])
@@ -263,12 +286,24 @@ const AudioRecorder = ({
 		setStatus('idle')
 		setShowNormalizingMessage(false)
 		setRecordingTime(0)
-		if (audioURL) {
-			URL.revokeObjectURL(audioURL)
-			setAudioURL(null)
-		}
+		setErrorMessage(null)
+		// Dropping the URL from state is what revokes it; see the effect below.
+		setAudioURL(null)
 		audioChunksRef.current = []
-		if (mediaRecorderRef.current) {
+		const recorder = mediaRecorderRef.current
+		if (recorder) {
+			// Detach handlers first so stopping the tracks below can't fire an onstop
+			// that normalizes and calls back after we've torn down (e.g. on unmount).
+			recorder.ondataavailable = null
+			recorder.onstop = null
+			if (recorder.state !== 'inactive') {
+				recorder.stop()
+			}
+			// Release the mic: without this, closing the modal mid-record leaves the
+			// browser's recording indicator on and the microphone hot.
+			for (const track of recorder.stream.getTracks()) {
+				track.stop()
+			}
 			mediaRecorderRef.current = null
 		}
 		if (normalizingTimeoutRef.current) {
@@ -305,11 +340,9 @@ const AudioRecorder = ({
 
 		try {
 			setStatus('loading')
-			// Clean up previous audio state
-			if (audioURL) {
-				URL.revokeObjectURL(audioURL)
-				setAudioURL(null)
-			}
+			setErrorMessage(null)
+			// Clean up previous audio state; clearing it revokes the old take.
+			setAudioURL(null)
 
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
 			const mediaRecorder = new MediaRecorder(stream, { mimeType: supportedAudioMimeType })
@@ -385,9 +418,13 @@ const AudioRecorder = ({
 				setStatus('recording')
 			}
 		} catch (error) {
+			const message = micErrorMessage(error)
 			console.error('Error accessing microphone:', error)
-			toast.error('Unable to access microphone. Please check permissions.')
-			setStatus('idle')
+			toast.error(message)
+			setErrorMessage(message)
+			// Terminal 'error' (not 'idle') so the auto-start effect can't retry in a
+			// loop; the user retries explicitly via the button below.
+			setStatus('error')
 		}
 	}
 
@@ -424,12 +461,14 @@ const AudioRecorder = ({
 		}
 	}, [])
 
-	useImperativeHandle(ref, () => ({
-		stopRecording,
-		getStatus: () => status,
-		reset,
-		startRecording,
-	}))
+	// Revoking the object URL lives here, not in `reset`. The unmount cleanup above
+	// captures render 1's `reset`, whose `audioURL` is still null, so a revoke from
+	// there never ran and the recorded take stayed pinned for the tab's lifetime.
+	// Everything else `reset` touches is a ref, which is always current.
+	useEffect(() => {
+		if (!audioURL) return
+		return () => URL.revokeObjectURL(audioURL)
+	}, [audioURL])
 
 	return (
 		<div className="flex flex-col h-full">
@@ -456,10 +495,24 @@ const AudioRecorder = ({
 					status={status}
 					showNormalizingMessage={showNormalizingMessage}
 					recordingTime={recordingTime}
+					errorMessage={errorMessage}
 				/>
 			</div>
 
 			<div className="flex justify-center gap-4 mt-auto">
+				{status === 'error' && (
+					<Button
+						type="button"
+						variant="outline"
+						size="lg"
+						onClick={startRecording}
+						disabled={isProcessing || !!submitStatus}
+						className="flex items-center gap-2 px-8"
+					>
+						<Mic className="h-5 w-5" />
+						<span>Try again</span>
+					</Button>
+				)}
 				{(status === 'recording' || status === 'paused') && (
 					<>
 						<Button

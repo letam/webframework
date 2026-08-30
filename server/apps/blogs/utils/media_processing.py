@@ -12,6 +12,8 @@ from io import BytesIO
 from django.core.files.base import ContentFile
 from PIL import Image, ImageOps
 
+from .images import flatten_to_rgb
+
 VIDEO_THUMBNAIL_MAX_WIDTH = 1280
 IMAGE_RENDITION_MAX_EDGE = 1600
 POSTER_MAX_EDGE = 1280
@@ -131,7 +133,7 @@ def generate_jpeg_rendition(
             return None
 
         image.thumbnail((max_edge, max_edge), Image.Resampling.LANCZOS)
-        image = _flatten_to_rgb(image)
+        image = flatten_to_rgb(image)
 
         buffer = BytesIO()
         image.save(buffer, format='JPEG', quality=80, optimize=True)
@@ -150,18 +152,3 @@ def save_media_thumbnail(media, content: ContentFile, filename: str) -> None:
 
     if old_name and old_name != media.thumbnail.name:
         media.thumbnail.storage.delete(old_name)
-
-
-def _flatten_to_rgb(image: Image.Image) -> Image.Image:
-    if image.mode in {'RGBA', 'LA'} or (
-        image.mode == 'P' and image.info.get('transparency') is not None
-    ):
-        canvas = Image.new('RGB', image.size, 'white')
-        alpha = image.convert('RGBA').getchannel('A')
-        canvas.paste(image.convert('RGBA'), mask=alpha)
-        return canvas
-
-    if image.mode != 'RGB':
-        return image.convert('RGB')
-
-    return image

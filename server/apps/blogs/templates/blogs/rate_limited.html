@@ -1,0 +1,77 @@
+{# Deliberately standalone — this does NOT extend shared/base.html.
+
+   The whole point of a rate limiter is that rejecting a request costs less than
+   serving one. base.html includes shared/header.html, which evaluates
+   `{% templatetag openblock %} if user.is_authenticated {% templatetag closeblock %}`;
+   that forces the lazy `request.user`, and with the database session backend any
+   request carrying a sessionid cookie then costs a session SELECT — on the exact
+   path that exists to shed load, and paid once per flooded request. Extending the
+   base would also render the whole site chrome to say one sentence.
+
+   So this page stands alone: no includes, no context beyond `message`, no
+   database work, and no JavaScript. Theming is plain `prefers-color-scheme`
+   rather than base.html's localStorage-aware script, which costs a reader whose
+   chosen theme differs from their system one nothing worse than a plain page in
+   the other palette.
+#}<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Too many requests - Echo Sphere</title>
+  {# Nothing here is worth indexing, and the crawler that earned this response is
+     exactly the client that should not treat it as the post's content. #}
+  <meta name="robots" content="noindex" />
+  <style>
+    :root {
+      --background: #f5f8ff;
+      --foreground: #0b1020;
+      --muted-foreground: #64748b;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --background: #0b1020;
+        --foreground: #f8fafc;
+        --muted-foreground: #94a3b8;
+      }
+    }
+
+    body {
+      margin: 0;
+      background-color: var(--background);
+      color: var(--foreground);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    }
+
+    .rate-limited {
+      max-width: 32rem;
+      margin: 0 auto;
+      padding: 4rem 1.5rem;
+      text-align: center;
+    }
+
+    .rate-limited h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 0 0 0.75rem;
+    }
+
+    .rate-limited p {
+      color: var(--muted-foreground);
+      line-height: 1.6;
+      margin: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="rate-limited">
+    <h1>Too many requests</h1>
+    <p>{{ message }}</p>
+  </div>
+</body>
+
+</html>

@@ -5,6 +5,7 @@ import logging
 import mimetypes
 import os
 import tempfile
+from datetime import timedelta
 from urllib.parse import urlsplit
 
 from django.conf import settings
@@ -20,7 +21,14 @@ from django.db.models import (
     Value,
 )
 from django.db.models.functions import Coalesce
-from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect, JsonResponse
+from django.http import (
+    FileResponse,
+    Http404,
+    HttpResponse,
+    HttpResponseRedirect,
+    JsonResponse,
+    StreamingHttpResponse,
+)
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils import timezone
@@ -31,9 +39,15 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle, UserRateThrottle
 from werkzeug.http import parse_range_header
 
+from apps.ratelimit import (
+    RATE_LIMITED_MESSAGE,
+    get_client_ip,
+    json_rate_limited_response,
+    rate_limit,
+)
+from apps.throttling import IpScopedRateThrottle, IpUserRateThrottle
 from apps.uploads.s3 import (
     ALLOWED_CONTENT_TYPE_RE,
     delete_object,
@@ -73,6 +87,13 @@ logger = logging.getLogger(__name__)
 VALID_MEDIA_TYPES = {choice[0] for choice in MEDIA_TYPE_CHOICES}
 POSTER_UPLOAD_LIMIT_BYTES = 5 * 1024 * 1024
 
+# A transcription left at 'pending' this long is treated as stranded — its worker
+# almost certainly died (in production the worker only runs while the machine is
+# awake) — so a repeat transcribe request re-enqueues it instead of no-oping. The
+# transcribe action is the only path that clears a stuck spinner, so this is the
+# ceiling on how long the UI can spin before the author can retry.
+STALE_TRANSCRIPT_PENDING = timedelta(minutes=15)
+
 
 class MediaValidationError(ValueError):
     """Raised when a media payload fails pre-create validation."""
@@ -99,7 +120,7 @@ def _related_count(model):
     )
 
 
-class TranscribeRateThrottle(UserRateThrottle):
+class TranscribeRateThrottle(IpUserRateThrottle):
     """Throttle for the transcribe action, which calls a paid external API."""
 
     scope = 'transcribe'
@@ -131,15 +152,29 @@ def _shallow_request_data(data):
 
 
 def _viewer_key_for_request(request):
-    """Return the stable, non-credential viewer key for the request."""
+    """Return a stable, non-credential viewer key without minting a session.
+
+    Authenticated users key on their id. Anonymous requests reuse an *existing*
+    session key when the browser already has one; otherwise they fall back to a
+    coarse per-day fingerprint of client IP + user agent. We deliberately never
+    call ``request.session.save()`` here: cookieless clients (Open Graph
+    crawlers, curl, anything that drops the Set-Cookie) would otherwise mint a
+    fresh session — and therefore a fresh dedupe key — on every request, both
+    inflating view counts and filling the session table on a small SQLite VM.
+    """
     if request.user.is_authenticated:
         return f'u:{request.user.id}'
 
-    if not request.session.session_key:
-        request.session.save()
-
     session_key = request.session.session_key
-    digest = hashlib.sha256(f'{settings.SECRET_KEY}:{session_key}'.encode()).hexdigest()[:40]
+    if session_key:
+        raw = f'{settings.SECRET_KEY}:{session_key}'
+    else:
+        client_ip = get_client_ip(request)
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        day = timezone.now().strftime('%Y-%m-%d')
+        raw = f'{settings.SECRET_KEY}:{client_ip}:{user_agent}:{day}'
+
+    digest = hashlib.sha256(raw.encode()).hexdigest()[:40]
     return f's:{digest}'
 
 
@@ -311,6 +346,11 @@ class PostViewSet(viewsets.ModelViewSet):
             post = serializer.instance
 
             if media_payload:
+                # Pin the Media pk to the Post pk so a direct-upload file lands
+                # under post/<post.id>/media/... on first save (media_file_path
+                # reads instance.id). This intentionally couples the two pks and
+                # lets Media.save() skip its insert-twice fallback; see the note
+                # in Media.save() for the mechanism.
                 media_kwargs = {
                     'id': post.id,  # pyright: ignore [reportOptionalMemberAccess]
                     'media_type': media_payload['media_type'],
@@ -628,7 +668,7 @@ class PostViewSet(viewsets.ModelViewSet):
         detail=False,
         methods=['post'],
         url_path='views',
-        throttle_classes=[ScopedRateThrottle],
+        throttle_classes=[IpScopedRateThrottle],
         throttle_scope='views',
     )
     def views(self, request):
@@ -806,12 +846,27 @@ class PostViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # A 'pending' status normally means a transcription is already in flight,
+        # so a repeat request no-ops. But a worker that died leaves it pending
+        # forever and the UI spins with no way out; once it's been pending past
+        # the staleness window, re-enqueue instead. Re-saving bumps `modified`
+        # (auto_now), which resets the window so rapid retries don't pile on jobs.
+        # `modified` must be listed in update_fields for that to happen: Django
+        # only runs a field's pre_save (where auto_now stamps) when update_fields
+        # names it. Omit it and the window is measured from the row's last
+        # unrelated write, so every retry on an older post looks stranded and
+        # enqueues another paid Whisper job.
+        media = post.media
+        is_stranded_pending = (
+            media.transcript_status == 'pending'
+            and media.modified < timezone.now() - STALE_TRANSCRIPT_PENDING
+        )
         try:
-            if post.media.transcript_status != 'pending':
-                post.media.transcript_status = 'pending'
-                post.media.save(update_fields=['transcript_status'])
-                transcribe_post_media.enqueue(post.media.pk)
-                post.media.refresh_from_db()
+            if media.transcript_status != 'pending' or is_stranded_pending:
+                media.transcript_status = 'pending'
+                media.save(update_fields=['transcript_status', 'modified'])
+                transcribe_post_media.enqueue(media.pk)
+                media.refresh_from_db()
         except Exception:
             logger.exception('Error transcribing audio for post %s', post.id)
             return Response(
@@ -868,6 +923,27 @@ def get_post_media_mime_type(request, post_id):
     return HttpResponse(mime_type, content_type="text/plain")
 
 
+# Streaming a range block-by-block keeps a media request at O(block size) in RAM.
+# Reading the whole slice into one bytes object (what this did before) meant a
+# browser's opening `Range: bytes=0-` allocated the entire file — up to the 100 MB
+# cap, briefly doubled by the response object — enough for two concurrent viewers
+# to OOM a 512 MB VM.
+_MEDIA_STREAM_BLOCK_SIZE = 64 * 1024
+
+
+def _iter_file_range(file_path, start, length, block_size=_MEDIA_STREAM_BLOCK_SIZE):
+    """Yield ``length`` bytes of ``file_path`` starting at ``start``, block by block."""
+    with open(file_path, 'rb') as file_to_send:
+        file_to_send.seek(start)
+        remaining = length
+        while remaining > 0:
+            chunk = file_to_send.read(min(block_size, remaining))
+            if not chunk:
+                break
+            remaining -= len(chunk)
+            yield chunk
+
+
 @require_GET
 def stream_post_media(request, post_id):
     """Stream a media file to the client. Necessary to load media files in Safari.
@@ -912,16 +988,16 @@ def stream_post_media(request, post_id):
         return response
 
     start, end = bounds
-    with open(file_path, 'rb') as file_to_send:
-        file_to_send.seek(start)
-        data = file_to_send.read(end - start)
-
+    length = end - start
+    response = StreamingHttpResponse(
+        _iter_file_range(file_path, start, length),
+        status=206,  # Partial Content
+        content_type=get_file_mime_type(file_path),
+    )
+    response['Content-Length'] = str(length)
     # HTTP Content-Range is end-inclusive, hence end - 1.
-    response = HttpResponse(data, content_type=get_file_mime_type(file_path))
-    response['Content-Length'] = len(data)
     response['Content-Range'] = f'bytes {start}-{end - 1}/{file_size}'
     response['Accept-Ranges'] = 'bytes'
-    response.status_code = 206  # Partial Content
     return response
 
 
@@ -935,6 +1011,27 @@ def link_preview_image(request, preview_id):
         raise Http404
 
     response = FileResponse(preview.image.open('rb'), content_type='image/jpeg')
+    response['Cache-Control'] = 'private, max-age=86400'
+    return response
+
+
+@require_GET
+def serve_media_thumbnail(request, post_id):
+    """Serve a post's media thumbnail through the visibility gate.
+
+    Thumbnails (video posters and image renditions) are always JPEG. Serving them
+    here rather than statically keeps private/unlisted media behind
+    ``Post.is_visible_to`` instead of the Fly proxy.
+    """
+    post = get_object_or_404(Post.objects.select_related('media'), id=post_id)
+    if not post.is_visible_to(request.user, token=request.GET.get('token')):
+        raise Http404
+
+    media = post.media
+    if not media or not media.thumbnail:
+        raise Http404
+
+    response = FileResponse(media.thumbnail.open('rb'), content_type='image/jpeg')
     response['Cache-Control'] = 'private, max-age=86400'
     return response
 
@@ -983,10 +1080,38 @@ def _link_preview_meta(preview):
     return ' · '.join(part for part in parts if part)
 
 
+def _post_detail_rate_limited(request):
+    """Build post_detail's 429 in the shape the caller asked for.
+
+    Mirrors the view's own Accept negotiation below: an `application/json`
+    client is on the API contract and gets JSON, and everyone else — a reader
+    who reloaded the share page a few too many times, a crawler — gets a page.
+    The default JSON body would render as a raw blob in a browser window, which
+    looks like a broken site rather than like "try again in a minute".
+    """
+    if 'application/json' in request.META.get('HTTP_ACCEPT', ''):
+        return json_rate_limited_response(request)
+    return render(
+        request,
+        'blogs/rate_limited.html',
+        {'message': RATE_LIMITED_MESSAGE},
+        status=429,
+    )
+
+
+@rate_limit(
+    'post_detail',
+    limit=120,
+    window_seconds=60,
+    limited_response=_post_detail_rate_limited,
+)
 def post_detail(request, post_id):
     """View for individual post detail pages.
 
     Returns JSON if Accept header contains application/json, otherwise renders HTML.
+
+    Rate-limited per client IP: each HTML GET records a view, so without a cap a
+    single client could inflate counts and grow the view/session tables at will.
     """
     post = get_object_or_404(Post.objects.select_related('author', 'media'), id=post_id)
     if not post.is_visible_to(request.user, token=request.GET.get('token')):

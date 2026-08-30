@@ -138,6 +138,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 			const options = await getFetchOptions('POST', {
 				file_name: data.media.name,
 				content_type: data.media.type,
+				content_length: data.media.size,
 			})
 			response = await fetch(`${SERVER_API_URL}/uploads/presign/`, options)
 			if (!response.ok) {

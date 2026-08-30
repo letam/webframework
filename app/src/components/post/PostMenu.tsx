@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
-import { downloadFile, getFileExtension } from '@/lib/utils/file'
+import { downloadFile } from '@/lib/utils/file'
 import { getMediaUrl } from '@/lib/api/posts'
 import { format } from 'date-fns'
 import type { Post, PostVisibility } from '@/types/post'
@@ -86,8 +86,10 @@ const PostMenu: React.FC<PostMenuProps> = ({
 	const handleDownload = () => {
 		if (post.media) {
 			const formattedDateTime = format(post.created, 'yyyy-MM-dd_HH-mm-ss')
-			const mediaFileExtension = getFileExtension(post.media.file || post.media.s3_file_key)
-			const filename = `${post.author.username}_${formattedDateTime}.${mediaFileExtension}`
+			const mediaFileExtension = post.media.extension
+			const filename = mediaFileExtension
+				? `${post.author.username}_${formattedDateTime}.${mediaFileExtension}`
+				: `${post.author.username}_${formattedDateTime}`
 
 			downloadFile({ url: getMediaUrl(post), filename })
 		}

@@ -69,18 +69,26 @@ def get_s3_client():
     )
 
 
-def generate_presigned_put_url(key: str, content_type: str, expires_in: int = 300) -> str:
-    """Generate a presigned PUT URL for uploading one object."""
+def generate_presigned_put_url(
+    key: str, content_type: str, content_length: int | None = None, expires_in: int = 300
+) -> str:
+    """Generate a presigned PUT URL for uploading one object.
+
+    When ``content_length`` is given it is signed into the URL, which adds
+    ``content-length`` to ``X-Amz-SignedHeaders``. R2/S3 then enforces the exact
+    byte count at the edge: an upload whose ``Content-Length`` differs from the
+    signed value is rejected before its body is stored, rather than being caught
+    only afterwards by the post-create ``head_object`` size check.
+    """
+    params = {
+        'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
+        'Key': key,
+        'ContentType': content_type,
+    }
+    if content_length is not None:
+        params['ContentLength'] = content_length
     s3 = get_s3_client()
-    return s3.generate_presigned_url(
-        'put_object',
-        Params={
-            'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
-            'Key': key,
-            'ContentType': content_type,
-        },
-        ExpiresIn=expires_in,
-    )
+    return s3.generate_presigned_url('put_object', Params=params, ExpiresIn=expires_in)
 
 
 def generate_presigned_get_url(key: str, expires_in: int = 3600) -> str:

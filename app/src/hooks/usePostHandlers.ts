@@ -81,6 +81,9 @@ export const usePostHandlers = (
 			} catch (error) {
 				console.error('Failed to update post:', error)
 				toast.error('Failed to update post')
+				// Rethrow so EditPostModal keeps the dialog open and preserves the
+				// in-progress edit; a resolved promise closes it and drops the edit.
+				throw error
 			}
 		},
 		[editPost]

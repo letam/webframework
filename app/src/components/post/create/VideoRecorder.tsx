@@ -1,4 +1,4 @@
-import { useState, useRef, forwardRef, useImperativeHandle, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Video, Square } from 'lucide-react'
 // webm-duration-fix (and its Node polyfills) is only needed once a recording
 // stops, so it is imported dynamically to keep it out of the initial bundle.
@@ -8,10 +8,6 @@ import { supportedVideoMimeType } from '@/lib/utils/media'
 import { isIOS } from '@/lib/utils/browser'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getSettings } from '@/lib/utils/settings'
-
-export interface VideoRecorderRef {
-	reset: () => void
-}
 
 interface VideoRecorderModalProps {
 	onVideoCaptured: (videoBlob: Blob) => void
@@ -47,43 +43,88 @@ const formatTime = (seconds: number): string => {
 	return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
-const VideoRecorder = forwardRef<
-	VideoRecorderRef,
-	{
-		onVideoCaptured: (videoBlob: Blob) => void
-		disabled?: boolean
-		autoStart?: boolean
+// Map a getUserMedia rejection to a message that tells the user what to fix.
+const cameraErrorMessage = (error: unknown): string => {
+	if (error instanceof DOMException) {
+		if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
+			return 'Camera access was blocked. Allow it in your browser settings, then try again.'
+		}
+		if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+			return 'No camera was found. Connect one and try again.'
+		}
+		if (error.name === 'NotReadableError') {
+			return 'Your camera is in use by another app. Close it and try again.'
+		}
 	}
->(({ onVideoCaptured, disabled, autoStart = false }, ref) => {
+	return 'Unable to access camera or microphone. Please check permissions and try again.'
+}
+
+interface VideoRecorderProps {
+	onVideoCaptured: (videoBlob: Blob) => void
+	disabled?: boolean
+	autoStart?: boolean
+}
+
+const VideoRecorder = ({ onVideoCaptured, disabled, autoStart = false }: VideoRecorderProps) => {
 	const [isRecording, setIsRecording] = useState(false)
 	const [videoURL, setVideoURL] = useState<string | null>(null)
 	const [recordingTime, setRecordingTime] = useState<number>(0)
+	const [errorMessage, setErrorMessage] = useState<string | null>(null)
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const videoChunksRef = useRef<Blob[]>([])
 	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const streamRef = useRef<MediaStream | null>(null)
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
+	// Auto-start at most once per mount so a failed getUserMedia can't retry in a loop.
+	const hasAutoStartedRef = useRef(false)
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: auto-start should only respond to the external trigger and current recording state
 	useEffect(() => {
-		if (autoStart && !isRecording && !videoURL) {
+		if (autoStart && !isRecording && !videoURL && !hasAutoStartedRef.current) {
+			hasAutoStartedRef.current = true
 			startRecording()
 		}
 	}, [autoStart, isRecording, videoURL])
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: cleanup should only run when this recorder unmounts
+	useEffect(() => {
+		return () => {
+			reset()
+		}
+	}, [])
+
+	// Revoking the object URL lives here, not in `reset`. The unmount cleanup above
+	// captures render 1's `reset`, whose `videoURL` is still null, so a revoke from
+	// there never ran and the recorded blob stayed pinned for the tab's lifetime.
+	// Everything else `reset` touches is a ref, which is always current. Keying on
+	// the URL also releases a take that a re-record or a second file pick replaced.
+	useEffect(() => {
+		if (!videoURL) return
+		return () => URL.revokeObjectURL(videoURL)
+	}, [videoURL])
+
 	const reset = () => {
 		setIsRecording(false)
 		setRecordingTime(0)
-		if (videoURL) {
-			URL.revokeObjectURL(videoURL)
-			setVideoURL(null)
-		}
+		setErrorMessage(null)
+		// Dropping the URL from state is what revokes it; see the effect above.
+		setVideoURL(null)
 		videoChunksRef.current = []
-		if (mediaRecorderRef.current) {
+		const recorder = mediaRecorderRef.current
+		if (recorder) {
+			// Detach handlers first so stopping below can't fire an onstop that calls
+			// back after we've torn down (e.g. on unmount).
+			recorder.ondataavailable = null
+			recorder.onstop = null
+			if (recorder.state !== 'inactive') {
+				recorder.stop()
+			}
 			mediaRecorderRef.current = null
 		}
 		if (streamRef.current) {
+			// Release the camera + mic: without this, closing the modal mid-record
+			// leaves the browser's recording indicator on and the devices hot.
 			for (const track of streamRef.current.getTracks()) {
 				track.stop()
 			}
@@ -97,10 +138,6 @@ const VideoRecorder = forwardRef<
 			timerRef.current = undefined
 		}
 	}
-
-	useImperativeHandle(ref, () => ({
-		reset,
-	}))
 
 	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
@@ -144,6 +181,7 @@ const VideoRecorder = forwardRef<
 		}
 
 		try {
+			setErrorMessage(null)
 			const settings = getSettings()
 			const videoConstraints = {
 				facingMode: 'user',
@@ -190,17 +228,24 @@ const VideoRecorder = forwardRef<
 			mediaRecorder.onstop = () => {
 				stopTimer()
 				;(async () => {
-					const { default: fixWebmDuration } = await import('webm-duration-fix')
-					const videoBlob = await fixWebmDuration(
-						new Blob(videoChunksRef.current, { type: videoChunksRef.current[0]?.type })
-					)
-					const videoUrl = URL.createObjectURL(videoBlob)
-					setVideoURL(videoUrl)
-					onVideoCaptured(videoBlob)
-
-					// Remove preview
-					if (videoRef.current) {
-						videoRef.current.srcObject = null
+					try {
+						const { default: fixWebmDuration } = await import('webm-duration-fix')
+						const videoBlob = await fixWebmDuration(
+							new Blob(videoChunksRef.current, { type: videoChunksRef.current[0]?.type })
+						)
+						const videoUrl = URL.createObjectURL(videoBlob)
+						setVideoURL(videoUrl)
+						onVideoCaptured(videoBlob)
+					} catch (error) {
+						// Without this, a failed duration-fix or dynamic import rejects unhandled
+						// and the recording vanishes with no feedback (mirrors AudioRecorder.onstop).
+						console.error('Error processing video recording:', error)
+						toast.error('Error processing video recording')
+					} finally {
+						// Remove preview on success or failure so a dead live stream isn't left attached.
+						if (videoRef.current) {
+							videoRef.current.srcObject = null
+						}
 					}
 				})()
 			}
@@ -209,8 +254,10 @@ const VideoRecorder = forwardRef<
 			startTimer({ reset: true })
 			setIsRecording(true)
 		} catch (error) {
+			const message = cameraErrorMessage(error)
 			console.error('Error accessing camera/microphone:', error)
-			toast.error('Unable to access camera or microphone. Please check permissions.')
+			toast.error(message)
+			setErrorMessage(message)
 		}
 	}
 
@@ -241,9 +288,18 @@ const VideoRecorder = forwardRef<
 						src={videoURL || undefined}
 						style={{ transform: 'scaleX(-1)' }} // Mirror the video for selfie view
 					/>
-					{!isRecording && !videoURL && (
+					{!isRecording && !videoURL && !errorMessage && (
 						<div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
 							<Video className="h-12 w-12 opacity-50" />
+						</div>
+					)}
+					{!isRecording && !videoURL && errorMessage && (
+						<div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4 text-center">
+							<span className="text-sm text-white/80">{errorMessage}</span>
+							<Button type="button" variant="secondary" size="sm" onClick={startRecording}>
+								<Video className="h-4 w-4" />
+								<span>Try again</span>
+							</Button>
 						</div>
 					)}
 				</div>
@@ -286,6 +342,6 @@ const VideoRecorder = forwardRef<
 			/>
 		</div>
 	)
-})
+}
 
 export default VideoRecorder

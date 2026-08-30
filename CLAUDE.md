@@ -90,12 +90,11 @@ uv run python server/manage.py createsuperuser
 # Initialize users (superuser + anonymous user for anonymous posts)
 uv run python server/manage.py init_users
 
-# Python linting/formatting
+# Python linting/formatting (ruff is the sole formatter and import sorter;
+# ruff format is Black-compatible and the [tool.ruff.format] quote-style =
+# "preserve" keeps Black's skip-string-normalization behavior)
 ruff check server/
 ruff format server/
-# Or use black + isort:
-black server/
-isort server/
 ```
 
 ### Frontend
@@ -157,8 +156,8 @@ npx @biomejs/biome check .
 
 ### Python/Django
 
-- **Formatter**: Black (preserves string quotes, line length 99)
-- **Import sorting**: isort (black profile)
+- **Formatter**: `ruff format` (preserves string quotes via `quote-style = "preserve"`, line length 99)
+- **Import sorting**: Ruff (the `I` rule, black-compatible ordering)
 - **Linter**: Ruff (target Python 3.13, Django-specific rules enabled)
 - **Docstrings**: Google convention
 - **Line length**: 99 characters
@@ -309,7 +308,7 @@ webframework/
 ├── fly.toml                    # Fly.io deployment config
 ├── justfile                    # Task runner (imports from admin/justfiles/)
 ├── package.json                # Root (Biome dev dependency)
-├── pyproject.toml              # Python config (deps, ruff, black, isort, pyright)
+├── pyproject.toml              # Python config (deps, ruff; pyright config is in pyrightconfig.json)
 └── pyrightconfig.json          # Python type checker config
 ```
 

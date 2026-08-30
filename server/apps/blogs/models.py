@@ -87,7 +87,15 @@ class Media(models.Model):
 
     def save(self, *args, **kwargs):
         """Save media and populate duration when it can be probed."""
-        # If this is a new record with file and we don't yet have id for media_file_path def
+        # media_file_path() interpolates self.id into the upload path, but a
+        # fresh insert has no id until the INSERT runs — and FileField writes the
+        # file (calling upload_to) *before* that. So when a file-bearing row is
+        # created without a pre-assigned id, insert once without the file to get
+        # an id, then attach the file and re-save. The post-create path in
+        # views.py sidesteps this by pre-setting id=post.id (see the Media↔Post
+        # id coupling there), so it skips this branch; test factories and the
+        # 0010 data migration create file-bearing rows without an id and depend
+        # on it, so it is live, not dead.
         if self.id is None and self.file:  # pyright: ignore [reportAttributeAccessIssue]
             # Store file temporarily outside of record
             file = self.file
@@ -238,7 +246,14 @@ class Post(models.Model):
     class Meta:
         """Model options for posts."""
 
-        ordering = ['-created']
+        # `-id` is a stable tiebreaker: `created` (auto_now_add) can repeat across
+        # rows written in the same instant (bulk inserts, tests), and without it
+        # keyset/offset pagination of the feed can drop or repeat those rows. The
+        # matching ('-created', '-id') index below serves this default sort.
+        ordering = ['-created', '-id']
+        indexes = [
+            models.Index(fields=['-created', '-id'], name='blogs_post_feed_idx'),
+        ]
 
     def __str__(self):
         """Return the post headline."""

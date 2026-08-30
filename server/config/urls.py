@@ -21,6 +21,7 @@ from apps.blogs.views import (
     get_post_media_mime_type,
     link_preview_image,
     post_detail,
+    serve_media_thumbnail,
     stream_post_media,
 )
 from apps.uploads.views import get_presigned_url
@@ -57,6 +58,11 @@ urlpatterns = [
         name='get_post_media_mime_type',
     ),
     path('api/posts/<int:post_id>/media/', stream_post_media, name='stream_post_media'),
+    path(
+        'api/posts/<int:post_id>/media/thumbnail/',
+        serve_media_thumbnail,
+        name='media_thumbnail',
+    ),
     path(
         'api/link-previews/<int:preview_id>/image/',
         link_preview_image,
