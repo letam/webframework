@@ -12,15 +12,22 @@ export { isOutboxEntryVisible }
 
 export const getVisibleOutboxEntries = (
 	entries: OutboxEntry[],
-	auth: Pick<OutboxAuthState, 'isAuthenticated' | 'userId'>
-) => entries.filter((entry) => isOutboxEntryVisible(entry, auth))
+	auth: Pick<OutboxAuthState, 'isAuthenticated' | 'userId' | 'isAuthResolved'>
+) =>
+	auth.isAuthResolved
+		? entries.filter((entry) => isOutboxEntryVisible(entry, auth))
+		: entries.filter((entry) => entry.author === 'unknown')
 
 export const useOutbox = () => {
 	const snapshot = useSyncExternalStore(subscribeOutbox, getOutboxSnapshot, getOutboxSnapshot)
-	const { isAuthenticated, userId } = useAuth()
+	const { isAuthenticated, userId, isAuthResolved } = useAuth()
 
 	return {
 		...snapshot,
-		entries: getVisibleOutboxEntries(snapshot.entries, { isAuthenticated, userId }),
+		entries: getVisibleOutboxEntries(snapshot.entries, {
+			isAuthenticated,
+			userId,
+			isAuthResolved,
+		}),
 	}
 }

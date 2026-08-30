@@ -5,7 +5,11 @@ import { __resetOutboxForTests, enqueuePost } from '@/lib/outbox'
 import type { OutboxEntry } from '@/lib/utils/outboxDb'
 
 const authValue = vi.hoisted(() => ({
-	current: { isAuthenticated: false, userId: null as number | null },
+	current: {
+		isAuthenticated: false,
+		userId: null as number | null,
+		isAuthResolved: false,
+	},
 }))
 
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => authValue.current }))
@@ -52,7 +56,7 @@ describe('useOutbox visibility filtering', () => {
 		await enqueueFor(2, 'Someone else')
 		await enqueueFor('anon', 'Anonymous')
 		await enqueueFor('unknown', 'Unknown session')
-		authValue.current = { isAuthenticated: true, userId: 1 }
+		authValue.current = { isAuthenticated: true, userId: 1, isAuthResolved: true }
 
 		const { result } = renderHook(() => useOutbox())
 
@@ -63,7 +67,7 @@ describe('useOutbox visibility filtering', () => {
 		await enqueueFor(1, 'Mine')
 		await enqueueFor('anon', 'Anonymous')
 		await enqueueFor('unknown', 'Unknown session')
-		authValue.current = { isAuthenticated: false, userId: null }
+		authValue.current = { isAuthenticated: false, userId: null, isAuthResolved: true }
 
 		const { result } = renderHook(() => useOutbox())
 
@@ -71,5 +75,16 @@ describe('useOutbox visibility filtering', () => {
 			'Anonymous',
 			'Unknown session',
 		])
+	})
+
+	it('shows only identity-neutral entries until auth resolves', async () => {
+		await enqueueFor(1, 'Authenticated')
+		await enqueueFor('anon', 'Anonymous')
+		await enqueueFor('unknown', 'Unknown session')
+		authValue.current = { isAuthenticated: false, userId: null, isAuthResolved: false }
+
+		const { result } = renderHook(() => useOutbox())
+
+		expect(result.current.entries.map((entry) => entry.text)).toEqual(['Unknown session'])
 	})
 })

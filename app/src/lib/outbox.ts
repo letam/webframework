@@ -68,7 +68,9 @@ let flushLocked = false
 // Reconnects must re-verify identity before sending; stays set until a refresh succeeds.
 let authRefreshNeeded = false
 // Flush requests that arrive while a pass holds the lock; replayed when the pass ends.
-let pendingFlushIds: Set<string> | null = null
+// Manual intent is sticky because any explicit request must remain explicit when
+// several overlapping requests collapse into one drain pass.
+let pendingFlush: { ids: Set<string>; manual: boolean } | null = null
 const listeners = new Set<() => void>()
 
 const publishSnapshot = (next: OutboxSnapshot) => {
@@ -250,8 +252,9 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 	if (ids.length === 0 || !isOnline()) return
 	if (flushLocked || snapshot.flushing) {
-		pendingFlushIds ??= new Set()
-		for (const id of ids) pendingFlushIds.add(id)
+		pendingFlush ??= { ids: new Set(), manual: false }
+		for (const id of ids) pendingFlush.ids.add(id)
+		pendingFlush.manual ||= options?.manual === true
 		return
 	}
 	flushLocked = true
@@ -267,7 +270,7 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 		// unrelated later pass — in local mode, long after the click they came from.
 		// They'd fail this same auth check anyway; in auto mode the backoff pass
 		// below covers the whole queue.
-		pendingFlushIds = null
+		pendingFlush = null
 		if (options?.manual) {
 			toast.error("Couldn't reach the server — your posts are still on this device.")
 		}
@@ -310,15 +313,14 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 }
 
 const drainPendingFlush = async () => {
-	if (!pendingFlushIds) return
-	const requested = pendingFlushIds
-	pendingFlushIds = null
+	if (!pendingFlush) return
+	const requested = pendingFlush
+	pendingFlush = null
 	const ids = snapshot.entries
-		.filter((entry) => entry.status === 'queued' && requested.has(entry.id))
+		.filter((entry) => entry.status === 'queued' && requested.ids.has(entry.id))
 		.sort((a, b) => a.createdAt - b.createdAt)
 		.map((entry) => entry.id)
-	// A latched manual request intentionally degrades to a background pass here.
-	await runFlush(ids)
+	await runFlush(ids, { manual: requested.manual })
 }
 
 export const configureOutbox = (nextDependencies: OutboxDependencies) => {
@@ -423,6 +425,6 @@ export const __resetOutboxForTests = () => {
 	dependencies = null
 	flushLocked = false
 	authRefreshNeeded = false
-	pendingFlushIds = null
+	pendingFlush = null
 	listeners.clear()
 }

@@ -570,6 +570,35 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
+	it('preserves a latched manual send while local mode is active', async () => {
+		setSyncMode('local')
+		await enqueueText({ text: 'First local post' })
+		await enqueueText({ text: 'Second local post' })
+		const [firstId, secondId] = getOutboxSnapshot().entries.map((entry) => entry.id)
+		let releaseFirst!: (post: Awaited<ReturnType<typeof postsApi.createPost>>) => void
+		vi.mocked(postsApi.createPost)
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						releaseFirst = resolve
+					})
+			)
+			.mockResolvedValueOnce(makePost({ id: 109 }))
+		setOnline(true)
+
+		const firstPass = flushEntry(firstId)
+		await vi.waitFor(() => expect(postsApi.createPost).toHaveBeenCalledTimes(1))
+		await flushEntry(secondId)
+		releaseFirst(makePost({ id: 108 }))
+		await firstPass
+
+		expect(postsApi.createPost).toHaveBeenCalledTimes(2)
+		expect(postsApi.createPost).toHaveBeenLastCalledWith(
+			expect.objectContaining({ text: 'Second local post' })
+		)
+		expect(getOutboxSnapshot().entries).toEqual([])
+	})
+
 	it('schedules a backoff retry when the auth check cannot complete', async () => {
 		vi.useFakeTimers()
 		auth = { isAuthenticated: false, userId: null, isAuthResolved: false }
