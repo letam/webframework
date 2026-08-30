@@ -137,7 +137,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	const loadOutboxEntry = useCallback(
 		(entry: OutboxEntry) => {
-			if (postText.length > 0 || !hasNoMedia) return false
+			if (postText.length > 0 || !hasNoMedia) return null
 
 			setPostText(entry.text)
 			setVisibility(entry.visibility ?? 'public')
@@ -153,7 +153,18 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				setMediaType('text')
 			}
 			textareaRef.current?.focus()
-			return true
+			return {
+				rollback: () => {
+					setPostText('')
+					setVisibility('public')
+					setAudioBlob(null)
+					setVideoBlob(null)
+					setAudioFile(null)
+					setVideoFile(null)
+					setImageFile(null)
+					setMediaType('text')
+				},
+			}
 		},
 		[hasNoMedia, postText]
 	)

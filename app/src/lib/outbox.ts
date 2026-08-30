@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { toast } from '@/components/ui/sonner'
 import { createPost, transcribePost } from '@/lib/api/posts'
 import { ApiError } from '@/lib/api/errors'
-import { applyCreatedPostToCaches } from '@/hooks/usePosts'
+import { applyCreatedPostToCaches, applyUpdatedPostToCaches } from '@/hooks/usePosts'
 import { clearCsrfTokenCache } from '@/lib/utils/fetch'
 import { getSettings } from '@/lib/utils/settings'
 import {
@@ -225,10 +225,15 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 				(entry.mediaType === 'audio' || entry.mediaType === 'video') &&
 				auth.isAuthenticated
 			) {
-				void transcribePost(post.id).catch((error) => {
-					console.error('Auto-transcription failed to start:', error)
-					toast.error('Auto-transcription failed to start')
-				})
+				const queryClient = dependencies?.queryClient
+				void transcribePost(post.id)
+					.then((updatedPost) => {
+						if (queryClient) applyUpdatedPostToCaches(queryClient, updatedPost)
+					})
+					.catch((error) => {
+						console.error('Auto-transcription failed to start:', error)
+						toast.error('Auto-transcription failed to start')
+					})
 			}
 			return 'synced'
 		} catch (error) {

@@ -20,7 +20,7 @@ import {
 import type { PostsPage } from '@/lib/api/posts'
 import * as outboxDb from '@/lib/utils/outboxDb'
 import type { OutboxEntry } from '@/lib/utils/outboxDb'
-import { makePost, makePostsPage, textOnlyPost } from '@/__tests__/data/mockPosts'
+import { makeMedia, makePost, makePostsPage, textOnlyPost } from '@/__tests__/data/mockPosts'
 import { clearCsrfTokenCache } from '@/lib/utils/fetch'
 
 const storedEntries = vi.hoisted(() => new Map<string, OutboxEntry>())
@@ -745,15 +745,26 @@ describe('outbox sync engine', () => {
 			media: new Blob(['audio'], { type: 'audio/webm' }),
 			mediaName: 'queued.webm',
 		})
-		const created = makePost({ id: 96 })
+		const created = makePost({ id: 96, media: makeMedia({ transcript_status: '' }) })
+		const transcriptionStarted = makePost({
+			id: 96,
+			media: makeMedia({ transcript_status: 'pending' }),
+		})
+		queryClient.setQueryData(['posts', {}], infiniteData([]))
 		vi.mocked(postsApi.createPost).mockResolvedValueOnce(created)
-		vi.mocked(postsApi.transcribePost).mockResolvedValueOnce(created)
+		vi.mocked(postsApi.transcribePost).mockResolvedValueOnce(transcriptionStarted)
 		setOnline(true)
 
 		await flushOutbox()
 
 		expect(postsApi.transcribePost).toHaveBeenCalledOnce()
 		expect(postsApi.transcribePost).toHaveBeenCalledWith(96)
+		await vi.waitFor(() =>
+			expect(
+				queryClient.getQueryData<InfiniteData<PostsPage>>(['posts', {}])?.pages[0].posts[0].media
+					?.transcript_status
+			).toBe('pending')
+		)
 	})
 
 	it('does not auto-transcribe text, disabled, or anonymous entries', async () => {

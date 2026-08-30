@@ -85,12 +85,14 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 			toast("This post is already being sent, so it can't be edited.")
 			return
 		}
-		if (!requestComposerLoad(current)) {
+		const composerLoad = requestComposerLoad(current)
+		if (!composerLoad) {
 			toast('Finish or clear the composer first.')
 			return
 		}
 		const result = await removeEntry(entry.id)
 		if (result === 'failed') {
+			composerLoad.rollback()
 			toast.error("Couldn't remove the stored copy. The post is still in your outbox.")
 		}
 	}

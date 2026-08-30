@@ -134,6 +134,19 @@ export const applyCreatedPostToCaches = (queryClient: QueryClient, newPost: Post
 	updateTagsCacheFromFeed(queryClient)
 }
 
+export const applyUpdatedPostToCaches = (queryClient: QueryClient, updatedPost: Post) => {
+	queryClient.setQueriesData<InfiniteData<PostsPage>>(
+		{ queryKey: POSTS_QUERY_KEY, predicate: (query) => isPostsQueryKey(query.queryKey) },
+		(data) =>
+			data
+				? mapPages(data, (posts) =>
+						posts.map((post) => (post.id === updatedPost.id ? updatedPost : post))
+					)
+				: data
+	)
+	updateTagsCacheFromFeed(queryClient)
+}
+
 export const usePosts = (
 	scope: PostsQueryScope = DEFAULT_POSTS_SCOPE,
 	options: UsePostsOptions = {}

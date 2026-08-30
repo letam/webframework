@@ -1,6 +1,10 @@
 import type { OutboxEntry } from '@/lib/utils/outboxDb'
 
-export type ComposerLoader = (entry: OutboxEntry) => boolean
+export interface ComposerLoadHandle {
+	rollback: () => void
+}
+
+export type ComposerLoader = (entry: OutboxEntry) => ComposerLoadHandle | null
 
 let composerLoader: ComposerLoader | null = null
 
@@ -11,4 +15,4 @@ export const registerComposerLoader = (loader: ComposerLoader) => {
 	}
 }
 
-export const requestComposerLoad = (entry: OutboxEntry) => composerLoader?.(entry) ?? false
+export const requestComposerLoad = (entry: OutboxEntry) => composerLoader?.(entry) ?? null

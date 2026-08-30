@@ -13,6 +13,7 @@ const mockGetOutboxSnapshot = vi.hoisted(() => vi.fn())
 const mockRemoveEntry = vi.hoisted(() => vi.fn())
 const mockRetryEntry = vi.hoisted(() => vi.fn())
 const mockRequestComposerLoad = vi.hoisted(() => vi.fn())
+const mockRollbackComposerLoad = vi.hoisted(() => vi.fn())
 const mockCreateObjectURL = vi.hoisted(() => vi.fn(() => 'blob:queued-media'))
 const mockRevokeObjectURL = vi.hoisted(() => vi.fn())
 const mockToast = vi.hoisted(() =>
@@ -76,7 +77,7 @@ describe('OutboxCard', () => {
 		mockFlushOutbox.mockResolvedValue(undefined)
 		mockRemoveEntry.mockResolvedValue('removed')
 		mockRetryEntry.mockResolvedValue(undefined)
-		mockRequestComposerLoad.mockReturnValue(true)
+		mockRequestComposerLoad.mockReturnValue({ rollback: mockRollbackComposerLoad })
 	})
 
 	it('renders queued and draft states with the current author presentation', () => {
@@ -139,7 +140,7 @@ describe('OutboxCard', () => {
 	})
 
 	it('keeps an entry when the composer is occupied', async () => {
-		mockRequestComposerLoad.mockReturnValue(false)
+		mockRequestComposerLoad.mockReturnValue(null)
 		const user = userEvent.setup()
 		const entry = makeEntry()
 		mockGetOutboxSnapshot.mockReturnValue({ entries: [entry], flushing: false, syncMode: 'auto' })
@@ -149,6 +150,22 @@ describe('OutboxCard', () => {
 
 		expect(mockRemoveEntry).not.toHaveBeenCalled()
 		expect(mockToast).toHaveBeenCalledWith('Finish or clear the composer first.')
+	})
+
+	it('rolls back composer loading when edit storage deletion fails', async () => {
+		mockRemoveEntry.mockResolvedValueOnce('failed')
+		const user = userEvent.setup()
+		const entry = makeEntry()
+		mockGetOutboxSnapshot.mockReturnValue({ entries: [entry], flushing: false, syncMode: 'auto' })
+		render(<OutboxCard entry={entry} />)
+
+		await user.click(screen.getByRole('button', { name: 'Edit' }))
+
+		await waitFor(() => expect(mockRemoveEntry).toHaveBeenCalledWith(entry.id))
+		expect(mockRollbackComposerLoad).toHaveBeenCalledOnce()
+		expect(mockToast.error).toHaveBeenCalledWith(
+			"Couldn't remove the stored copy. The post is still in your outbox."
+		)
 	})
 
 	it('refuses to edit an entry a flush has since picked up', async () => {

@@ -170,14 +170,14 @@ describe('CreatePost', () => {
 		render(<CreatePost onPostCreated={onPostCreated} />)
 		const media = new Blob(['final-image'], { type: 'image/png' })
 
-		let loaded = false
+		let loadHandle: ReturnType<typeof requestComposerLoad> = null
 		act(() => {
-			loaded = requestComposerLoad(
+			loadHandle = requestComposerLoad(
 				makeEntry({ media, mediaType: 'image', mediaName: 'restored.png' })
 			)
 		})
 
-		expect(loaded).toBe(true)
+		expect(loadHandle).not.toBeNull()
 		expect(screen.getByPlaceholderText("What's on your mind?")).toHaveValue(
 			'Restored from the outbox'
 		)
@@ -194,13 +194,34 @@ describe('CreatePost', () => {
 		)
 	})
 
+	it('can roll back an outbox load when its durable deletion fails', () => {
+		render(<CreatePost onPostCreated={vi.fn()} />)
+		const media = new Blob(['queued-image'], { type: 'image/png' })
+		let loadHandle: ReturnType<typeof requestComposerLoad> = null
+
+		act(() => {
+			loadHandle = requestComposerLoad(
+				makeEntry({ media, mediaType: 'image', mediaName: 'queued.png' })
+			)
+		})
+		expect(screen.getByPlaceholderText("What's on your mind?")).toHaveValue(
+			'Restored from the outbox'
+		)
+		expect(screen.getByText('queued.png')).toBeInTheDocument()
+
+		act(() => loadHandle?.rollback())
+
+		expect(screen.getByPlaceholderText("What's on your mind?")).toHaveValue('')
+		expect(screen.queryByText('queued.png')).not.toBeInTheDocument()
+	})
+
 	it('refuses to replace content already in the composer', async () => {
 		const user = userEvent.setup()
 		render(<CreatePost onPostCreated={vi.fn()} />)
 		const composer = screen.getByPlaceholderText("What's on your mind?")
 		await user.type(composer, 'Already writing')
 
-		expect(requestComposerLoad(makeEntry())).toBe(false)
+		expect(requestComposerLoad(makeEntry())).toBeNull()
 		expect(composer).toHaveValue('Already writing')
 	})
 
