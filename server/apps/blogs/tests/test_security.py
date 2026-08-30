@@ -171,6 +171,36 @@ class PresignUploadTests(ViewTestCase):
         self.assertEqual(response.json()['file_path'], f'post/audio/{anonymous.id}/clip.mp3')
 
     @mock.patch('apps.uploads.views.generate_presigned_put_url')
+    def test_presign_rejects_session_that_does_not_match_expected_author(self, mock_presign):
+        """A session switch is rejected before an upload URL can be issued."""
+        response = self._presign(
+            {
+                'content_type': 'audio/mpeg',
+                'file_name': 'queued.mp3',
+                'content_length': 1024,
+                'expected_author': '999999',
+            }
+        )
+
+        self.assertEqual(response.status_code, 403)
+        mock_presign.assert_not_called()
+
+    @mock.patch('apps.uploads.views.generate_presigned_put_url')
+    def test_presign_accepts_matching_anonymous_author(self, mock_presign):
+        """An anonymous queue may bind its upload explicitly to that identity."""
+        mock_presign.return_value = 'https://example.com/signed'
+        response = self._presign(
+            {
+                'content_type': 'audio/mpeg',
+                'file_name': 'queued.mp3',
+                'content_length': 1024,
+                'expected_author': 'anon',
+            }
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    @mock.patch('apps.uploads.views.generate_presigned_put_url')
     def test_presign_is_rate_limited(self, mock_presign):
         """Presign requests beyond the per-IP limit get a 429."""
         mock_presign.return_value = 'https://example.com/signed'

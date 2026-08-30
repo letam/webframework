@@ -158,6 +158,7 @@ describe('posts API', () => {
 				file_name: 'clip.webm',
 				content_type: 'audio/webm',
 				content_length: file.size,
+				expected_author: 7,
 			})
 			const createOptions = fetchMock.mock.calls[3][1] as RequestInit
 			const formData = createOptions.body as FormData
