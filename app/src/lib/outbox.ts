@@ -71,16 +71,29 @@ const getPersistedSyncMode = (): SyncMode | null => {
 	}
 }
 
+const persistSyncMode = (mode: SyncMode) => {
+	if (typeof localStorage === 'undefined') return
+	try {
+		localStorage.setItem('post-sync-mode', mode)
+	} catch {
+		// Storage can be unavailable in private or restricted browsing contexts.
+	}
+}
+
 export const resolveInitialSyncMode = (): SyncMode => {
 	const postSyncDefault = getSettings().postSyncDefault
 	return postSyncDefault === 'remember' ? getInitialSyncMode() : postSyncDefault
 }
 
+const initialSyncMode = resolveInitialSyncMode()
 let snapshot: OutboxSnapshot = {
 	entries: [],
 	flushing: false,
-	syncMode: resolveInitialSyncMode(),
+	syncMode: initialSyncMode,
 }
+// Explicit auto/local defaults override remembered composer history. Persist the
+// resolved startup value so the first automatic flush cannot adopt stale history.
+persistSyncMode(initialSyncMode)
 let dependencies: OutboxDependencies | null = null
 let retryTimer: number | undefined
 let retryIndex = 0
@@ -509,11 +522,7 @@ export const getOutboxSnapshot = () => snapshot
 export const setSyncMode = (mode: SyncMode) => {
 	if (snapshot.syncMode === mode) return
 	publishSnapshot({ ...snapshot, syncMode: mode })
-	try {
-		localStorage.setItem('post-sync-mode', mode)
-	} catch {
-		// Storage can be unavailable in private or restricted browsing contexts.
-	}
+	persistSyncMode(mode)
 	if (mode === 'auto') void flushOutbox()
 }
 

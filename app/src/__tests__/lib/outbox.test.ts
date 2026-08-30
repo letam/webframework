@@ -202,14 +202,18 @@ describe('outbox sync mode initialization', () => {
 		expect(storageWrite).not.toHaveBeenCalled()
 	})
 
-	it('uses the resolved setting for the module snapshot', async () => {
-		localStorage.setItem('app-settings', JSON.stringify({ postSyncDefault: 'local' }))
-		localStorage.setItem('post-sync-mode', 'auto')
+	it.each([
+		['local', 'auto'],
+		['auto', 'local'],
+	] as const)('uses and persists the resolved %s setting over stale %s history', async (setting, staleMode) => {
+		localStorage.setItem('app-settings', JSON.stringify({ postSyncDefault: setting }))
+		localStorage.setItem('post-sync-mode', staleMode)
 		vi.resetModules()
 
 		const freshOutbox = await import('@/lib/outbox')
 
-		expect(freshOutbox.getOutboxSnapshot().syncMode).toBe('local')
+		expect(freshOutbox.getOutboxSnapshot().syncMode).toBe(setting)
+		expect(localStorage.getItem('post-sync-mode')).toBe(setting)
 		freshOutbox.__resetOutboxForTests()
 	})
 
