@@ -11,6 +11,7 @@ import {
 	OUTBOX_CLAIM_LEASE_MS,
 	removeOutboxEntryIfIdle,
 	renewOutboxEntryClaim,
+	resetFailedOutboxEntryForRetry,
 	saveOutboxEntry,
 	type OutboxEntry,
 } from '@/lib/utils/outboxDb'
@@ -144,6 +145,30 @@ describe('outbox storage', () => {
 		await expect(removeOutboxEntryIfIdle(entry.id)).resolves.toEqual({ status: 'missing' })
 	})
 
+	it('atomically resets only a failed entry for retry', async () => {
+		const failed = makeEntry({ status: 'failed', attempts: 3, lastError: 'Try later.' })
+		await saveOutboxEntry(failed)
+
+		await expect(resetFailedOutboxEntryForRetry(failed.id)).resolves.toEqual({
+			status: 'reset',
+			entry: {
+				...failed,
+				status: 'queued',
+				attempts: 0,
+				lastError: null,
+				claimOwner: null,
+				claimExpiresAt: null,
+			},
+		})
+		await expect(resetFailedOutboxEntryForRetry(failed.id)).resolves.toEqual({
+			status: 'conflict',
+			entry: expect.objectContaining({ status: 'queued' }),
+		})
+		await expect(resetFailedOutboxEntryForRetry('missing')).resolves.toEqual({
+			status: 'missing',
+		})
+	})
+
 	it('distinguishes found, missing, and unavailable reads', async () => {
 		const entry = makeEntry()
 		await saveOutboxEntry(entry)
@@ -208,6 +233,9 @@ describe('outbox storage', () => {
 			status: 'unavailable',
 		})
 		expect(await removeOutboxEntryIfIdle('missing')).toEqual({ status: 'unavailable' })
+		expect(await resetFailedOutboxEntryForRetry('missing')).toEqual({
+			status: 'unavailable',
+		})
 		expect(await loadOutboxEntries()).toEqual([])
 	})
 })

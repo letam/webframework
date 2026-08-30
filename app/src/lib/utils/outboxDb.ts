@@ -49,6 +49,12 @@ export type RemoveOutboxEntryResult =
 	| { status: 'sending'; entry: OutboxEntry }
 	| { status: 'unavailable' }
 
+export type ResetOutboxEntryResult =
+	| { status: 'reset'; entry: OutboxEntry }
+	| { status: 'missing' }
+	| { status: 'conflict'; entry: OutboxEntry }
+	| { status: 'unavailable' }
+
 const openDb = (): Promise<IDBDatabase | null> =>
 	new Promise((resolve) => {
 		if (typeof indexedDB === 'undefined') {
@@ -239,6 +245,57 @@ export const renewOutboxEntryClaim = async (id: string, owner: string): Promise<
 			transaction.oncomplete = () => resolve(renewed)
 			transaction.onerror = () => resolve(false)
 			transaction.onabort = () => resolve(false)
+		})
+	} finally {
+		db.close()
+	}
+}
+
+export const resetFailedOutboxEntryForRetry = async (
+	id: string
+): Promise<ResetOutboxEntryResult> => {
+	const db = await openDb()
+	if (!db) return { status: 'unavailable' }
+
+	try {
+		return await new Promise<ResetOutboxEntryResult>((resolve) => {
+			let transaction: IDBTransaction
+			let result: ResetOutboxEntryResult = { status: 'unavailable' }
+			try {
+				transaction = db.transaction(STORE, 'readwrite')
+				const store = transaction.objectStore(STORE)
+				const request = store.get(id)
+				request.onsuccess = () => {
+					const entry = request.result as OutboxEntry | undefined
+					if (!entry) {
+						result = { status: 'missing' }
+						return
+					}
+					if (entry.status !== 'failed') {
+						result = { status: 'conflict', entry }
+						return
+					}
+					const reset = {
+						...entry,
+						status: 'queued' as const,
+						attempts: 0,
+						lastError: null,
+						claimOwner: null,
+						claimExpiresAt: null,
+					}
+					const putRequest = store.put(reset)
+					putRequest.onsuccess = () => {
+						result = { status: 'reset', entry: reset }
+					}
+				}
+				request.onerror = () => transaction.abort()
+			} catch {
+				resolve({ status: 'unavailable' })
+				return
+			}
+			transaction.oncomplete = () => resolve(result)
+			transaction.onerror = () => resolve({ status: 'unavailable' })
+			transaction.onabort = () => resolve({ status: 'unavailable' })
 		})
 	} finally {
 		db.close()

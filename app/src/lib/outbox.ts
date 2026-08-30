@@ -13,6 +13,7 @@ import {
 	OUTBOX_CLAIM_LEASE_MS,
 	removeOutboxEntryIfIdle,
 	renewOutboxEntryClaim,
+	resetFailedOutboxEntryForRetry,
 	saveOutboxEntry,
 	type OutboxEntry,
 } from '@/lib/utils/outboxDb'
@@ -146,6 +147,9 @@ const scheduleSendingReconciliation = (id: string) => {
 		}
 		if (durable.status === 'found' && durable.entry.status !== 'sending') {
 			setEntries(snapshot.entries.map((entry) => (entry.id === id ? durable.entry : entry)))
+			if (durable.entry.status === 'queued' && snapshot.syncMode === 'auto' && isOnline()) {
+				void flushOutbox()
+			}
 			return
 		}
 		scheduleSendingReconciliation(id)
@@ -531,7 +535,18 @@ export const retryEntry = async (id: string) => {
 	resetBackoff()
 	const entry = snapshot.entries.find((candidate) => candidate.id === id)
 	if (!entry || entry.status !== 'failed') return
-	if (!(await updateEntry(id, { status: 'queued', attempts: 0, lastError: null }))) return
+	const reset = await resetFailedOutboxEntryForRetry(id)
+	if (reset.status === 'unavailable') return
+	if (reset.status === 'missing') {
+		setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
+		return
+	}
+	if (reset.status === 'conflict') {
+		setEntries(snapshot.entries.map((candidate) => (candidate.id === id ? reset.entry : candidate)))
+		if (reset.entry.status === 'sending') scheduleSendingReconciliation(id)
+		return
+	}
+	setEntries(snapshot.entries.map((candidate) => (candidate.id === id ? reset.entry : candidate)))
 	await runFlush([id], { manual: true })
 }
 

@@ -60,6 +60,21 @@ vi.mock('@/lib/utils/outboxDb', () => ({
 		return { status: 'removed' as const }
 	}),
 	renewOutboxEntryClaim: vi.fn(async () => true),
+	resetFailedOutboxEntryForRetry: vi.fn(async (id: string) => {
+		const entry = storedEntries.get(id)
+		if (!entry) return { status: 'missing' as const }
+		if (entry.status !== 'failed') return { status: 'conflict' as const, entry }
+		const reset = {
+			...entry,
+			status: 'queued' as const,
+			attempts: 0,
+			lastError: null,
+			claimOwner: null,
+			claimExpiresAt: null,
+		}
+		storedEntries.set(id, reset)
+		return { status: 'reset' as const, entry: reset }
+	}),
 }))
 
 vi.mock('@/lib/api/posts', () => ({
@@ -674,6 +689,28 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
+	it('does not overwrite a live claim from a stale manual retry', async () => {
+		await enqueueText({ text: 'Failed in both tabs' })
+		vi.mocked(postsApi.createPost).mockRejectedValueOnce(new ApiError('bad request', 400))
+		setOnline(true)
+		await flushOutbox()
+		const failed = getOutboxSnapshot().entries[0]
+		const sending = {
+			...failed,
+			status: 'sending' as const,
+			claimOwner: 'another-tab',
+			claimExpiresAt: Date.now() + 300_000,
+		}
+		storedEntries.set(failed.id, sending)
+		vi.mocked(postsApi.createPost).mockClear()
+
+		await retryEntry(failed.id)
+
+		expect(postsApi.createPost).not.toHaveBeenCalled()
+		expect(storedEntries.get(failed.id)).toEqual(sending)
+		expect(getOutboxSnapshot().entries).toEqual([sending])
+	})
+
 	it('replays a manual retry that arrives while a pass is in flight', async () => {
 		await enqueueText({ text: 'Failing' })
 		vi.mocked(postsApi.createPost).mockRejectedValueOnce(new ApiError('bad request', 400))
@@ -865,6 +902,28 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries[0].status).toBe('sending')
 		storedEntries.delete(entryId)
 		await vi.advanceTimersByTimeAsync(1_000)
+
+		expect(getOutboxSnapshot().entries).toEqual([])
+	})
+
+	it('resumes auto-sync when another tab leaves a queued entry', async () => {
+		vi.useFakeTimers()
+		await enqueueText({ text: 'Retry after the other tab' })
+		const entryId = getOutboxSnapshot().entries[0].id
+		storedEntries.set(entryId, {
+			...getOutboxSnapshot().entries[0],
+			status: 'sending',
+		})
+		setOnline(true)
+		await flushOutbox()
+		storedEntries.set(entryId, {
+			...getOutboxSnapshot().entries[0],
+			status: 'queued',
+		})
+		vi.mocked(postsApi.createPost).mockResolvedValueOnce(makePost({ id: 111 }))
+
+		await vi.advanceTimersByTimeAsync(1_000)
+		await vi.waitFor(() => expect(postsApi.createPost).toHaveBeenCalledOnce())
 
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
