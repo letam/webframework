@@ -203,8 +203,18 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 	while (true) {
 		try {
 			const post = await createPost(buildCreateRequest(entry))
-			await deleteOutboxEntry(entry.id)
-			setEntries(snapshot.entries.filter((candidate) => candidate.id !== entry?.id))
+			const deleted = await deleteOutboxEntry(entry.id)
+			if (deleted) {
+				setEntries(snapshot.entries.filter((candidate) => candidate.id !== entry?.id))
+			} else {
+				// Publication succeeded, so this entry must never return to the send queue.
+				// Keep the durable copy visible as cleanup-only instead of silently allowing
+				// it to reappear as a queued post after reload.
+				await updateEntry(entry.id, {
+					status: 'published',
+					lastError: "This post was published, but its local copy couldn't be cleared.",
+				})
+			}
 			if (dependencies) applyCreatedPostToCaches(dependencies.queryClient, post)
 			resetBackoff()
 
@@ -379,7 +389,7 @@ export const retryEntry = async (id: string) => {
 	await runFlush([id], { manual: true })
 }
 
-export type RemoveEntryResult = 'removed' | 'sending'
+export type RemoveEntryResult = 'removed' | 'sending' | 'failed'
 
 export const removeEntry = async (id: string): Promise<RemoveEntryResult> => {
 	// A 'sending' entry's POST is already in flight — deleting it here couldn't stop
@@ -390,7 +400,13 @@ export const removeEntry = async (id: string): Promise<RemoveEntryResult> => {
 	// inside that await (backoff timer, reconnect, another enqueue) would still find
 	// the entry and publish the post the user just removed.
 	setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
-	await deleteOutboxEntry(id)
+	const deleted = await deleteOutboxEntry(id)
+	if (!deleted) {
+		// The durable copy still exists and can return after a reload. Put it back in
+		// the visible snapshot and make the caller report that removal did not happen.
+		setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), entry])
+		return 'failed'
+	}
 	return 'removed'
 }
 

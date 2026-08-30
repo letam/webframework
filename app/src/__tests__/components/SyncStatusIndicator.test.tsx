@@ -93,6 +93,20 @@ describe('SyncStatusIndicator', () => {
 		expect(screen.getByLabelText("Some queued posts couldn't be sent.")).toHaveTextContent('1')
 	})
 
+	it('shows published entries as local cleanup instead of queued work', () => {
+		mockUseOutbox.mockReturnValue({
+			entries: [makeEntry({ status: 'published' })],
+			flushing: false,
+			syncMode: 'auto',
+		})
+		renderIndicator()
+
+		expect(
+			screen.getByLabelText('A published post still has a local copy on this device.')
+		).toHaveTextContent('1')
+		expect(screen.queryByLabelText('1 queued.')).not.toBeInTheDocument()
+	})
+
 	it('shows the online pre-flush lull', () => {
 		mockUseOutbox.mockReturnValue({
 			entries: [makeEntry(), makeEntry()],

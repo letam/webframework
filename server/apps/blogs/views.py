@@ -334,6 +334,22 @@ class PostViewSet(viewsets.ModelViewSet):
         )
         return Response(response_serializer.data, status=response_status, headers=headers)
 
+    @action(detail=False, methods=['post'], url_path='idempotency-check')
+    def idempotency_check(self, request):
+        """Return this author's existing client-UUID post before a direct upload."""
+        client_uuid = request.data.get('client_uuid')
+        try:
+            parsed_uuid = UUID(str(client_uuid))
+        except (AttributeError, TypeError, ValueError):
+            raise ValidationError({'client_uuid': 'A valid UUID is required.'}) from None
+
+        existing_post = Post.objects.filter(
+            author=self._create_author(), client_uuid=parsed_uuid
+        ).first()
+        if not existing_post:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return self._created_post_response(existing_post, status.HTTP_200_OK)
+
     def create(self, request, *args, **kwargs):
         """Create a post and attach validated media when provided."""
         requested_visibility = request.data.get('visibility', VISIBILITY_PUBLIC)

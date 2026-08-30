@@ -8,13 +8,21 @@ export const SyncStatusIndicator = () => {
 	const { entries, flushing, syncMode } = useOutbox()
 	const count = entries.length
 	const failedCount = entries.filter((entry) => entry.status === 'failed').length
+	const publishedCount = entries.filter((entry) => entry.status === 'published').length
 
 	let label: string
 	let Icon = Cloud
 	let iconClassName = 'h-4 w-4'
 	let visibleCount: number | null = count
 
-	if (!online && count > 0) {
+	if (!online && publishedCount > 0) {
+		Icon = TriangleAlert
+		label =
+			publishedCount === 1
+				? 'A published post still has a local copy on this device.'
+				: `${publishedCount} published posts still have local copies on this device.`
+		visibleCount = publishedCount
+	} else if (!online && count > 0) {
 		Icon = WifiOff
 		// Local mode must not promise an auto-send that reconnecting won't perform.
 		label =
@@ -33,6 +41,13 @@ export const SyncStatusIndicator = () => {
 		Icon = Loader2
 		iconClassName = 'h-4 w-4 animate-spin'
 		label = 'Sending queued posts…'
+	} else if (publishedCount > 0) {
+		Icon = TriangleAlert
+		label =
+			publishedCount === 1
+				? 'A published post still has a local copy on this device.'
+				: `${publishedCount} published posts still have local copies on this device.`
+		visibleCount = publishedCount
 	} else if (failedCount > 0) {
 		Icon = TriangleAlert
 		label = "Some queued posts couldn't be sent."

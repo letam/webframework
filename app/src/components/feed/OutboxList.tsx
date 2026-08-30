@@ -7,6 +7,7 @@ import { flushOutbox } from '@/lib/outbox'
 export const OutboxList = () => {
 	const { entries, syncMode } = useOutbox()
 	if (entries.length === 0) return null
+	const queuedCount = entries.filter((entry) => entry.status === 'queued').length
 
 	const handlePostAll = () => {
 		if (!navigator.onLine) {
@@ -23,9 +24,11 @@ export const OutboxList = () => {
 					<span className="text-sm font-medium text-muted-foreground">
 						On this device — {entries.length}
 					</span>
-					<Button type="button" variant="ghost" size="sm" onClick={handlePostAll}>
-						Post all
-					</Button>
+					{queuedCount > 0 && (
+						<Button type="button" variant="ghost" size="sm" onClick={handlePostAll}>
+							Post all
+						</Button>
+					)}
 				</div>
 			)}
 			{[...entries]

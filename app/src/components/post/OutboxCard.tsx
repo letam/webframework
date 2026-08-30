@@ -29,6 +29,7 @@ interface OutboxCardProps {
 const statusLabel = (entry: OutboxEntry, syncMode: SyncMode) => {
 	if (entry.status === 'sending') return 'Posting…'
 	if (entry.status === 'failed') return "Couldn't post"
+	if (entry.status === 'published') return 'Posted'
 	return syncMode === 'local' ? 'On this device' : 'Queued'
 }
 
@@ -58,7 +59,11 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 			toast("This post is already being sent, so it can't be removed.")
 			return
 		}
-		toast('Removed.')
+		if (result === 'failed') {
+			toast.error("Couldn't remove this post from this device. Try again.")
+			return
+		}
+		toast(entry.status === 'published' ? 'Local copy cleared.' : 'Removed.')
 	}
 
 	const handlePostNow = () => {
@@ -84,7 +89,10 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 			toast('Finish or clear the composer first.')
 			return
 		}
-		await removeEntry(entry.id)
+		const result = await removeEntry(entry.id)
+		if (result === 'failed') {
+			toast.error("Couldn't remove the stored copy. The post is still in your outbox.")
+		}
 	}
 
 	return (
@@ -142,7 +150,8 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 				<span
 					className={cn(
 						'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium leading-none text-muted-foreground',
-						entry.status === 'failed' && 'border-destructive/30 bg-destructive/10 text-destructive'
+						(entry.status === 'failed' || entry.status === 'published') &&
+							'border-destructive/30 bg-destructive/10 text-destructive'
 					)}
 				>
 					{entry.status === 'sending' && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -155,7 +164,7 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 				)}
 			</div>
 
-			{entry.status === 'failed' && entry.lastError && (
+			{(entry.status === 'failed' || entry.status === 'published') && entry.lastError && (
 				<p className="mt-2 text-sm text-destructive">{entry.lastError}</p>
 			)}
 
@@ -165,7 +174,7 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 						Post now
 					</Button>
 				)}
-				{entry.status !== 'sending' && (
+				{(entry.status === 'queued' || entry.status === 'failed') && (
 					<Button type="button" variant="ghost" size="sm" onClick={() => void handleEdit()}>
 						Edit
 					</Button>
@@ -176,16 +185,20 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 					</Button>
 				)}
 				<Button type="button" variant="ghost" size="sm" onClick={() => setRemoveOpen(true)}>
-					Remove
+					{entry.status === 'published' ? 'Clear' : 'Remove'}
 				</Button>
 			</div>
 
 			<AlertDialog open={removeOpen} onOpenChange={setRemoveOpen}>
 				<AlertDialogContent>
 					<AlertDialogHeader>
-						<AlertDialogTitle>Remove queued post?</AlertDialogTitle>
+						<AlertDialogTitle>
+							{entry.status === 'published' ? 'Clear local copy?' : 'Remove queued post?'}
+						</AlertDialogTitle>
 						<AlertDialogDescription>
-							It hasn't been posted and will be gone from this device.
+							{entry.status === 'published'
+								? 'The post is already published. This only clears its leftover copy from this device.'
+								: "It hasn't been posted and will be gone from this device."}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
@@ -194,7 +207,7 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 							onClick={() => void handleRemove()}
 							className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
 						>
-							Remove
+							{entry.status === 'published' ? 'Clear' : 'Remove'}
 						</AlertDialogAction>
 					</AlertDialogFooter>
 				</AlertDialogContent>

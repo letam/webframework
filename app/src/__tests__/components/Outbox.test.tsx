@@ -185,6 +185,34 @@ describe('OutboxCard', () => {
 		expect(mockRetryEntry).toHaveBeenCalledWith(entry.id)
 	})
 
+	it('shows a published entry as cleanup-only', async () => {
+		const user = userEvent.setup()
+		const entry = makeEntry({
+			status: 'published',
+			lastError: "This post was published, but its local copy couldn't be cleared.",
+		})
+		render(<OutboxCard entry={entry} />)
+
+		expect(screen.getByText('Posted')).toBeInTheDocument()
+		expect(screen.getByText(entry.lastError as string)).toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Post now' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
+
+		await user.click(screen.getByRole('button', { name: 'Clear' }))
+		const dialog = screen.getByRole('alertdialog')
+		expect(within(dialog).getByText('Clear local copy?')).toBeInTheDocument()
+		expect(
+			within(dialog).getByText(
+				'The post is already published. This only clears its leftover copy from this device.'
+			)
+		).toBeInTheDocument()
+		await user.click(within(dialog).getByRole('button', { name: 'Clear' }))
+
+		await waitFor(() => expect(mockRemoveEntry).toHaveBeenCalledWith(entry.id))
+		expect(mockToast).toHaveBeenCalledWith('Local copy cleared.')
+	})
+
 	it('requires confirmation before removing the only local copy', async () => {
 		const user = userEvent.setup()
 		const entry = makeEntry()
@@ -200,6 +228,24 @@ describe('OutboxCard', () => {
 
 		await waitFor(() => expect(mockRemoveEntry).toHaveBeenCalledWith(entry.id))
 		expect(mockToast).toHaveBeenCalledWith('Removed.')
+	})
+
+	it('reports a storage failure instead of claiming the post was removed', async () => {
+		mockRemoveEntry.mockResolvedValueOnce('failed')
+		const user = userEvent.setup()
+		render(<OutboxCard entry={makeEntry()} />)
+
+		await user.click(screen.getByRole('button', { name: 'Remove' }))
+		await user.click(
+			within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove' })
+		)
+
+		await waitFor(() =>
+			expect(mockToast.error).toHaveBeenCalledWith(
+				"Couldn't remove this post from this device. Try again."
+			)
+		)
+		expect(mockToast).not.toHaveBeenCalledWith('Removed.')
 	})
 
 	it('renders an image preview and revokes its object URL on unmount', async () => {
@@ -265,6 +311,18 @@ describe('OutboxList', () => {
 		render(<OutboxList />)
 
 		expect(screen.queryByText(/On this device —/)).not.toBeInTheDocument()
+		expect(screen.queryByRole('button', { name: 'Post all' })).not.toBeInTheDocument()
+	})
+
+	it('does not offer to post a published cleanup entry again', () => {
+		mockUseOutbox.mockReturnValue({
+			entries: [makeEntry({ status: 'published' })],
+			syncMode: 'local',
+		})
+
+		render(<OutboxList />)
+
+		expect(screen.getByText('On this device — 1')).toBeInTheDocument()
 		expect(screen.queryByRole('button', { name: 'Post all' })).not.toBeInTheDocument()
 	})
 

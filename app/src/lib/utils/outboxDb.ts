@@ -4,7 +4,7 @@ const DB_NAME = 'post-outbox'
 const STORE = 'entries'
 
 export type OutboxAuthor = number | 'anon' | 'unknown'
-export type OutboxStatus = 'queued' | 'sending' | 'failed'
+export type OutboxStatus = 'queued' | 'sending' | 'failed' | 'published'
 
 export interface OutboxEntry {
 	id: string

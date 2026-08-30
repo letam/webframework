@@ -51,6 +51,16 @@ const revivePost = (post: Post): Post => ({
 	url: `${window.location.origin}/p/${post.id}/`,
 })
 
+const findPostByClientUuid = async (clientUuid: string): Promise<Post | null> => {
+	const options = await getFetchOptions('POST', { client_uuid: clientUuid })
+	const response = await fetch(`${SERVER_API_URL}/posts/idempotency-check/`, options)
+	if (response.status === 204) return null
+	if (!response.ok) {
+		throw new ApiError('Failed to check for an existing post', response.status)
+	}
+	return revivePost((await response.json()) as Post)
+}
+
 const buildPostsUrl = (scope: PostsQueryScope) => {
 	const params = new URLSearchParams()
 
@@ -138,6 +148,14 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 
 		// Check environment variable to see if we upload to S3 cloud-compatible storage or local storage
 		if (data.media && UPLOAD_FILES_TO_S3) {
+			// A queued retry may be replaying a create whose response was lost. Ask
+			// before presigning or uploading so the same client UUID cannot leave a
+			// second, unattached object behind in S3/R2.
+			if (data.client_uuid) {
+				const existingPost = await findPostByClientUuid(data.client_uuid)
+				if (existingPost) return existingPost
+			}
+
 			// Get presigned url from backend
 			const options = await getFetchOptions('POST', {
 				file_name: data.media.name,

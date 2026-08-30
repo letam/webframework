@@ -350,6 +350,30 @@ describe('outbox sync engine', () => {
 		)
 	})
 
+	it('keeps a published entry cleanup-only when its storage deletion fails', async () => {
+		const created = makePost({ id: 107, body: 'Published words' })
+		vi.mocked(postsApi.createPost).mockResolvedValueOnce(created)
+		await enqueueText({ text: 'Published words' })
+		const [entry] = getOutboxSnapshot().entries
+		vi.mocked(outboxDb.deleteOutboxEntry).mockResolvedValueOnce(false)
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(postsApi.createPost).toHaveBeenCalledOnce()
+		expect(getOutboxSnapshot().entries).toEqual([
+			expect.objectContaining({
+				id: entry.id,
+				status: 'published',
+				lastError: "This post was published, but its local copy couldn't be cleared.",
+			}),
+		])
+		expect(storedEntries.get(entry.id)).toMatchObject({ status: 'published' })
+
+		await flushOutbox()
+		expect(postsApi.createPost).toHaveBeenCalledOnce()
+	})
+
 	it('returns false without publishing an entry when device storage fails', async () => {
 		vi.mocked(outboxDb.saveOutboxEntry).mockResolvedValueOnce(false)
 
@@ -671,6 +695,17 @@ describe('outbox sync engine', () => {
 
 		releaseDelete(true)
 		await expect(removal).resolves.toBe('removed')
+	})
+
+	it('restores a removed entry when its storage deletion fails', async () => {
+		await enqueueText({ text: 'Keep me visible' })
+		const entry = getOutboxSnapshot().entries[0]
+		vi.mocked(outboxDb.deleteOutboxEntry).mockResolvedValueOnce(false)
+
+		await expect(removeEntry(entry.id)).resolves.toBe('failed')
+
+		expect(getOutboxSnapshot().entries).toEqual([entry])
+		expect(storedEntries.has(entry.id)).toBe(true)
 	})
 
 	it('starts auto-transcription after an authenticated audio entry syncs', async () => {

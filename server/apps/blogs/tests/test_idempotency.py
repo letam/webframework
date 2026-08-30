@@ -61,6 +61,40 @@ class PostCreateIdempotencyTests(ViewTestCase):
         self.assertEqual(Post.objects.filter(author=self.user).count(), 1)
         self.assertEqual(Post.objects.get(id=first.data['id']).body, 'Original')
 
+    def test_idempotency_check_returns_existing_post_for_same_author(self):
+        """Direct-upload clients can dedupe before requesting a presigned URL."""
+        client_uuid = uuid4()
+        post = Post.objects.create(
+            author=self.user, body='Already created', client_uuid=client_uuid
+        )
+
+        response = self.client.post(
+            reverse('post-idempotency-check'), {'client_uuid': str(client_uuid)}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['id'], post.id)
+        self.assertNotIn('client_uuid', response.data)
+
+    def test_idempotency_check_is_scoped_to_current_author(self):
+        """A UUID match owned by someone else is indistinguishable from no match."""
+        client_uuid = uuid4()
+        Post.objects.create(author=self.user, body='Private key', client_uuid=client_uuid)
+
+        response = self.other_client.post(
+            reverse('post-idempotency-check'), {'client_uuid': str(client_uuid)}
+        )
+
+        self.assertEqual(response.status_code, 204)
+
+    def test_idempotency_check_rejects_invalid_uuid(self):
+        """The preflight endpoint rejects malformed lookup keys."""
+        response = self.client.post(
+            reverse('post-idempotency-check'), {'client_uuid': 'not-a-uuid'}
+        )
+
+        self.assertEqual(response.status_code, 400)
+
     def test_s3_replay_dedupes_before_media_validation(self):
         """A replay wins before an attached S3 key can be rejected as reused."""
         client_uuid = str(uuid4())

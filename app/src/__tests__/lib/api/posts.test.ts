@@ -124,6 +124,7 @@ describe('posts API', () => {
 			const createdPost = makePost({ id: 9, body: 'Uploaded through S3.' })
 			const file = new File(['audio'], 'clip.webm', { type: 'audio/webm' })
 			fetchMock
+				.mockResolvedValueOnce(await response({}, true, 204))
 				.mockResolvedValueOnce(
 					await response({
 						url: 'https://upload.example.com/signed-put',
@@ -143,16 +144,20 @@ describe('posts API', () => {
 			})
 
 			expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+				'/api/posts/idempotency-check/',
 				'/api/uploads/presign/',
 				'https://upload.example.com/signed-put',
 				'/api/posts/',
 			])
 			expect(getFetchOptions).toHaveBeenNthCalledWith(1, 'POST', {
+				client_uuid: '2db60ca2-7637-46f5-a8ea-44ec850c004b',
+			})
+			expect(getFetchOptions).toHaveBeenNthCalledWith(2, 'POST', {
 				file_name: 'clip.webm',
 				content_type: 'audio/webm',
 				content_length: file.size,
 			})
-			const createOptions = fetchMock.mock.calls[2][1] as RequestInit
+			const createOptions = fetchMock.mock.calls[3][1] as RequestInit
 			const formData = createOptions.body as FormData
 			expect(formData.get('body')).toBe('Uploaded through S3.')
 			expect(formData.get('media_type')).toBe('audio')
@@ -162,6 +167,28 @@ describe('posts API', () => {
 			expect(formData.get('client_uuid')).toBe('2db60ca2-7637-46f5-a8ea-44ec850c004b')
 			expect(result.modified).toBeInstanceOf(Date)
 			expect(result.url).toBe(`${window.location.origin}/p/9/`)
+		})
+
+		it('returns an existing S3 post before presigning or uploading again', async () => {
+			const { createPost } = await importPostsApi(true)
+			const { getFetchOptions } = await import('@/lib/utils/fetch')
+			const existingPost = makePost({ id: 12, body: 'Already uploaded.' })
+			const file = new File(['audio'], 'clip.webm', { type: 'audio/webm' })
+			const clientUuid = 'b24937ad-8d69-49b3-a78d-acde7058c7cd'
+			fetchMock.mockResolvedValueOnce(await response(toServerPost(existingPost)))
+
+			const result = await createPost({
+				text: 'Already uploaded.',
+				media: file,
+				media_type: 'audio',
+				client_uuid: clientUuid,
+			})
+
+			expect(fetchMock).toHaveBeenCalledTimes(1)
+			expect(fetchMock).toHaveBeenCalledWith('/api/posts/idempotency-check/', expect.any(Object))
+			expect(getFetchOptions).toHaveBeenCalledWith('POST', { client_uuid: clientUuid })
+			expect(result.id).toBe(existingPost.id)
+			expect(result.modified).toBeInstanceOf(Date)
 		})
 
 		it('throws when the presign request fails and skips the upload', async () => {
