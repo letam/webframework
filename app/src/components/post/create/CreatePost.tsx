@@ -110,6 +110,12 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const audioInputRef = useRef<HTMLInputElement>(null)
 	const uploadInputRef = useRef<HTMLInputElement>(null)
 	const imageInputRef = useRef<HTMLInputElement>(null)
+	const composerStateRef = useRef<{
+		text: string
+		visibility: PostVisibility
+		mediaType: 'text' | 'audio' | 'video' | 'image'
+		media: Blob | File | null
+	}>({ text: '', visibility: 'public', mediaType: 'text', media: null })
 
 	const hasNoMedia = !audioBlob && !audioFile && !videoBlob && !videoFile && !imageFile
 	const canPost = !!postText.trim() || !hasNoMedia
@@ -134,17 +140,21 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				: mediaType === 'image'
 					? imageFile
 					: null
+	composerStateRef.current = { text: postText, visibility, mediaType, media: activeMedia }
 
 	const loadOutboxEntry = useCallback(
 		(entry: OutboxEntry) => {
 			if (postText.length > 0 || !hasNoMedia) return null
 
+			const loadedVisibility = entry.visibility ?? 'public'
+			let loadedMedia: File | null = null
 			setPostText(entry.text)
-			setVisibility(entry.visibility ?? 'public')
+			setVisibility(loadedVisibility)
 			if (entry.media && entry.mediaType) {
 				const file = new File([entry.media], entry.mediaName ?? 'restored', {
 					type: entry.media.type,
 				})
+				loadedMedia = file
 				setMediaType(entry.mediaType)
 				if (entry.mediaType === 'audio') setAudioFile(file)
 				if (entry.mediaType === 'video') setVideoFile(file)
@@ -152,9 +162,25 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			} else {
 				setMediaType('text')
 			}
+			const loadedMediaType = entry.media && entry.mediaType ? entry.mediaType : 'text'
+			composerStateRef.current = {
+				text: entry.text,
+				visibility: loadedVisibility,
+				mediaType: loadedMediaType,
+				media: loadedMedia,
+			}
 			textareaRef.current?.focus()
 			return {
 				rollback: () => {
+					const current = composerStateRef.current
+					if (
+						current.text !== entry.text ||
+						current.visibility !== loadedVisibility ||
+						current.mediaType !== loadedMediaType ||
+						current.media !== loadedMedia
+					) {
+						return false
+					}
 					setPostText('')
 					setVisibility('public')
 					setAudioBlob(null)
@@ -163,6 +189,13 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					setVideoFile(null)
 					setImageFile(null)
 					setMediaType('text')
+					composerStateRef.current = {
+						text: '',
+						visibility: 'public',
+						mediaType: 'text',
+						media: null,
+					}
+					return true
 				},
 			}
 		},

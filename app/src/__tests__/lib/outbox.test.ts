@@ -46,6 +46,17 @@ vi.mock('@/lib/utils/outboxDb', () => ({
 		storedEntries.set(id, claimed)
 		return { status: 'claimed' as const, entry: claimed }
 	}),
+	inspectOutboxEntry: vi.fn(async (id: string) => {
+		const entry = storedEntries.get(id)
+		return entry ? { status: 'found' as const, entry } : { status: 'missing' as const }
+	}),
+	removeOutboxEntryIfIdle: vi.fn(async (id: string) => {
+		const entry = storedEntries.get(id)
+		if (!entry) return { status: 'missing' as const }
+		if (entry.status === 'sending') return { status: 'sending' as const, entry }
+		storedEntries.delete(id)
+		return { status: 'removed' as const }
+	}),
 }))
 
 vi.mock('@/lib/api/posts', () => ({
@@ -402,6 +413,23 @@ describe('outbox sync engine', () => {
 		expect(postsApi.createPost).not.toHaveBeenCalled()
 		expect(getOutboxSnapshot().entries).toEqual([queued])
 		expect(storedEntries.get(queued.id)).toEqual(queued)
+	})
+
+	it('recovers to an actionable failure when a post status write fails', async () => {
+		await enqueueText({ text: 'Status write can fail' })
+		const entryId = getOutboxSnapshot().entries[0].id
+		vi.mocked(postsApi.createPost).mockRejectedValueOnce(new ApiError('rejected', 400))
+		vi.mocked(outboxDb.saveOutboxEntry).mockResolvedValueOnce(false)
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(getOutboxSnapshot().entries[0]).toMatchObject({
+			id: entryId,
+			status: 'failed',
+			lastError: "Couldn't save this post's status. Try again.",
+		})
+		expect(storedEntries.get(entryId)?.status).toBe('sending')
 	})
 
 	it('does not post an entry removed from durable storage by another tab', async () => {
@@ -780,11 +808,44 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
+	it('refuses removal when another tab has durably claimed the entry', async () => {
+		vi.useFakeTimers()
+		await enqueueText({ text: 'Claimed elsewhere' })
+		const queued = getOutboxSnapshot().entries[0]
+		const sending = { ...queued, status: 'sending' as const }
+		storedEntries.set(queued.id, sending)
+
+		await expect(removeEntry(queued.id)).resolves.toBe('sending')
+
+		expect(storedEntries.get(queued.id)).toEqual(sending)
+		expect(getOutboxSnapshot().entries).toEqual([sending])
+	})
+
+	it('reconciles a send completed by another tab', async () => {
+		vi.useFakeTimers()
+		await enqueueText({ text: 'Sent elsewhere' })
+		const entryId = getOutboxSnapshot().entries[0].id
+		storedEntries.set(entryId, {
+			...getOutboxSnapshot().entries[0],
+			status: 'sending',
+		})
+		setOnline(true)
+
+		await flushOutbox()
+		expect(getOutboxSnapshot().entries[0].status).toBe('sending')
+		storedEntries.delete(entryId)
+		await vi.advanceTimersByTimeAsync(1_000)
+
+		expect(getOutboxSnapshot().entries).toEqual([])
+	})
+
 	it('hides a removed entry before its storage deletion resolves', async () => {
 		await enqueueText()
 		const entryId = getOutboxSnapshot().entries[0].id
-		let releaseDelete!: (deleted: boolean) => void
-		vi.mocked(outboxDb.deleteOutboxEntry).mockImplementationOnce(
+		let releaseDelete!: (
+			result: Awaited<ReturnType<typeof outboxDb.removeOutboxEntryIfIdle>>
+		) => void
+		vi.mocked(outboxDb.removeOutboxEntryIfIdle).mockImplementationOnce(
 			() =>
 				new Promise((resolve) => {
 					releaseDelete = resolve
@@ -798,14 +859,16 @@ describe('outbox sync engine', () => {
 		await flushOutbox()
 		expect(postsApi.createPost).not.toHaveBeenCalled()
 
-		releaseDelete(true)
+		releaseDelete({ status: 'removed' })
 		await expect(removal).resolves.toBe('removed')
 	})
 
 	it('restores a removed entry when its storage deletion fails', async () => {
 		await enqueueText({ text: 'Keep me visible' })
 		const entry = getOutboxSnapshot().entries[0]
-		vi.mocked(outboxDb.deleteOutboxEntry).mockResolvedValueOnce(false)
+		vi.mocked(outboxDb.removeOutboxEntryIfIdle).mockResolvedValueOnce({
+			status: 'unavailable',
+		})
 
 		await expect(removeEntry(entry.id)).resolves.toBe('failed')
 

@@ -215,6 +215,26 @@ describe('CreatePost', () => {
 		expect(screen.queryByText('queued.png')).not.toBeInTheDocument()
 	})
 
+	it('preserves composer changes made before an outbox rollback', async () => {
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+		let loadHandle: ReturnType<typeof requestComposerLoad> = null
+
+		act(() => {
+			loadHandle = requestComposerLoad(makeEntry())
+		})
+		const composer = screen.getByPlaceholderText("What's on your mind?")
+		await user.type(composer, ' with a new edit')
+
+		let rolledBack = true
+		act(() => {
+			rolledBack = loadHandle?.rollback() ?? false
+		})
+
+		expect(rolledBack).toBe(false)
+		expect(composer).toHaveValue('Restored from the outbox with a new edit')
+	})
+
 	it('refuses to replace content already in the composer', async () => {
 		const user = userEvent.setup()
 		render(<CreatePost onPostCreated={vi.fn()} />)

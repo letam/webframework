@@ -8,7 +8,9 @@ import { getSettings } from '@/lib/utils/settings'
 import {
 	claimOutboxEntryForSend,
 	deleteOutboxEntry,
+	inspectOutboxEntry,
 	loadOutboxEntries,
+	removeOutboxEntryIfIdle,
 	saveOutboxEntry,
 	type OutboxEntry,
 } from '@/lib/utils/outboxDb'
@@ -65,6 +67,7 @@ let snapshot: OutboxSnapshot = {
 let dependencies: OutboxDependencies | null = null
 let retryTimer: number | undefined
 let retryIndex = 0
+const sendingReconcileTimers = new Map<string, number>()
 let flushLocked = false
 // Flush requests that arrive while a pass holds the lock; replayed when the pass ends.
 // Manual intent is sticky because any explicit request must remain explicit when
@@ -81,7 +84,11 @@ const setEntries = (entries: OutboxEntry[]) => {
 	publishSnapshot({ ...snapshot, entries: [...entries].sort((a, b) => a.createdAt - b.createdAt) })
 }
 
-const updateEntry = async (id: string, changes: Partial<OutboxEntry>) => {
+const updateEntry = async (
+	id: string,
+	changes: Partial<OutboxEntry>,
+	options?: { recoverFailedSend?: boolean }
+) => {
 	const current = snapshot.entries.find((entry) => entry.id === id)
 	if (!current) return null
 	const updated = { ...current, ...changes }
@@ -91,7 +98,15 @@ const updateEntry = async (id: string, changes: Partial<OutboxEntry>) => {
 		// optimistic update; a newer mutation may have replaced it while the write
 		// was pending.
 		if (snapshot.entries.find((entry) => entry.id === id) === updated) {
-			setEntries(snapshot.entries.map((entry) => (entry.id === id ? current : entry)))
+			const fallback =
+				options?.recoverFailedSend && current.status === 'sending'
+					? {
+							...current,
+							status: 'failed' as const,
+							lastError: "Couldn't save this post's status. Try again.",
+						}
+					: current
+			setEntries(snapshot.entries.map((entry) => (entry.id === id ? fallback : entry)))
 		}
 		return null
 	}
@@ -99,6 +114,33 @@ const updateEntry = async (id: string, changes: Partial<OutboxEntry>) => {
 }
 
 const isOnline = () => typeof navigator === 'undefined' || navigator.onLine
+
+const clearSendingReconcileTimer = (id: string) => {
+	const timer = sendingReconcileTimers.get(id)
+	if (timer !== undefined && typeof window !== 'undefined') window.clearTimeout(timer)
+	sendingReconcileTimers.delete(id)
+}
+
+const scheduleSendingReconciliation = (id: string) => {
+	if (typeof window === 'undefined' || sendingReconcileTimers.has(id)) return
+	const timer = window.setTimeout(async () => {
+		sendingReconcileTimers.delete(id)
+		const current = snapshot.entries.find((entry) => entry.id === id)
+		if (current?.status !== 'sending') return
+
+		const durable = await inspectOutboxEntry(id)
+		if (durable.status === 'missing') {
+			setEntries(snapshot.entries.filter((entry) => entry.id !== id))
+			return
+		}
+		if (durable.status === 'found' && durable.entry.status !== 'sending') {
+			setEntries(snapshot.entries.map((entry) => (entry.id === id ? durable.entry : entry)))
+			return
+		}
+		scheduleSendingReconciliation(id)
+	}, 1_000)
+	sendingReconcileTimers.set(id, timer)
+}
 
 const resetBackoff = () => {
 	if (retryTimer !== undefined && typeof window !== 'undefined') {
@@ -162,44 +204,64 @@ type SyncResult = 'synced' | 'network' | 'failed' | 'retryable' | 'skipped'
 
 const markFailure = async (entry: OutboxEntry, error: unknown): Promise<SyncResult> => {
 	if (error instanceof TypeError) {
-		await updateEntry(entry.id, { status: 'queued', lastError: null })
+		await updateEntry(entry.id, { status: 'queued', lastError: null }, { recoverFailedSend: true })
 		return 'network'
 	}
 
 	if (error instanceof ApiError) {
 		if (error.status === 401) {
-			await updateEntry(entry.id, {
-				status: 'failed',
-				lastError: 'Sign in to post this.',
-			})
+			await updateEntry(
+				entry.id,
+				{
+					status: 'failed',
+					lastError: 'Sign in to post this.',
+				},
+				{ recoverFailedSend: true }
+			)
 			return 'failed'
 		}
 		if (error.status === 429 || error.status >= 500) {
 			const attempts = entry.attempts + 1
 			if (attempts < 5) {
-				await updateEntry(entry.id, { status: 'queued', attempts, lastError: null })
+				await updateEntry(
+					entry.id,
+					{ status: 'queued', attempts, lastError: null },
+					{ recoverFailedSend: true }
+				)
 				return 'retryable'
 			}
-			await updateEntry(entry.id, {
-				status: 'failed',
-				attempts,
-				lastError: 'The server had trouble with this post. Try again in a bit.',
-			})
+			await updateEntry(
+				entry.id,
+				{
+					status: 'failed',
+					attempts,
+					lastError: 'The server had trouble with this post. Try again in a bit.',
+				},
+				{ recoverFailedSend: true }
+			)
 			return 'failed'
 		}
 		if (error.status < 500) {
-			await updateEntry(entry.id, {
-				status: 'failed',
-				lastError: 'The server rejected this post.',
-			})
+			await updateEntry(
+				entry.id,
+				{
+					status: 'failed',
+					lastError: 'The server rejected this post.',
+				},
+				{ recoverFailedSend: true }
+			)
 			return 'failed'
 		}
 	}
 
-	await updateEntry(entry.id, {
-		status: 'failed',
-		lastError: "Couldn't post this. Try again.",
-	})
+	await updateEntry(
+		entry.id,
+		{
+			status: 'failed',
+			lastError: "Couldn't post this. Try again.",
+		},
+		{ recoverFailedSend: true }
+	)
 	return 'failed'
 }
 
@@ -218,6 +280,7 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 	}
 	if (claim.status === 'not-queued') {
 		setEntries(snapshot.entries.map((candidate) => (candidate.id === id ? claim.entry : candidate)))
+		if (claim.entry.status === 'sending') scheduleSendingReconciliation(id)
 		return 'skipped'
 	}
 	entry = claim.entry
@@ -269,10 +332,14 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 				continue
 			}
 			if (error instanceof ApiError && error.status === 403) {
-				await updateEntry(entry.id, {
-					status: 'failed',
-					lastError: "Couldn't post this. Try again.",
-				})
+				await updateEntry(
+					entry.id,
+					{
+						status: 'failed',
+						lastError: "Couldn't post this. Try again.",
+					},
+					{ recoverFailedSend: true }
+				)
 				return 'failed'
 			}
 			return markFailure(entry, error)
@@ -432,8 +499,13 @@ export const removeEntry = async (id: string): Promise<RemoveEntryResult> => {
 	// inside that await (backoff timer, reconnect, another enqueue) would still find
 	// the entry and publish the post the user just removed.
 	setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
-	const deleted = await deleteOutboxEntry(id)
-	if (!deleted) {
+	const removal = await removeOutboxEntryIfIdle(id)
+	if (removal.status === 'sending') {
+		setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), removal.entry])
+		scheduleSendingReconciliation(id)
+		return 'sending'
+	}
+	if (removal.status === 'unavailable') {
 		// The durable copy still exists and can return after a reload. Put it back in
 		// the visible snapshot and make the caller report that removal did not happen.
 		setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), entry])
@@ -450,6 +522,7 @@ export const handleOutboxOnline = async () => {
 
 export const __resetOutboxForTests = () => {
 	resetBackoff()
+	for (const id of sendingReconcileTimers.keys()) clearSendingReconcileTimer(id)
 	snapshot = { entries: [], flushing: false, syncMode: 'auto' }
 	dependencies = null
 	flushLocked = false

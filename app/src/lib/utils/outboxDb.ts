@@ -29,6 +29,16 @@ export type ClaimOutboxEntryResult =
 	| { status: 'not-queued'; entry: OutboxEntry }
 	| { status: 'unavailable' }
 
+export type InspectOutboxEntryResult =
+	| { status: 'found'; entry: OutboxEntry }
+	| { status: 'missing' }
+	| { status: 'unavailable' }
+
+export type RemoveOutboxEntryResult =
+	| { status: 'removed' | 'missing' }
+	| { status: 'sending'; entry: OutboxEntry }
+	| { status: 'unavailable' }
+
 const openDb = (): Promise<IDBDatabase | null> =>
 	new Promise((resolve) => {
 		if (typeof indexedDB === 'undefined') {
@@ -108,6 +118,35 @@ export const saveOutboxEntry = async (entry: OutboxEntry): Promise<boolean> =>
 export const getOutboxEntry = async (id: string): Promise<OutboxEntry | null> =>
 	(await runRequest<OutboxEntry | undefined>('readonly', (store) => store.get(id))) ?? null
 
+export const inspectOutboxEntry = async (id: string): Promise<InspectOutboxEntryResult> => {
+	const db = await openDb()
+	if (!db) return { status: 'unavailable' }
+
+	try {
+		return await new Promise<InspectOutboxEntryResult>((resolve) => {
+			let transaction: IDBTransaction
+			let result: InspectOutboxEntryResult = { status: 'unavailable' }
+			try {
+				transaction = db.transaction(STORE, 'readonly')
+				const request = transaction.objectStore(STORE).get(id)
+				request.onsuccess = () => {
+					const entry = request.result as OutboxEntry | undefined
+					result = entry ? { status: 'found', entry } : { status: 'missing' }
+				}
+				request.onerror = () => transaction.abort()
+			} catch {
+				resolve({ status: 'unavailable' })
+				return
+			}
+			transaction.oncomplete = () => resolve(result)
+			transaction.onerror = () => resolve({ status: 'unavailable' })
+			transaction.onabort = () => resolve({ status: 'unavailable' })
+		})
+	} finally {
+		db.close()
+	}
+}
+
 export const claimOutboxEntryForSend = async (id: string): Promise<ClaimOutboxEntryResult> => {
 	const db = await openDb()
 	if (!db) return { status: 'unavailable' }
@@ -153,6 +192,47 @@ export const claimOutboxEntryForSend = async (id: string): Promise<ClaimOutboxEn
 
 export const deleteOutboxEntry = async (id: string): Promise<boolean> =>
 	(await runRequest<undefined>('readwrite', (store) => store.delete(id))) !== null
+
+export const removeOutboxEntryIfIdle = async (id: string): Promise<RemoveOutboxEntryResult> => {
+	const db = await openDb()
+	if (!db) return { status: 'unavailable' }
+
+	try {
+		return await new Promise<RemoveOutboxEntryResult>((resolve) => {
+			let transaction: IDBTransaction
+			let result: RemoveOutboxEntryResult = { status: 'unavailable' }
+			try {
+				transaction = db.transaction(STORE, 'readwrite')
+				const store = transaction.objectStore(STORE)
+				const request = store.get(id)
+				request.onsuccess = () => {
+					const entry = request.result as OutboxEntry | undefined
+					if (!entry) {
+						result = { status: 'missing' }
+						return
+					}
+					if (entry.status === 'sending') {
+						result = { status: 'sending', entry }
+						return
+					}
+					const deleteRequest = store.delete(id)
+					deleteRequest.onsuccess = () => {
+						result = { status: 'removed' }
+					}
+				}
+				request.onerror = () => transaction.abort()
+			} catch {
+				resolve({ status: 'unavailable' })
+				return
+			}
+			transaction.oncomplete = () => resolve(result)
+			transaction.onerror = () => resolve({ status: 'unavailable' })
+			transaction.onabort = () => resolve({ status: 'unavailable' })
+		})
+	} finally {
+		db.close()
+	}
+}
 
 export const loadOutboxEntries = async (): Promise<OutboxEntry[]> => {
 	const db = await openDb()

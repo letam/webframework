@@ -1,7 +1,8 @@
 import type { OutboxEntry } from '@/lib/utils/outboxDb'
 
 export interface ComposerLoadHandle {
-	rollback: () => void
+	/** Clears the loaded entry only if the composer has not changed since loading. */
+	rollback: () => boolean
 }
 
 export type ComposerLoader = (entry: OutboxEntry) => ComposerLoadHandle | null

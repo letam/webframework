@@ -6,7 +6,9 @@ import {
 	claimOutboxEntryForSend,
 	deleteOutboxEntry,
 	getOutboxEntry,
+	inspectOutboxEntry,
 	loadOutboxEntries,
+	removeOutboxEntryIfIdle,
 	saveOutboxEntry,
 	type OutboxEntry,
 } from '@/lib/utils/outboxDb'
@@ -89,6 +91,35 @@ describe('outbox storage', () => {
 		})
 	})
 
+	it('atomically refuses to remove a sending entry', async () => {
+		const entry = makeEntry({ status: 'sending' })
+		await saveOutboxEntry(entry)
+
+		await expect(removeOutboxEntryIfIdle(entry.id)).resolves.toEqual({
+			status: 'sending',
+			entry,
+		})
+		expect(await getOutboxEntry(entry.id)).toEqual(entry)
+	})
+
+	it('atomically removes idle entries and reports missing rows', async () => {
+		const entry = makeEntry()
+		await saveOutboxEntry(entry)
+
+		await expect(removeOutboxEntryIfIdle(entry.id)).resolves.toEqual({ status: 'removed' })
+		await expect(removeOutboxEntryIfIdle(entry.id)).resolves.toEqual({ status: 'missing' })
+	})
+
+	it('distinguishes found, missing, and unavailable reads', async () => {
+		const entry = makeEntry()
+		await saveOutboxEntry(entry)
+
+		await expect(inspectOutboxEntry(entry.id)).resolves.toEqual({ status: 'found', entry })
+		await expect(inspectOutboxEntry('missing')).resolves.toEqual({ status: 'missing' })
+		globalThis.indexedDB = undefined as unknown as IDBFactory
+		await expect(inspectOutboxEntry(entry.id)).resolves.toEqual({ status: 'unavailable' })
+	})
+
 	it('recovers sending entries to queued on load', async () => {
 		const entry = makeEntry({ status: 'sending' })
 		await saveOutboxEntry(entry)
@@ -124,6 +155,7 @@ describe('outbox storage', () => {
 
 		expect(await saveOutboxEntry(makeEntry())).toBe(false)
 		expect(await claimOutboxEntryForSend('missing')).toEqual({ status: 'unavailable' })
+		expect(await removeOutboxEntryIfIdle('missing')).toEqual({ status: 'unavailable' })
 		expect(await loadOutboxEntries()).toEqual([])
 	})
 })
