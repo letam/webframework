@@ -21,7 +21,17 @@ export interface OutboxEntry {
 	mediaType: 'audio' | 'video' | 'image' | null
 	media: Blob | null
 	mediaName: string | null
+	/** Present only while a tab owns an active send lease. */
+	claimOwner?: string | null
+	claimExpiresAt?: number | null
 }
+
+export const OUTBOX_CLAIM_LEASE_MS = 5 * 60_000
+
+const recoverExpiredClaim = (entry: OutboxEntry, now: number): OutboxEntry =>
+	entry.status === 'sending' && (!entry.claimExpiresAt || entry.claimExpiresAt <= now)
+		? { ...entry, status: 'queued', claimOwner: null, claimExpiresAt: null }
+		: entry
 
 export type ClaimOutboxEntryResult =
 	| { status: 'claimed'; entry: OutboxEntry }
@@ -127,11 +137,18 @@ export const inspectOutboxEntry = async (id: string): Promise<InspectOutboxEntry
 			let transaction: IDBTransaction
 			let result: InspectOutboxEntryResult = { status: 'unavailable' }
 			try {
-				transaction = db.transaction(STORE, 'readonly')
-				const request = transaction.objectStore(STORE).get(id)
+				transaction = db.transaction(STORE, 'readwrite')
+				const store = transaction.objectStore(STORE)
+				const request = store.get(id)
 				request.onsuccess = () => {
-					const entry = request.result as OutboxEntry | undefined
-					result = entry ? { status: 'found', entry } : { status: 'missing' }
+					const stored = request.result as OutboxEntry | undefined
+					if (!stored) {
+						result = { status: 'missing' }
+						return
+					}
+					const recovered = recoverExpiredClaim(stored, Date.now())
+					if (recovered !== stored) store.put(recovered)
+					result = { status: 'found', entry: recovered }
 				}
 				request.onerror = () => transaction.abort()
 			} catch {
@@ -147,7 +164,10 @@ export const inspectOutboxEntry = async (id: string): Promise<InspectOutboxEntry
 	}
 }
 
-export const claimOutboxEntryForSend = async (id: string): Promise<ClaimOutboxEntryResult> => {
+export const claimOutboxEntryForSend = async (
+	id: string,
+	owner: string
+): Promise<ClaimOutboxEntryResult> => {
 	const db = await openDb()
 	if (!db) return { status: 'unavailable' }
 
@@ -160,7 +180,8 @@ export const claimOutboxEntryForSend = async (id: string): Promise<ClaimOutboxEn
 				const store = transaction.objectStore(STORE)
 				const request = store.get(id)
 				request.onsuccess = () => {
-					const entry = request.result as OutboxEntry | undefined
+					const stored = request.result as OutboxEntry | undefined
+					const entry = stored ? recoverExpiredClaim(stored, Date.now()) : undefined
 					if (!entry) {
 						result = { status: 'missing' }
 						return
@@ -170,6 +191,8 @@ export const claimOutboxEntryForSend = async (id: string): Promise<ClaimOutboxEn
 						return
 					}
 					const claimed = { ...entry, status: 'sending' as const, lastError: null }
+					claimed.claimOwner = owner
+					claimed.claimExpiresAt = Date.now() + OUTBOX_CLAIM_LEASE_MS
 					const putRequest = store.put(claimed)
 					putRequest.onsuccess = () => {
 						result = { status: 'claimed', entry: claimed }
@@ -184,6 +207,38 @@ export const claimOutboxEntryForSend = async (id: string): Promise<ClaimOutboxEn
 			transaction.oncomplete = () => resolve(result)
 			transaction.onerror = () => resolve({ status: 'unavailable' })
 			transaction.onabort = () => resolve({ status: 'unavailable' })
+		})
+	} finally {
+		db.close()
+	}
+}
+
+export const renewOutboxEntryClaim = async (id: string, owner: string): Promise<boolean> => {
+	const db = await openDb()
+	if (!db) return false
+
+	try {
+		return await new Promise<boolean>((resolve) => {
+			let transaction: IDBTransaction
+			let renewed = false
+			try {
+				transaction = db.transaction(STORE, 'readwrite')
+				const store = transaction.objectStore(STORE)
+				const request = store.get(id)
+				request.onsuccess = () => {
+					const entry = request.result as OutboxEntry | undefined
+					if (entry?.status !== 'sending' || entry.claimOwner !== owner) return
+					store.put({ ...entry, claimExpiresAt: Date.now() + OUTBOX_CLAIM_LEASE_MS })
+					renewed = true
+				}
+				request.onerror = () => transaction.abort()
+			} catch {
+				resolve(false)
+				return
+			}
+			transaction.oncomplete = () => resolve(renewed)
+			transaction.onerror = () => resolve(false)
+			transaction.onabort = () => resolve(false)
 		})
 	} finally {
 		db.close()
@@ -206,7 +261,8 @@ export const removeOutboxEntryIfIdle = async (id: string): Promise<RemoveOutboxE
 				const store = transaction.objectStore(STORE)
 				const request = store.get(id)
 				request.onsuccess = () => {
-					const entry = request.result as OutboxEntry | undefined
+					const stored = request.result as OutboxEntry | undefined
+					const entry = stored ? recoverExpiredClaim(stored, Date.now()) : undefined
 					if (!entry) {
 						result = { status: 'missing' }
 						return
@@ -248,9 +304,8 @@ export const loadOutboxEntries = async (): Promise<OutboxEntry[]> => {
 				const request = store.getAll()
 				request.onsuccess = () => {
 					entries = (request.result as OutboxEntry[]).map((entry) => {
-						if (entry.status !== 'sending') return entry
-						const recovered = { ...entry, status: 'queued' as const }
-						store.put(recovered)
+						const recovered = recoverExpiredClaim(entry, Date.now())
+						if (recovered !== entry) store.put(recovered)
 						return recovered
 					})
 				}

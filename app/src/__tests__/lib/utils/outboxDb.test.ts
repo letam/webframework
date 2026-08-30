@@ -8,7 +8,9 @@ import {
 	getOutboxEntry,
 	inspectOutboxEntry,
 	loadOutboxEntries,
+	OUTBOX_CLAIM_LEASE_MS,
 	removeOutboxEntryIfIdle,
+	renewOutboxEntryClaim,
 	saveOutboxEntry,
 	type OutboxEntry,
 } from '@/lib/utils/outboxDb'
@@ -75,24 +77,56 @@ describe('outbox storage', () => {
 	})
 
 	it('atomically claims only an existing queued entry for sending', async () => {
+		vi.spyOn(Date, 'now').mockReturnValue(FIXED_NOW)
 		const entry = makeEntry()
 		await saveOutboxEntry(entry)
 
-		await expect(claimOutboxEntryForSend(entry.id)).resolves.toEqual({
+		await expect(claimOutboxEntryForSend(entry.id, 'tab-a')).resolves.toEqual({
 			status: 'claimed',
-			entry: { ...entry, status: 'sending' },
+			entry: {
+				...entry,
+				status: 'sending',
+				claimOwner: 'tab-a',
+				claimExpiresAt: FIXED_NOW + OUTBOX_CLAIM_LEASE_MS,
+			},
 		})
-		await expect(claimOutboxEntryForSend(entry.id)).resolves.toEqual({
+		await expect(claimOutboxEntryForSend(entry.id, 'tab-b')).resolves.toEqual({
 			status: 'not-queued',
-			entry: { ...entry, status: 'sending' },
+			entry: expect.objectContaining({
+				...entry,
+				status: 'sending',
+				claimOwner: 'tab-a',
+			}),
 		})
-		await expect(claimOutboxEntryForSend('removed-in-another-tab')).resolves.toEqual({
+		await expect(claimOutboxEntryForSend('removed-in-another-tab', 'tab-a')).resolves.toEqual({
 			status: 'missing',
 		})
 	})
 
+	it('preserves a live claim on load and renews only for its owner', async () => {
+		const now = vi.spyOn(Date, 'now').mockReturnValue(FIXED_NOW)
+		const entry = makeEntry({
+			status: 'sending',
+			claimOwner: 'tab-a',
+			claimExpiresAt: FIXED_NOW + OUTBOX_CLAIM_LEASE_MS,
+		})
+		await saveOutboxEntry(entry)
+
+		expect(await loadOutboxEntries()).toEqual([entry])
+		expect(await renewOutboxEntryClaim(entry.id, 'tab-b')).toBe(false)
+		now.mockReturnValue(FIXED_NOW + 10_000)
+		expect(await renewOutboxEntryClaim(entry.id, 'tab-a')).toBe(true)
+		expect((await getOutboxEntry(entry.id))?.claimExpiresAt).toBe(
+			FIXED_NOW + 10_000 + OUTBOX_CLAIM_LEASE_MS
+		)
+	})
+
 	it('atomically refuses to remove a sending entry', async () => {
-		const entry = makeEntry({ status: 'sending' })
+		const entry = makeEntry({
+			status: 'sending',
+			claimOwner: 'tab-a',
+			claimExpiresAt: Date.now() + OUTBOX_CLAIM_LEASE_MS,
+		})
 		await saveOutboxEntry(entry)
 
 		await expect(removeOutboxEntryIfIdle(entry.id)).resolves.toEqual({
@@ -118,6 +152,22 @@ describe('outbox storage', () => {
 		await expect(inspectOutboxEntry('missing')).resolves.toEqual({ status: 'missing' })
 		globalThis.indexedDB = undefined as unknown as IDBFactory
 		await expect(inspectOutboxEntry(entry.id)).resolves.toEqual({ status: 'unavailable' })
+	})
+
+	it('recovers an expired claim during reconciliation', async () => {
+		vi.spyOn(Date, 'now').mockReturnValue(FIXED_NOW)
+		const entry = makeEntry({
+			status: 'sending',
+			claimOwner: 'closed-tab',
+			claimExpiresAt: FIXED_NOW,
+		})
+		await saveOutboxEntry(entry)
+
+		await expect(inspectOutboxEntry(entry.id)).resolves.toEqual({
+			status: 'found',
+			entry: { ...entry, status: 'queued', claimOwner: null, claimExpiresAt: null },
+		})
+		expect((await getOutboxEntry(entry.id))?.status).toBe('queued')
 	})
 
 	it('recovers sending entries to queued on load', async () => {
@@ -154,7 +204,9 @@ describe('outbox storage', () => {
 		globalThis.indexedDB = undefined as unknown as IDBFactory
 
 		expect(await saveOutboxEntry(makeEntry())).toBe(false)
-		expect(await claimOutboxEntryForSend('missing')).toEqual({ status: 'unavailable' })
+		expect(await claimOutboxEntryForSend('missing', 'tab-a')).toEqual({
+			status: 'unavailable',
+		})
 		expect(await removeOutboxEntryIfIdle('missing')).toEqual({ status: 'unavailable' })
 		expect(await loadOutboxEntries()).toEqual([])
 	})

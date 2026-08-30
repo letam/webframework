@@ -10,7 +10,9 @@ import {
 	deleteOutboxEntry,
 	inspectOutboxEntry,
 	loadOutboxEntries,
+	OUTBOX_CLAIM_LEASE_MS,
 	removeOutboxEntryIfIdle,
+	renewOutboxEntryClaim,
 	saveOutboxEntry,
 	type OutboxEntry,
 } from '@/lib/utils/outboxDb'
@@ -22,7 +24,7 @@ export type SyncMode = 'auto' | 'local'
 
 export type EnqueueInput = Omit<
 	OutboxEntry,
-	'id' | 'createdAt' | 'status' | 'attempts' | 'lastError'
+	'id' | 'createdAt' | 'status' | 'attempts' | 'lastError' | 'claimOwner' | 'claimExpiresAt'
 >
 
 export interface OutboxAuthState {
@@ -44,6 +46,7 @@ export interface OutboxSnapshot {
 }
 
 const RETRY_DELAYS_MS = [15_000, 30_000, 60_000, 120_000, 300_000] as const
+const outboxClaimOwner = crypto.randomUUID()
 
 const getInitialSyncMode = (): SyncMode => {
 	if (typeof localStorage === 'undefined') return 'auto'
@@ -91,7 +94,13 @@ const updateEntry = async (
 ) => {
 	const current = snapshot.entries.find((entry) => entry.id === id)
 	if (!current) return null
-	const updated = { ...current, ...changes }
+	const updated = {
+		...current,
+		...changes,
+		...(changes.status && changes.status !== 'sending'
+			? { claimOwner: null, claimExpiresAt: null }
+			: {}),
+	}
 	setEntries(snapshot.entries.map((entry) => (entry.id === id ? updated : entry)))
 	if (!(await saveOutboxEntry(updated))) {
 		// Keep the reactive snapshot aligned with IndexedDB. Only roll back our own
@@ -104,6 +113,8 @@ const updateEntry = async (
 							...current,
 							status: 'failed' as const,
 							lastError: "Couldn't save this post's status. Try again.",
+							claimOwner: null,
+							claimExpiresAt: null,
 						}
 					: current
 			setEntries(snapshot.entries.map((entry) => (entry.id === id ? fallback : entry)))
@@ -272,7 +283,7 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 	// Claim and verify the durable row in one transaction. This prevents a stale
 	// snapshot in another tab from recreating and publishing a post that the user
 	// already removed there.
-	const claim = await claimOutboxEntryForSend(id)
+	const claim = await claimOutboxEntryForSend(id, outboxClaimOwner)
 	if (claim.status === 'unavailable') return 'failed'
 	if (claim.status === 'missing') {
 		setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
@@ -290,59 +301,89 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 		return 'skipped'
 	}
 	let retriedCsrf = false
-
-	while (true) {
-		try {
-			const post = await createPost(buildCreateRequest(entry))
-			const deleted = await deleteOutboxEntry(entry.id)
-			if (deleted) {
-				setEntries(snapshot.entries.filter((candidate) => candidate.id !== entry?.id))
-			} else {
-				// Publication succeeded, so this entry must never return to the send queue.
-				// Keep the durable copy visible as cleanup-only instead of silently allowing
-				// it to reappear as a queued post after reload.
-				await updateEntry(entry.id, {
-					status: 'published',
-					lastError: "This post was published, but its local copy couldn't be cleared.",
-				})
-			}
-			if (dependencies) applyCreatedPostToCaches(dependencies.queryClient, post)
-			resetBackoff()
-
-			if (
-				entry.autoTranscribe &&
-				(entry.mediaType === 'audio' || entry.mediaType === 'video') &&
-				auth.isAuthenticated
-			) {
-				const queryClient = dependencies?.queryClient
-				void transcribePost(post.id)
-					.then((updatedPost) => {
-						if (queryClient) applyUpdatedPostToCaches(queryClient, updatedPost)
-					})
-					.catch((error) => {
-						console.error('Auto-transcription failed to start:', error)
-						toast.error('Auto-transcription failed to start')
-					})
-			}
-			return 'synced'
-		} catch (error) {
-			if (error instanceof ApiError && error.status === 403 && !retriedCsrf) {
-				clearCsrfTokenCache()
-				retriedCsrf = true
-				continue
-			}
-			if (error instanceof ApiError && error.status === 403) {
-				await updateEntry(
-					entry.id,
-					{
-						status: 'failed',
-						lastError: "Couldn't post this. Try again.",
+	const claimHeartbeat =
+		typeof window === 'undefined'
+			? undefined
+			: window.setInterval(
+					() => {
+						void renewOutboxEntryClaim(entry.id, outboxClaimOwner)
 					},
-					{ recoverFailedSend: true }
+					Math.min(OUTBOX_CLAIM_LEASE_MS / 3, 60_000)
 				)
-				return 'failed'
+
+	try {
+		while (true) {
+			try {
+				const post = await createPost(buildCreateRequest(entry))
+				const deleted = await deleteOutboxEntry(entry.id)
+				if (deleted) {
+					setEntries(snapshot.entries.filter((candidate) => candidate.id !== entry?.id))
+				} else {
+					// Publication succeeded, so this entry must never return to the send queue.
+					// Keep the durable copy visible as cleanup-only instead of silently allowing
+					// it to reappear as a queued post after reload.
+					await updateEntry(entry.id, {
+						status: 'published',
+						lastError: "This post was published, but its local copy couldn't be cleared.",
+					})
+				}
+				if (dependencies) applyCreatedPostToCaches(dependencies.queryClient, post)
+				resetBackoff()
+
+				if (
+					entry.autoTranscribe &&
+					(entry.mediaType === 'audio' || entry.mediaType === 'video') &&
+					auth.isAuthenticated
+				) {
+					const queryClient = dependencies?.queryClient
+					void transcribePost(post.id)
+						.then((updatedPost) => {
+							if (queryClient) applyUpdatedPostToCaches(queryClient, updatedPost)
+						})
+						.catch((error) => {
+							console.error('Auto-transcription failed to start:', error)
+							toast.error('Auto-transcription failed to start')
+						})
+				}
+				return 'synced'
+			} catch (error) {
+				if (error instanceof ApiError && error.status === 403 && !retriedCsrf) {
+					clearCsrfTokenCache()
+					retriedCsrf = true
+					let retryAuth: OutboxAuthState | null
+					try {
+						retryAuth = await getKnownAuthState()
+					} catch {
+						retryAuth = null
+					}
+					if (!retryAuth) {
+						await updateEntry(entry.id, { status: 'queued' }, { recoverFailedSend: true })
+						return 'network'
+					}
+					if (!isOutboxEntryVisible(entry, retryAuth)) {
+						await updateEntry(entry.id, { status: 'queued' }, { recoverFailedSend: true })
+						return 'skipped'
+					}
+					auth = retryAuth
+					continue
+				}
+				if (error instanceof ApiError && error.status === 403) {
+					await updateEntry(
+						entry.id,
+						{
+							status: 'failed',
+							lastError: "Couldn't post this. Try again.",
+						},
+						{ recoverFailedSend: true }
+					)
+					return 'failed'
+				}
+				return markFailure(entry, error)
 			}
-			return markFailure(entry, error)
+		}
+	} finally {
+		if (claimHeartbeat !== undefined && typeof window !== 'undefined') {
+			window.clearInterval(claimHeartbeat)
 		}
 	}
 }
@@ -445,7 +486,11 @@ export const setSyncMode = (mode: SyncMode) => {
 export const loadOutbox = async () => {
 	const entriesById = new Map((await loadOutboxEntries()).map((entry) => [entry.id, entry]))
 	for (const entry of snapshot.entries) entriesById.set(entry.id, entry)
-	setEntries([...entriesById.values()])
+	const entries = [...entriesById.values()]
+	setEntries(entries)
+	for (const entry of entries) {
+		if (entry.status === 'sending') scheduleSendingReconciliation(entry.id)
+	}
 }
 
 // `id` lets the composer's online-submit fallback reuse the client_uuid its live
@@ -458,6 +503,8 @@ export const enqueuePost = async (input: EnqueueInput & { id?: string }): Promis
 		status: 'queued',
 		attempts: 0,
 		lastError: null,
+		claimOwner: null,
+		claimExpiresAt: null,
 	}
 	if (!(await saveOutboxEntry(entry))) return false
 

@@ -10,6 +10,7 @@ import {
 	flushOutbox,
 	getOutboxSnapshot,
 	handleOutboxOnline,
+	loadOutbox,
 	removeEntry,
 	resolveInitialSyncMode,
 	retryEntry,
@@ -29,6 +30,7 @@ const mockToast = vi.hoisted(() =>
 )
 
 vi.mock('@/lib/utils/outboxDb', () => ({
+	OUTBOX_CLAIM_LEASE_MS: 300_000,
 	loadOutboxEntries: vi.fn(async () => [...storedEntries.values()]),
 	saveOutboxEntry: vi.fn(async (entry: OutboxEntry) => {
 		storedEntries.set(entry.id, entry)
@@ -57,6 +59,7 @@ vi.mock('@/lib/utils/outboxDb', () => ({
 		storedEntries.delete(id)
 		return { status: 'removed' as const }
 	}),
+	renewOutboxEntryClaim: vi.fn(async () => true),
 }))
 
 vi.mock('@/lib/api/posts', () => ({
@@ -490,6 +493,33 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
+	it('revalidates identity before retrying a CSRF failure', async () => {
+		await enqueueText({ author: 1, text: 'Do not cross accounts' })
+		const refreshAuthStatus = vi
+			.fn()
+			.mockResolvedValueOnce(true)
+			.mockImplementationOnce(async () => {
+				auth = { isAuthenticated: true, userId: 2, isAuthResolved: true }
+				return true
+			})
+		configureOutbox({ queryClient, getAuthState: () => auth, refreshAuthStatus })
+		vi.mocked(postsApi.createPost).mockRejectedValueOnce(new ApiError('csrf', 403))
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(refreshAuthStatus).toHaveBeenCalledTimes(2)
+		expect(postsApi.createPost).toHaveBeenCalledOnce()
+		expect(getOutboxSnapshot().entries).toEqual([
+			expect.objectContaining({
+				author: 1,
+				status: 'queued',
+				claimOwner: null,
+				claimExpiresAt: null,
+			}),
+		])
+	})
+
 	it('marks a second 403 failed after the single CSRF retry', async () => {
 		await enqueueText()
 		vi.mocked(postsApi.createPost).mockRejectedValue(new ApiError('csrf', 403))
@@ -834,6 +864,32 @@ describe('outbox sync engine', () => {
 		await flushOutbox()
 		expect(getOutboxSnapshot().entries[0].status).toBe('sending')
 		storedEntries.delete(entryId)
+		await vi.advanceTimersByTimeAsync(1_000)
+
+		expect(getOutboxSnapshot().entries).toEqual([])
+	})
+
+	it('preserves and reconciles a live claim loaded from another tab', async () => {
+		vi.useFakeTimers()
+		await enqueueText({ text: 'Already sending elsewhere' })
+		const queued = getOutboxSnapshot().entries[0]
+		const sending = {
+			...queued,
+			status: 'sending' as const,
+			claimOwner: 'another-tab',
+			claimExpiresAt: Date.now() + 300_000,
+		}
+		__resetOutboxForTests()
+		configureOutbox({
+			queryClient,
+			getAuthState: () => auth,
+			refreshAuthStatus: vi.fn(async () => true),
+		})
+		storedEntries.set(queued.id, sending)
+
+		await loadOutbox()
+		expect(getOutboxSnapshot().entries).toEqual([sending])
+		storedEntries.delete(queued.id)
 		await vi.advanceTimersByTimeAsync(1_000)
 
 		expect(getOutboxSnapshot().entries).toEqual([])
