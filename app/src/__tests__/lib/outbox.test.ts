@@ -298,6 +298,32 @@ describe('outbox sync engine', () => {
 		expect(postsApi.createPost).toHaveBeenCalledTimes(1)
 	})
 
+	it('honors local mode selected in another tab before an automatic flush', async () => {
+		await enqueueText({ text: 'Keep cross-tab local' })
+		localStorage.setItem('post-sync-mode', 'local')
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(postsApi.createPost).not.toHaveBeenCalled()
+		expect(getOutboxSnapshot().syncMode).toBe('local')
+		expect(getOutboxSnapshot().entries).toHaveLength(1)
+	})
+
+	it('honors auto mode selected in another tab', async () => {
+		setSyncMode('local')
+		await enqueueText({ text: 'Resume cross-tab auto' })
+		localStorage.setItem('post-sync-mode', 'auto')
+		vi.mocked(postsApi.createPost).mockResolvedValueOnce(makePost({ id: 114 }))
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(postsApi.createPost).toHaveBeenCalledOnce()
+		expect(getOutboxSnapshot().syncMode).toBe('auto')
+		expect(getOutboxSnapshot().entries).toEqual([])
+	})
+
 	it('manually posts all queued entries while local', async () => {
 		setSyncMode('local')
 		await enqueueText({ text: 'First local post' })
@@ -342,6 +368,31 @@ describe('outbox sync engine', () => {
 
 		expect(postsApi.createPost).toHaveBeenCalledTimes(2)
 		expect(getOutboxSnapshot().entries).toEqual([])
+	})
+
+	it('stops a batch when another tab switches to local mode', async () => {
+		await enqueueText({ text: 'First cross-tab post' })
+		await enqueueText({ text: 'Second cross-tab post' })
+		let releaseFirst!: (post: Awaited<ReturnType<typeof postsApi.createPost>>) => void
+		vi.mocked(postsApi.createPost).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					releaseFirst = resolve
+				})
+		)
+		setOnline(true)
+
+		const automaticPass = flushOutbox()
+		await vi.waitFor(() => expect(postsApi.createPost).toHaveBeenCalledOnce())
+		localStorage.setItem('post-sync-mode', 'local')
+		releaseFirst(makePost({ id: 115 }))
+		await automaticPass
+
+		expect(postsApi.createPost).toHaveBeenCalledOnce()
+		expect(getOutboxSnapshot().syncMode).toBe('local')
+		expect(getOutboxSnapshot().entries.map((entry) => entry.text)).toEqual([
+			'Second cross-tab post',
+		])
 	})
 
 	it('manually posts one queued entry while local', async () => {

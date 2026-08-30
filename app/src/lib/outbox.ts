@@ -60,6 +60,16 @@ const getInitialSyncMode = (): SyncMode => {
 	}
 }
 
+const getPersistedSyncMode = (): SyncMode | null => {
+	if (typeof localStorage === 'undefined') return null
+	try {
+		const stored = localStorage.getItem('post-sync-mode')
+		return stored === 'auto' || stored === 'local' ? stored : null
+	} catch {
+		return null
+	}
+}
+
 export const resolveInitialSyncMode = (): SyncMode => {
 	const postSyncDefault = getSettings().postSyncDefault
 	return postSyncDefault === 'remember' ? getInitialSyncMode() : postSyncDefault
@@ -88,6 +98,15 @@ const publishSnapshot = (next: OutboxSnapshot) => {
 
 const setEntries = (entries: OutboxEntry[]) => {
 	publishSnapshot({ ...snapshot, entries: [...entries].sort((a, b) => a.createdAt - b.createdAt) })
+}
+
+const refreshSyncModeFromStorage = () => {
+	const persisted = getPersistedSyncMode()
+	if (persisted && persisted !== snapshot.syncMode) {
+		publishSnapshot({ ...snapshot, syncMode: persisted })
+		if (persisted === 'local') resetBackoff()
+	}
+	return snapshot.syncMode
 }
 
 const isOnline = () => typeof navigator === 'undefined' || navigator.onLine
@@ -394,6 +413,7 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 
 const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 	if (ids.length === 0 || !isOnline()) return
+	if (!options?.manual && refreshSyncModeFromStorage() !== 'auto') return
 	if (flushLocked || snapshot.flushing) {
 		pendingFlush ??= { ids: new Set(), manual: false }
 		for (const id of ids) pendingFlush.ids.add(id)
@@ -411,7 +431,7 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 		for (const id of ids) {
 			// The user can flip auto-sync off while a pass is mid-flight; an automatic
 			// pass stops at the next entry boundary (a manual "Post all" keeps going).
-			if (!options?.manual && snapshot.syncMode !== 'auto') break
+			if (!options?.manual && refreshSyncModeFromStorage() !== 'auto') break
 			let latestAuth: OutboxAuthState | null
 			try {
 				latestAuth = await getKnownAuthState()
@@ -518,7 +538,7 @@ export const enqueuePost = async (input: EnqueueInput & { id?: string }): Promis
 }
 
 export const flushOutbox = async (options?: { manual?: boolean }) => {
-	if (snapshot.syncMode !== 'auto' && !options?.manual) return
+	if (!options?.manual && refreshSyncModeFromStorage() !== 'auto') return
 	const ids = snapshot.entries
 		.filter((entry) => entry.status === 'queued')
 		.sort((a, b) => a.createdAt - b.createdAt)
