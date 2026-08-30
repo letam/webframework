@@ -85,7 +85,15 @@ const updateEntry = async (id: string, changes: Partial<OutboxEntry>) => {
 	if (!current) return null
 	const updated = { ...current, ...changes }
 	setEntries(snapshot.entries.map((entry) => (entry.id === id ? updated : entry)))
-	await saveOutboxEntry(updated)
+	if (!(await saveOutboxEntry(updated))) {
+		// Keep the reactive snapshot aligned with IndexedDB. Only roll back our own
+		// optimistic update; a newer mutation may have replaced it while the write
+		// was pending.
+		if (snapshot.entries.find((entry) => entry.id === id) === updated) {
+			setEntries(snapshot.entries.map((entry) => (entry.id === id ? current : entry)))
+		}
+		return null
+	}
 	return updated
 }
 
@@ -198,7 +206,11 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 	let entry = snapshot.entries.find((candidate) => candidate.id === id)
 	if (!entry || !auth.isAuthResolved || !isOutboxEntryVisible(entry, auth)) return 'skipped'
 
-	entry = (await updateEntry(id, { status: 'sending', lastError: null })) ?? entry
+	const sendingEntry = await updateEntry(id, { status: 'sending', lastError: null })
+	// Do not publish unless the durable record also says this send is in flight.
+	// Otherwise a reload could restore the old queued record and send it again.
+	if (!sendingEntry) return 'failed'
+	entry = sendingEntry
 	let retriedCsrf = false
 
 	while (true) {
@@ -391,7 +403,7 @@ export const retryEntry = async (id: string) => {
 	resetBackoff()
 	const entry = snapshot.entries.find((candidate) => candidate.id === id)
 	if (!entry || entry.status !== 'failed') return
-	await updateEntry(id, { status: 'queued', attempts: 0, lastError: null })
+	if (!(await updateEntry(id, { status: 'queued', attempts: 0, lastError: null }))) return
 	await runFlush([id], { manual: true })
 }
 

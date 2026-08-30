@@ -115,4 +115,44 @@ describe('useAuth', () => {
 			userId: 7,
 		})
 	})
+
+	it('discards an older auth response that finishes after a newer check', async () => {
+		let resolveOlder!: (response: ReturnType<typeof statusOk>) => void
+		let resolveNewer!: (response: ReturnType<typeof statusOk>) => void
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(statusOk({ user_id: 1, username: 'initial' }))
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveOlder = resolve
+					})
+			)
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveNewer = resolve
+					})
+			)
+		vi.stubGlobal('fetch', fetchMock)
+
+		const { result } = renderHook(() => useAuth(), { wrapper })
+		await waitFor(() => expect(result.current.userId).toBe(1))
+
+		let olderCheck!: Promise<boolean>
+		let newerCheck!: Promise<boolean>
+		act(() => {
+			olderCheck = result.current.refreshAuthStatus()
+			newerCheck = result.current.refreshAuthStatus()
+		})
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
+
+		resolveNewer(statusOk({ user_id: 2, username: 'newer' }))
+		await expect(newerCheck).resolves.toBe(true)
+		resolveOlder(statusOk({ user_id: 1, username: 'older' }))
+		await expect(olderCheck).resolves.toBe(false)
+
+		await waitFor(() => expect(result.current.userId).toBe(2))
+		expect(result.current.getAuthSnapshot()).toMatchObject({ userId: 2, username: 'newer' })
+	})
 })

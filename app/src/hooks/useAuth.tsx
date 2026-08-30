@@ -41,11 +41,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 	const queryClient = useQueryClient()
 	const hasCheckedAuth = useRef(false)
 	const [authState, setAuthState] = useState<AuthState>(INITIAL_AUTH_STATE)
+	const latestAuthRequestId = useRef(0)
 	// Written before setAuthState commits, so callers that await refreshAuthStatus
 	// (the outbox flush) can read the refreshed identity immediately.
 	const latestAuthRef = useRef<AuthState>(INITIAL_AUTH_STATE)
 
 	const checkAuthStatus = useCallback(async (): Promise<boolean> => {
+		const requestId = ++latestAuthRequestId.current
 		try {
 			const response = await fetch(`${SERVER_HOST}/auth/status/`)
 			if (!response.ok) {
@@ -54,6 +56,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 			}
 
 			const data = await response.json()
+			// A later check may have started after this request captured an older
+			// session cookie. Never let that older answer replace the latest identity,
+			// and tell awaiting senders not to proceed with their stale check.
+			if (requestId !== latestAuthRequestId.current) return false
 			const newAuthState: AuthState = {
 				isAuthenticated: data.is_authenticated,
 				isAuthLoading: false,
@@ -86,12 +92,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 		} finally {
 			// End the UI loading state after a failed attempt, but keep
 			// isAuthResolved false: null is still a default, not an auth answer.
-			setAuthState((previous) => {
-				if (!previous.isAuthLoading) return previous
-				const next = { ...previous, isAuthLoading: false }
-				latestAuthRef.current = next
-				return next
-			})
+			if (requestId === latestAuthRequestId.current) {
+				setAuthState((previous) => {
+					if (!previous.isAuthLoading) return previous
+					const next = { ...previous, isAuthLoading: false }
+					latestAuthRef.current = next
+					return next
+				})
+			}
 		}
 	}, [queryClient])
 

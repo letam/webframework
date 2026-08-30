@@ -381,6 +381,19 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
+	it('rolls back a sending transition and does not post when persistence fails', async () => {
+		await enqueueText({ text: 'Keep the durable queue authoritative' })
+		const queued = getOutboxSnapshot().entries[0]
+		vi.mocked(outboxDb.saveOutboxEntry).mockResolvedValueOnce(false)
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(postsApi.createPost).not.toHaveBeenCalled()
+		expect(getOutboxSnapshot().entries).toEqual([queued])
+		expect(storedEntries.get(queued.id)).toEqual(queued)
+	})
+
 	it('returns a network failure to queued and aborts the FIFO pass', async () => {
 		await enqueueText({ text: 'First' })
 		await enqueueText({ text: 'Second' })
