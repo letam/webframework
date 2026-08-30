@@ -38,6 +38,14 @@ vi.mock('@/lib/utils/outboxDb', () => ({
 		storedEntries.delete(id)
 		return true
 	}),
+	claimOutboxEntryForSend: vi.fn(async (id: string) => {
+		const entry = storedEntries.get(id)
+		if (!entry) return { status: 'missing' as const }
+		if (entry.status !== 'queued') return { status: 'not-queued' as const, entry }
+		const claimed = { ...entry, status: 'sending' as const, lastError: null }
+		storedEntries.set(id, claimed)
+		return { status: 'claimed' as const, entry: claimed }
+	}),
 }))
 
 vi.mock('@/lib/api/posts', () => ({
@@ -384,7 +392,9 @@ describe('outbox sync engine', () => {
 	it('rolls back a sending transition and does not post when persistence fails', async () => {
 		await enqueueText({ text: 'Keep the durable queue authoritative' })
 		const queued = getOutboxSnapshot().entries[0]
-		vi.mocked(outboxDb.saveOutboxEntry).mockResolvedValueOnce(false)
+		vi.mocked(outboxDb.claimOutboxEntryForSend).mockResolvedValueOnce({
+			status: 'unavailable',
+		})
 		setOnline(true)
 
 		await flushOutbox()
@@ -392,6 +402,18 @@ describe('outbox sync engine', () => {
 		expect(postsApi.createPost).not.toHaveBeenCalled()
 		expect(getOutboxSnapshot().entries).toEqual([queued])
 		expect(storedEntries.get(queued.id)).toEqual(queued)
+	})
+
+	it('does not post an entry removed from durable storage by another tab', async () => {
+		await enqueueText({ text: 'Removed elsewhere' })
+		const entryId = getOutboxSnapshot().entries[0].id
+		storedEntries.delete(entryId)
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(postsApi.createPost).not.toHaveBeenCalled()
+		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
 	it('returns a network failure to queued and aborts the FIFO pass', async () => {
@@ -554,6 +576,29 @@ describe('outbox sync engine', () => {
 		expect(postsApi.createPost).not.toHaveBeenCalled()
 		expect(getOutboxSnapshot().entries).toEqual([
 			expect.objectContaining({ author: 1, text: 'User one private queue', status: 'queued' }),
+		])
+	})
+
+	it('revalidates identity before every entry in a multi-post pass', async () => {
+		await enqueueText({ author: 1, text: 'First user-one post' })
+		await enqueueText({ author: 1, text: 'Second user-one post' })
+		const refreshAuthStatus = vi
+			.fn()
+			.mockResolvedValueOnce(true)
+			.mockImplementationOnce(async () => {
+				auth = { isAuthenticated: true, userId: 2, isAuthResolved: true }
+				return true
+			})
+		configureOutbox({ queryClient, getAuthState: () => auth, refreshAuthStatus })
+		vi.mocked(postsApi.createPost).mockResolvedValueOnce(makePost({ id: 110 }))
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(refreshAuthStatus).toHaveBeenCalledTimes(2)
+		expect(postsApi.createPost).toHaveBeenCalledOnce()
+		expect(getOutboxSnapshot().entries).toEqual([
+			expect.objectContaining({ author: 1, text: 'Second user-one post', status: 'queued' }),
 		])
 	})
 

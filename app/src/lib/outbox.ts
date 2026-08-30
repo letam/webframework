@@ -6,6 +6,7 @@ import { applyCreatedPostToCaches, applyUpdatedPostToCaches } from '@/hooks/useP
 import { clearCsrfTokenCache } from '@/lib/utils/fetch'
 import { getSettings } from '@/lib/utils/settings'
 import {
+	claimOutboxEntryForSend,
 	deleteOutboxEntry,
 	loadOutboxEntries,
 	saveOutboxEntry,
@@ -206,11 +207,25 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 	let entry = snapshot.entries.find((candidate) => candidate.id === id)
 	if (!entry || !auth.isAuthResolved || !isOutboxEntryVisible(entry, auth)) return 'skipped'
 
-	const sendingEntry = await updateEntry(id, { status: 'sending', lastError: null })
-	// Do not publish unless the durable record also says this send is in flight.
-	// Otherwise a reload could restore the old queued record and send it again.
-	if (!sendingEntry) return 'failed'
-	entry = sendingEntry
+	// Claim and verify the durable row in one transaction. This prevents a stale
+	// snapshot in another tab from recreating and publishing a post that the user
+	// already removed there.
+	const claim = await claimOutboxEntryForSend(id)
+	if (claim.status === 'unavailable') return 'failed'
+	if (claim.status === 'missing') {
+		setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
+		return 'skipped'
+	}
+	if (claim.status === 'not-queued') {
+		setEntries(snapshot.entries.map((candidate) => (candidate.id === id ? claim.entry : candidate)))
+		return 'skipped'
+	}
+	entry = claim.entry
+	setEntries(snapshot.entries.map((candidate) => (candidate.id === id ? entry : candidate)))
+	if (!isOutboxEntryVisible(entry, auth)) {
+		await updateEntry(id, { status: 'queued' })
+		return 'skipped'
+	}
 	let retriedCsrf = false
 
 	while (true) {
@@ -274,37 +289,28 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 		return
 	}
 	flushLocked = true
-	let auth: OutboxAuthState | null
-	try {
-		auth = await getKnownAuthState()
-	} catch {
-		auth = null
-	}
-	if (!auth) {
-		flushLocked = false
-		// Ids latched during the failed auth check would otherwise replay from some
-		// unrelated later pass — in local mode, long after the click they came from.
-		// They'd fail this same auth check anyway; in auto mode the backoff pass
-		// below covers the whole queue.
-		pendingFlush = null
-		if (options?.manual) {
-			toast.error("Couldn't reach the server — your posts are still on this device.")
-		}
-		scheduleRetry()
-		return
-	}
-
 	publishSnapshot({ ...snapshot, flushing: true })
 	let synced = 0
 	let failed = 0
 	let shouldRetry = false
+	let authFailed = false
 
 	try {
 		for (const id of ids) {
 			// The user can flip auto-sync off while a pass is mid-flight; an automatic
 			// pass stops at the next entry boundary (a manual "Post all" keeps going).
 			if (!options?.manual && snapshot.syncMode !== 'auto') break
-			const latestAuth = dependencies?.getAuthState() ?? auth
+			let latestAuth: OutboxAuthState | null
+			try {
+				latestAuth = await getKnownAuthState()
+			} catch {
+				latestAuth = null
+			}
+			if (!latestAuth) {
+				authFailed = true
+				shouldRetry = true
+				break
+			}
 			const result = await syncEntry(id, latestAuth)
 			if (result === 'synced') synced += 1
 			if (result === 'failed') failed += 1
@@ -317,6 +323,14 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 	} finally {
 		publishSnapshot({ ...snapshot, flushing: false })
 		flushLocked = false
+	}
+	if (authFailed) {
+		// Ids latched during a failed auth check would otherwise replay from an
+		// unrelated later pass. Auto mode's backoff below covers the whole queue.
+		pendingFlush = null
+		if (options?.manual) {
+			toast.error("Couldn't reach the server — your posts are still on this device.")
+		}
 	}
 
 	if (synced === 1) toast('Synced 1 queued post.')

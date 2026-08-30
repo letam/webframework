@@ -3,6 +3,7 @@ import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
 import {
+	claimOutboxEntryForSend,
 	deleteOutboxEntry,
 	getOutboxEntry,
 	loadOutboxEntries,
@@ -71,6 +72,23 @@ describe('outbox storage', () => {
 		// contents; this unit test deliberately pins only the Blob's outbox metadata.
 	})
 
+	it('atomically claims only an existing queued entry for sending', async () => {
+		const entry = makeEntry()
+		await saveOutboxEntry(entry)
+
+		await expect(claimOutboxEntryForSend(entry.id)).resolves.toEqual({
+			status: 'claimed',
+			entry: { ...entry, status: 'sending' },
+		})
+		await expect(claimOutboxEntryForSend(entry.id)).resolves.toEqual({
+			status: 'not-queued',
+			entry: { ...entry, status: 'sending' },
+		})
+		await expect(claimOutboxEntryForSend('removed-in-another-tab')).resolves.toEqual({
+			status: 'missing',
+		})
+	})
+
 	it('recovers sending entries to queued on load', async () => {
 		const entry = makeEntry({ status: 'sending' })
 		await saveOutboxEntry(entry)
@@ -105,6 +123,7 @@ describe('outbox storage', () => {
 		globalThis.indexedDB = undefined as unknown as IDBFactory
 
 		expect(await saveOutboxEntry(makeEntry())).toBe(false)
+		expect(await claimOutboxEntryForSend('missing')).toEqual({ status: 'unavailable' })
 		expect(await loadOutboxEntries()).toEqual([])
 	})
 })

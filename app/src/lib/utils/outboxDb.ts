@@ -23,6 +23,12 @@ export interface OutboxEntry {
 	mediaName: string | null
 }
 
+export type ClaimOutboxEntryResult =
+	| { status: 'claimed'; entry: OutboxEntry }
+	| { status: 'missing' }
+	| { status: 'not-queued'; entry: OutboxEntry }
+	| { status: 'unavailable' }
+
 const openDb = (): Promise<IDBDatabase | null> =>
 	new Promise((resolve) => {
 		if (typeof indexedDB === 'undefined') {
@@ -101,6 +107,49 @@ export const saveOutboxEntry = async (entry: OutboxEntry): Promise<boolean> =>
 
 export const getOutboxEntry = async (id: string): Promise<OutboxEntry | null> =>
 	(await runRequest<OutboxEntry | undefined>('readonly', (store) => store.get(id))) ?? null
+
+export const claimOutboxEntryForSend = async (id: string): Promise<ClaimOutboxEntryResult> => {
+	const db = await openDb()
+	if (!db) return { status: 'unavailable' }
+
+	try {
+		return await new Promise<ClaimOutboxEntryResult>((resolve) => {
+			let transaction: IDBTransaction
+			let result: ClaimOutboxEntryResult = { status: 'unavailable' }
+			try {
+				transaction = db.transaction(STORE, 'readwrite')
+				const store = transaction.objectStore(STORE)
+				const request = store.get(id)
+				request.onsuccess = () => {
+					const entry = request.result as OutboxEntry | undefined
+					if (!entry) {
+						result = { status: 'missing' }
+						return
+					}
+					if (entry.status !== 'queued') {
+						result = { status: 'not-queued', entry }
+						return
+					}
+					const claimed = { ...entry, status: 'sending' as const, lastError: null }
+					const putRequest = store.put(claimed)
+					putRequest.onsuccess = () => {
+						result = { status: 'claimed', entry: claimed }
+					}
+				}
+				request.onerror = () => transaction.abort()
+			} catch {
+				resolve({ status: 'unavailable' })
+				return
+			}
+
+			transaction.oncomplete = () => resolve(result)
+			transaction.onerror = () => resolve({ status: 'unavailable' })
+			transaction.onabort = () => resolve({ status: 'unavailable' })
+		})
+	} finally {
+		db.close()
+	}
+}
 
 export const deleteOutboxEntry = async (id: string): Promise<boolean> =>
 	(await runRequest<undefined>('readwrite', (store) => store.delete(id))) !== null
