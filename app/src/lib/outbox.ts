@@ -65,8 +65,6 @@ let dependencies: OutboxDependencies | null = null
 let retryTimer: number | undefined
 let retryIndex = 0
 let flushLocked = false
-// Reconnects must re-verify identity before sending; stays set until a refresh succeeds.
-let authRefreshNeeded = false
 // Flush requests that arrive while a pass holds the lock; replayed when the pass ends.
 // Manual intent is sticky because any explicit request must remain explicit when
 // several overlapping requests collapse into one drain pass.
@@ -129,11 +127,12 @@ export const isOutboxEntryVisible = (
 
 const getKnownAuthState = async () => {
 	if (!dependencies) return null
-	if (authRefreshNeeded || !dependencies.getAuthState().isAuthResolved) {
-		if (await dependencies.refreshAuthStatus()) authRefreshNeeded = false
-	}
+	// Cookies can change in another tab without updating this tab's React state.
+	// Revalidate at every actual send boundary so an entry selected for one author
+	// can never be published under a different current server session.
+	if (!(await dependencies.refreshAuthStatus())) return null
 	const auth = dependencies.getAuthState()
-	return !authRefreshNeeded && auth.isAuthResolved ? auth : null
+	return auth.isAuthResolved ? auth : null
 }
 
 const buildCreateRequest = (entry: OutboxEntry) => ({
@@ -420,7 +419,6 @@ export const removeEntry = async (id: string): Promise<RemoveEntryResult> => {
 export const handleOutboxOnline = async () => {
 	resetBackoff()
 	if (!dependencies) return
-	authRefreshNeeded = true
 	await flushOutbox()
 }
 
@@ -429,7 +427,6 @@ export const __resetOutboxForTests = () => {
 	snapshot = { entries: [], flushing: false, syncMode: 'auto' }
 	dependencies = null
 	flushLocked = false
-	authRefreshNeeded = false
 	pendingFlush = null
 	listeners.clear()
 }

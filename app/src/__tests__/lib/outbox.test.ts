@@ -526,6 +526,24 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
+	it('revalidates a resolved session before an automatic flush', async () => {
+		await enqueueText({ author: 1, text: 'User one private queue' })
+		const refreshAuthStatus = vi.fn(async () => {
+			auth = { isAuthenticated: true, userId: 2, isAuthResolved: true }
+			return true
+		})
+		configureOutbox({ queryClient, getAuthState: () => auth, refreshAuthStatus })
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(refreshAuthStatus).toHaveBeenCalledOnce()
+		expect(postsApi.createPost).not.toHaveBeenCalled()
+		expect(getOutboxSnapshot().entries).toEqual([
+			expect.objectContaining({ author: 1, text: 'User one private queue', status: 'queued' }),
+		])
+	})
+
 	it('resets a failed entry before retrying it manually', async () => {
 		await enqueueText()
 		vi.mocked(postsApi.createPost)
