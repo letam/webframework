@@ -285,7 +285,7 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 	// snapshot in another tab from recreating and publishing a post that the user
 	// already removed there.
 	const claim = await claimOutboxEntryForSend(id, outboxClaimOwner)
-	if (claim.status === 'unavailable') return 'failed'
+	if (claim.status === 'unavailable') return 'retryable'
 	if (claim.status === 'missing') {
 		setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
 		return 'skipped'

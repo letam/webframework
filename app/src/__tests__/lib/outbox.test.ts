@@ -492,7 +492,8 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
-	it('rolls back a sending transition and does not post when persistence fails', async () => {
+	it('retries without posting when the durable send claim initially fails', async () => {
+		vi.useFakeTimers()
 		await enqueueText({ text: 'Keep the durable queue authoritative' })
 		const queued = getOutboxSnapshot().entries[0]
 		vi.mocked(outboxDb.claimOutboxEntryForSend).mockResolvedValueOnce({
@@ -505,6 +506,12 @@ describe('outbox sync engine', () => {
 		expect(postsApi.createPost).not.toHaveBeenCalled()
 		expect(getOutboxSnapshot().entries).toEqual([queued])
 		expect(storedEntries.get(queued.id)).toEqual(queued)
+
+		vi.mocked(postsApi.createPost).mockResolvedValueOnce(makePost({ id: 113 }))
+		await vi.advanceTimersByTimeAsync(15_000)
+
+		expect(postsApi.createPost).toHaveBeenCalledOnce()
+		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
 	it('recovers to an actionable failure when a post status write fails', async () => {
