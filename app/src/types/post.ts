@@ -95,6 +95,7 @@ export interface LikeResponse {
 export interface CreatePostRequest {
 	text?: string
 	client_uuid?: string
+	expected_author?: number | 'anon'
 	media_type?: 'audio' | 'video' | 'image'
 	media?: File
 	visibility?: PostVisibility

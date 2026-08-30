@@ -141,6 +141,7 @@ describe('posts API', () => {
 				visibility: 'unlisted',
 				is_draft: true,
 				client_uuid: '2db60ca2-7637-46f5-a8ea-44ec850c004b',
+				expected_author: 7,
 			})
 
 			expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
@@ -151,6 +152,7 @@ describe('posts API', () => {
 			])
 			expect(getFetchOptions).toHaveBeenNthCalledWith(1, 'POST', {
 				client_uuid: '2db60ca2-7637-46f5-a8ea-44ec850c004b',
+				expected_author: 7,
 			})
 			expect(getFetchOptions).toHaveBeenNthCalledWith(2, 'POST', {
 				file_name: 'clip.webm',
@@ -165,6 +167,7 @@ describe('posts API', () => {
 			expect(formData.get('visibility')).toBe('unlisted')
 			expect(formData.get('is_draft')).toBe('true')
 			expect(formData.get('client_uuid')).toBe('2db60ca2-7637-46f5-a8ea-44ec850c004b')
+			expect(formData.get('expected_author')).toBe('7')
 			expect(result.modified).toBeInstanceOf(Date)
 			expect(result.url).toBe(`${window.location.origin}/p/9/`)
 		})

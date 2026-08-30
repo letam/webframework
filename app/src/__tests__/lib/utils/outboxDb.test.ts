@@ -5,6 +5,7 @@ import { IDBFactory } from 'fake-indexeddb'
 import {
 	claimOutboxEntryForSend,
 	deleteOutboxEntry,
+	deleteOwnedOutboxEntryClaim,
 	getOutboxEntry,
 	inspectOutboxEntry,
 	loadOutboxEntries,
@@ -13,6 +14,7 @@ import {
 	renewOutboxEntryClaim,
 	resetFailedOutboxEntryForRetry,
 	saveOutboxEntry,
+	updateOwnedOutboxEntryClaim,
 	type OutboxEntry,
 } from '@/lib/utils/outboxDb'
 
@@ -120,6 +122,42 @@ describe('outbox storage', () => {
 		expect((await getOutboxEntry(entry.id))?.claimExpiresAt).toBe(
 			FIXED_NOW + 10_000 + OUTBOX_CLAIM_LEASE_MS
 		)
+	})
+
+	it('allows only the current owner to settle a send claim', async () => {
+		const entry = makeEntry()
+		await saveOutboxEntry(entry)
+		await claimOutboxEntryForSend(entry.id, 'tab-a')
+
+		await expect(
+			updateOwnedOutboxEntryClaim(entry.id, 'tab-b', { status: 'failed' })
+		).resolves.toEqual({
+			status: 'lost',
+			entry: expect.objectContaining({ status: 'sending', claimOwner: 'tab-a' }),
+		})
+		await expect(deleteOwnedOutboxEntryClaim(entry.id, 'tab-b')).resolves.toEqual({
+			status: 'lost',
+			entry: expect.objectContaining({ status: 'sending', claimOwner: 'tab-a' }),
+		})
+		await expect(
+			updateOwnedOutboxEntryClaim(entry.id, 'tab-a', {
+				status: 'queued',
+				lastError: null,
+			})
+		).resolves.toEqual({
+			status: 'updated',
+			entry: expect.objectContaining({
+				status: 'queued',
+				claimOwner: null,
+				claimExpiresAt: null,
+			}),
+		})
+
+		await claimOutboxEntryForSend(entry.id, 'tab-a')
+		await expect(deleteOwnedOutboxEntryClaim(entry.id, 'tab-a')).resolves.toEqual({
+			status: 'removed',
+		})
+		expect(await getOutboxEntry(entry.id)).toBeNull()
 	})
 
 	it('atomically refuses to remove a sending entry', async () => {
@@ -234,6 +272,12 @@ describe('outbox storage', () => {
 		})
 		expect(await removeOutboxEntryIfIdle('missing')).toEqual({ status: 'unavailable' })
 		expect(await resetFailedOutboxEntryForRetry('missing')).toEqual({
+			status: 'unavailable',
+		})
+		expect(await updateOwnedOutboxEntryClaim('missing', 'tab-a', {})).toEqual({
+			status: 'unavailable',
+		})
+		expect(await deleteOwnedOutboxEntryClaim('missing', 'tab-a')).toEqual({
 			status: 'unavailable',
 		})
 		expect(await loadOutboxEntries()).toEqual([])

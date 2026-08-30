@@ -36,18 +36,47 @@ vi.mock('@/lib/utils/outboxDb', () => ({
 		storedEntries.set(entry.id, entry)
 		return true
 	}),
-	deleteOutboxEntry: vi.fn(async (id: string) => {
-		storedEntries.delete(id)
-		return true
-	}),
-	claimOutboxEntryForSend: vi.fn(async (id: string) => {
+	claimOutboxEntryForSend: vi.fn(async (id: string, owner: string) => {
 		const entry = storedEntries.get(id)
 		if (!entry) return { status: 'missing' as const }
 		if (entry.status !== 'queued') return { status: 'not-queued' as const, entry }
-		const claimed = { ...entry, status: 'sending' as const, lastError: null }
+		const claimed = {
+			...entry,
+			status: 'sending' as const,
+			lastError: null,
+			claimOwner: owner,
+			claimExpiresAt: Date.now() + 300_000,
+		}
 		storedEntries.set(id, claimed)
 		return { status: 'claimed' as const, entry: claimed }
 	}),
+	deleteOwnedOutboxEntryClaim: vi.fn(async (id: string, owner: string) => {
+		const entry = storedEntries.get(id)
+		if (!entry) return { status: 'missing' as const }
+		if (entry.status !== 'sending' || entry.claimOwner !== owner) {
+			return { status: 'lost' as const, entry }
+		}
+		storedEntries.delete(id)
+		return { status: 'removed' as const }
+	}),
+	updateOwnedOutboxEntryClaim: vi.fn(
+		async (id: string, owner: string, changes: Partial<OutboxEntry>) => {
+			const entry = storedEntries.get(id)
+			if (!entry) return { status: 'missing' as const }
+			if (entry.status !== 'sending' || entry.claimOwner !== owner) {
+				return { status: 'lost' as const, entry }
+			}
+			const updated = {
+				...entry,
+				...changes,
+				...(changes.status && changes.status !== 'sending'
+					? { claimOwner: null, claimExpiresAt: null }
+					: {}),
+			}
+			storedEntries.set(id, updated)
+			return { status: 'updated' as const, entry: updated }
+		}
+	),
 	inspectOutboxEntry: vi.fn(async (id: string) => {
 		const entry = storedEntries.get(id)
 		return entry ? { status: 'found' as const, entry } : { status: 'missing' as const }
@@ -381,10 +410,53 @@ describe('outbox sync engine', () => {
 		expect(postsApi.createPost).toHaveBeenCalledWith(
 			expect.objectContaining({
 				client_uuid: entry.id,
+				expected_author: 1,
 				is_draft: false,
 				link_previews_enabled: true,
 			})
 		)
+	})
+
+	it('does not delete or overwrite a claim acquired by another tab mid-request', async () => {
+		await enqueueText({ text: 'Original owner request' })
+		const entryId = getOutboxSnapshot().entries[0].id
+		let newerClaim!: OutboxEntry
+		vi.mocked(postsApi.createPost).mockImplementationOnce(async () => {
+			newerClaim = {
+				...(storedEntries.get(entryId) as OutboxEntry),
+				claimOwner: 'newer-tab',
+				claimExpiresAt: Date.now() + 300_000,
+			}
+			storedEntries.set(entryId, newerClaim)
+			return makePost({ id: 112 })
+		})
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(storedEntries.get(entryId)).toEqual(newerClaim)
+		expect(getOutboxSnapshot().entries).toEqual([newerClaim])
+	})
+
+	it('does not write a failure over a claim acquired by another tab', async () => {
+		await enqueueText({ text: 'Original owner failure' })
+		const entryId = getOutboxSnapshot().entries[0].id
+		let newerClaim!: OutboxEntry
+		vi.mocked(postsApi.createPost).mockImplementationOnce(async () => {
+			newerClaim = {
+				...(storedEntries.get(entryId) as OutboxEntry),
+				claimOwner: 'newer-tab',
+				claimExpiresAt: Date.now() + 300_000,
+			}
+			storedEntries.set(entryId, newerClaim)
+			throw new ApiError('rejected', 400)
+		})
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(storedEntries.get(entryId)).toEqual(newerClaim)
+		expect(getOutboxSnapshot().entries).toEqual([newerClaim])
 	})
 
 	it('keeps a published entry cleanup-only when its storage deletion fails', async () => {
@@ -392,7 +464,9 @@ describe('outbox sync engine', () => {
 		vi.mocked(postsApi.createPost).mockResolvedValueOnce(created)
 		await enqueueText({ text: 'Published words' })
 		const [entry] = getOutboxSnapshot().entries
-		vi.mocked(outboxDb.deleteOutboxEntry).mockResolvedValueOnce(false)
+		vi.mocked(outboxDb.deleteOwnedOutboxEntryClaim).mockResolvedValueOnce({
+			status: 'unavailable',
+		})
 		setOnline(true)
 
 		await flushOutbox()
@@ -437,7 +511,9 @@ describe('outbox sync engine', () => {
 		await enqueueText({ text: 'Status write can fail' })
 		const entryId = getOutboxSnapshot().entries[0].id
 		vi.mocked(postsApi.createPost).mockRejectedValueOnce(new ApiError('rejected', 400))
-		vi.mocked(outboxDb.saveOutboxEntry).mockResolvedValueOnce(false)
+		vi.mocked(outboxDb.updateOwnedOutboxEntryClaim).mockResolvedValueOnce({
+			status: 'unavailable',
+		})
 		setOnline(true)
 
 		await flushOutbox()

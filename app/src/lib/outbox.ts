@@ -7,7 +7,7 @@ import { clearCsrfTokenCache } from '@/lib/utils/fetch'
 import { getSettings } from '@/lib/utils/settings'
 import {
 	claimOutboxEntryForSend,
-	deleteOutboxEntry,
+	deleteOwnedOutboxEntryClaim,
 	inspectOutboxEntry,
 	loadOutboxEntries,
 	OUTBOX_CLAIM_LEASE_MS,
@@ -15,6 +15,8 @@ import {
 	renewOutboxEntryClaim,
 	resetFailedOutboxEntryForRetry,
 	saveOutboxEntry,
+	updateOwnedOutboxEntryClaim,
+	type OwnedOutboxClaimResult,
 	type OutboxEntry,
 } from '@/lib/utils/outboxDb'
 
@@ -86,43 +88,6 @@ const publishSnapshot = (next: OutboxSnapshot) => {
 
 const setEntries = (entries: OutboxEntry[]) => {
 	publishSnapshot({ ...snapshot, entries: [...entries].sort((a, b) => a.createdAt - b.createdAt) })
-}
-
-const updateEntry = async (
-	id: string,
-	changes: Partial<OutboxEntry>,
-	options?: { recoverFailedSend?: boolean }
-) => {
-	const current = snapshot.entries.find((entry) => entry.id === id)
-	if (!current) return null
-	const updated = {
-		...current,
-		...changes,
-		...(changes.status && changes.status !== 'sending'
-			? { claimOwner: null, claimExpiresAt: null }
-			: {}),
-	}
-	setEntries(snapshot.entries.map((entry) => (entry.id === id ? updated : entry)))
-	if (!(await saveOutboxEntry(updated))) {
-		// Keep the reactive snapshot aligned with IndexedDB. Only roll back our own
-		// optimistic update; a newer mutation may have replaced it while the write
-		// was pending.
-		if (snapshot.entries.find((entry) => entry.id === id) === updated) {
-			const fallback =
-				options?.recoverFailedSend && current.status === 'sending'
-					? {
-							...current,
-							status: 'failed' as const,
-							lastError: "Couldn't save this post's status. Try again.",
-							claimOwner: null,
-							claimExpiresAt: null,
-						}
-					: current
-			setEntries(snapshot.entries.map((entry) => (entry.id === id ? fallback : entry)))
-		}
-		return null
-	}
-	return updated
 }
 
 const isOnline = () => typeof navigator === 'undefined' || navigator.onLine
@@ -201,9 +166,10 @@ const getKnownAuthState = async () => {
 	return auth.isAuthResolved ? auth : null
 }
 
-const buildCreateRequest = (entry: OutboxEntry) => ({
+const buildCreateRequest = (entry: OutboxEntry, auth: OutboxAuthState) => ({
 	text: entry.text,
 	client_uuid: entry.id,
+	expected_author: auth.isAuthenticated ? (auth.userId as number) : ('anon' as const),
 	...(entry.visibility === null ? {} : { visibility: entry.visibility }),
 	is_draft: entry.isDraft,
 	link_previews_enabled: entry.linkPreviewsEnabled,
@@ -217,66 +183,97 @@ const buildCreateRequest = (entry: OutboxEntry) => ({
 
 type SyncResult = 'synced' | 'network' | 'failed' | 'retryable' | 'skipped'
 
+const adoptOwnedClaimResult = (
+	id: string,
+	result: OwnedOutboxClaimResult,
+	unavailableFallback?: Partial<OutboxEntry>
+) => {
+	if (result.status === 'updated') {
+		setEntries(snapshot.entries.map((entry) => (entry.id === id ? result.entry : entry)))
+		return
+	}
+	if (result.status === 'removed' || result.status === 'missing') {
+		setEntries(snapshot.entries.filter((entry) => entry.id !== id))
+		return
+	}
+	if (result.status === 'lost') {
+		setEntries(snapshot.entries.map((entry) => (entry.id === id ? result.entry : entry)))
+		if (result.entry.status === 'sending') scheduleSendingReconciliation(id)
+		return
+	}
+	if (unavailableFallback) {
+		setEntries(
+			snapshot.entries.map((entry) =>
+				entry.id === id
+					? {
+							...entry,
+							...unavailableFallback,
+							claimOwner: null,
+							claimExpiresAt: null,
+						}
+					: entry
+			)
+		)
+	}
+}
+
+const updateOwnedClaimAfterSend = async (
+	entry: OutboxEntry,
+	changes: Partial<OutboxEntry>,
+	unavailableFallback: Partial<OutboxEntry> = {
+		status: 'failed',
+		lastError: "Couldn't save this post's status. Try again.",
+	}
+) => {
+	const result = await updateOwnedOutboxEntryClaim(entry.id, outboxClaimOwner, changes)
+	adoptOwnedClaimResult(entry.id, result, unavailableFallback)
+	return result
+}
+
 const markFailure = async (entry: OutboxEntry, error: unknown): Promise<SyncResult> => {
 	if (error instanceof TypeError) {
-		await updateEntry(entry.id, { status: 'queued', lastError: null }, { recoverFailedSend: true })
+		await updateOwnedClaimAfterSend(entry, { status: 'queued', lastError: null })
 		return 'network'
 	}
 
 	if (error instanceof ApiError) {
 		if (error.status === 401) {
-			await updateEntry(
-				entry.id,
-				{
-					status: 'failed',
-					lastError: 'Sign in to post this.',
-				},
-				{ recoverFailedSend: true }
-			)
+			await updateOwnedClaimAfterSend(entry, {
+				status: 'failed',
+				lastError: 'Sign in to post this.',
+			})
 			return 'failed'
 		}
 		if (error.status === 429 || error.status >= 500) {
 			const attempts = entry.attempts + 1
 			if (attempts < 5) {
-				await updateEntry(
-					entry.id,
-					{ status: 'queued', attempts, lastError: null },
-					{ recoverFailedSend: true }
-				)
+				await updateOwnedClaimAfterSend(entry, {
+					status: 'queued',
+					attempts,
+					lastError: null,
+				})
 				return 'retryable'
 			}
-			await updateEntry(
-				entry.id,
-				{
-					status: 'failed',
-					attempts,
-					lastError: 'The server had trouble with this post. Try again in a bit.',
-				},
-				{ recoverFailedSend: true }
-			)
+			await updateOwnedClaimAfterSend(entry, {
+				status: 'failed',
+				attempts,
+				lastError: 'The server had trouble with this post. Try again in a bit.',
+			})
 			return 'failed'
 		}
 		if (error.status < 500) {
-			await updateEntry(
-				entry.id,
-				{
-					status: 'failed',
-					lastError: 'The server rejected this post.',
-				},
-				{ recoverFailedSend: true }
-			)
+			await updateOwnedClaimAfterSend(entry, {
+				status: 'failed',
+				lastError: 'The server rejected this post.',
+			})
 			return 'failed'
 		}
 	}
 
-	await updateEntry(
-		entry.id,
-		{
-			status: 'failed',
-			lastError: "Couldn't post this. Try again.",
-		},
-		{ recoverFailedSend: true }
-	)
+	await updateOwnedClaimAfterSend(entry, {
+		status: 'failed',
+		lastError: "Couldn't post this. Try again.",
+	})
 	return 'failed'
 }
 
@@ -301,7 +298,7 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 	entry = claim.entry
 	setEntries(snapshot.entries.map((candidate) => (candidate.id === id ? entry : candidate)))
 	if (!isOutboxEntryVisible(entry, auth)) {
-		await updateEntry(id, { status: 'queued' })
+		await updateOwnedClaimAfterSend(entry, { status: 'queued' })
 		return 'skipped'
 	}
 	let retriedCsrf = false
@@ -318,18 +315,25 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 	try {
 		while (true) {
 			try {
-				const post = await createPost(buildCreateRequest(entry))
-				const deleted = await deleteOutboxEntry(entry.id)
-				if (deleted) {
-					setEntries(snapshot.entries.filter((candidate) => candidate.id !== entry?.id))
-				} else {
+				const post = await createPost(buildCreateRequest(entry, auth))
+				const completion = await deleteOwnedOutboxEntryClaim(entry.id, outboxClaimOwner)
+				if (completion.status === 'unavailable') {
 					// Publication succeeded, so this entry must never return to the send queue.
 					// Keep the durable copy visible as cleanup-only instead of silently allowing
 					// it to reappear as a queued post after reload.
-					await updateEntry(entry.id, {
-						status: 'published',
-						lastError: "This post was published, but its local copy couldn't be cleared.",
-					})
+					await updateOwnedClaimAfterSend(
+						entry,
+						{
+							status: 'published',
+							lastError: "This post was published, but its local copy couldn't be cleared.",
+						},
+						{
+							status: 'published',
+							lastError: "This post was published, but its local copy couldn't be cleared.",
+						}
+					)
+				} else {
+					adoptOwnedClaimResult(entry.id, completion)
 				}
 				if (dependencies) applyCreatedPostToCaches(dependencies.queryClient, post)
 				resetBackoff()
@@ -361,25 +365,21 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 						retryAuth = null
 					}
 					if (!retryAuth) {
-						await updateEntry(entry.id, { status: 'queued' }, { recoverFailedSend: true })
+						await updateOwnedClaimAfterSend(entry, { status: 'queued' })
 						return 'network'
 					}
 					if (!isOutboxEntryVisible(entry, retryAuth)) {
-						await updateEntry(entry.id, { status: 'queued' }, { recoverFailedSend: true })
+						await updateOwnedClaimAfterSend(entry, { status: 'queued' })
 						return 'skipped'
 					}
 					auth = retryAuth
 					continue
 				}
 				if (error instanceof ApiError && error.status === 403) {
-					await updateEntry(
-						entry.id,
-						{
-							status: 'failed',
-							lastError: "Couldn't post this. Try again.",
-						},
-						{ recoverFailedSend: true }
-					)
+					await updateOwnedClaimAfterSend(entry, {
+						status: 'failed',
+						lastError: "Couldn't post this. Try again.",
+					})
 					return 'failed'
 				}
 				return markFailure(entry, error)

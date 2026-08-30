@@ -51,8 +51,14 @@ const revivePost = (post: Post): Post => ({
 	url: `${window.location.origin}/p/${post.id}/`,
 })
 
-const findPostByClientUuid = async (clientUuid: string): Promise<Post | null> => {
-	const options = await getFetchOptions('POST', { client_uuid: clientUuid })
+const findPostByClientUuid = async (
+	clientUuid: string,
+	expectedAuthor?: number | 'anon'
+): Promise<Post | null> => {
+	const options = await getFetchOptions('POST', {
+		client_uuid: clientUuid,
+		...(expectedAuthor === undefined ? {} : { expected_author: expectedAuthor }),
+	})
 	const response = await fetch(`${SERVER_API_URL}/posts/idempotency-check/`, options)
 	if (response.status === 204) return null
 	if (!response.ok) {
@@ -137,6 +143,9 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 		if (data.client_uuid) {
 			formData.append('client_uuid', data.client_uuid)
 		}
+		if (data.expected_author !== undefined) {
+			formData.append('expected_author', String(data.expected_author))
+		}
 
 		// // Debug logging
 		// console.log('Creating post with data:', data)
@@ -152,7 +161,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 			// before presigning or uploading so the same client UUID cannot leave a
 			// second, unattached object behind in S3/R2.
 			if (data.client_uuid) {
-				const existingPost = await findPostByClientUuid(data.client_uuid)
+				const existingPost = await findPostByClientUuid(data.client_uuid, data.expected_author)
 				if (existingPost) return existingPost
 			}
 

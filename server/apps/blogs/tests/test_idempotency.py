@@ -95,6 +95,42 @@ class PostCreateIdempotencyTests(ViewTestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    def test_create_rejects_session_that_does_not_match_expected_author(self):
+        """A queued create cannot cross from its verified user to another identity."""
+        response = self.other_client.post(
+            reverse('post-list'),
+            {
+                'body': 'User one queue',
+                'client_uuid': str(uuid4()),
+                'expected_author': str(self.user.pk),
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Post.objects.filter(body='User one queue').exists())
+
+    def test_anonymous_create_accepts_matching_expected_author(self):
+        """Anonymous queues can bind explicitly to the anonymous session."""
+        response = self.anon_client.post(
+            reverse('post-list'),
+            {
+                'body': 'Anonymous expected queue',
+                'client_uuid': str(uuid4()),
+                'expected_author': 'anon',
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+    def test_idempotency_check_rejects_changed_session_before_presign(self):
+        """The S3 preflight rejects a session mismatch before upload work begins."""
+        response = self.anon_client.post(
+            reverse('post-idempotency-check'),
+            {'client_uuid': str(uuid4()), 'expected_author': str(self.user.pk)},
+        )
+
+        self.assertEqual(response.status_code, 403)
+
     def test_s3_replay_dedupes_before_media_validation(self):
         """A replay wins before an attached S3 key can be rejected as reused."""
         client_uuid = str(uuid4())

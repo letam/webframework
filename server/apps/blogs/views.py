@@ -37,7 +37,7 @@ from django.utils.dateformat import format as format_date
 from django.views.decorators.http import require_GET
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from werkzeug.http import parse_range_header
@@ -324,6 +324,15 @@ class PostViewSet(viewsets.ModelViewSet):
             return None
         return Post.objects.filter(author=author, client_uuid=parsed_uuid).first()
 
+    def _validate_expected_author(self, request, author):
+        """Reject queued creates when the session changed after client verification."""
+        expected_author = request.data.get('expected_author')
+        if expected_author in (None, ''):
+            return
+        actual_author = str(author.pk) if request.user.is_authenticated else 'anon'
+        if str(expected_author) != actual_author:
+            raise PermissionDenied('The active session no longer matches this queued post.')
+
     def _created_post_response(self, instance, response_status):
         """Serialize a fresh or replayed create response."""
         response_serializer = PostSerializer(instance, context=self.get_serializer_context())
@@ -337,15 +346,15 @@ class PostViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='idempotency-check')
     def idempotency_check(self, request):
         """Return this author's existing client-UUID post before a direct upload."""
+        author = self._create_author()
+        self._validate_expected_author(request, author)
         client_uuid = request.data.get('client_uuid')
         try:
             parsed_uuid = UUID(str(client_uuid))
         except (AttributeError, TypeError, ValueError):
             raise ValidationError({'client_uuid': 'A valid UUID is required.'}) from None
 
-        existing_post = Post.objects.filter(
-            author=self._create_author(), client_uuid=parsed_uuid
-        ).first()
+        existing_post = Post.objects.filter(author=author, client_uuid=parsed_uuid).first()
         if not existing_post:
             return Response(status=status.HTTP_204_NO_CONTENT)
         return self._created_post_response(existing_post, status.HTTP_200_OK)
@@ -363,6 +372,7 @@ class PostViewSet(viewsets.ModelViewSet):
             )
 
         author = self._create_author()
+        self._validate_expected_author(request, author)
         client_uuid = request.data.get('client_uuid')
         existing_post = self._existing_client_post(author, client_uuid)
         if existing_post:
@@ -382,6 +392,7 @@ class PostViewSet(viewsets.ModelViewSet):
             )
 
         request_data = _shallow_request_data(request.data)
+        request_data.pop('expected_author', None)
         for media_field in ('media', 'media_type', 's3_file_key'):
             request_data.pop(media_field, None)
         serializer = self.get_serializer(data=request_data)

@@ -55,6 +55,12 @@ export type ResetOutboxEntryResult =
 	| { status: 'conflict'; entry: OutboxEntry }
 	| { status: 'unavailable' }
 
+export type OwnedOutboxClaimResult =
+	| { status: 'updated'; entry: OutboxEntry }
+	| { status: 'removed' | 'missing' }
+	| { status: 'lost'; entry: OutboxEntry }
+	| { status: 'unavailable' }
+
 const openDb = (): Promise<IDBDatabase | null> =>
 	new Promise((resolve) => {
 		if (typeof indexedDB === 'undefined') {
@@ -304,6 +310,102 @@ export const resetFailedOutboxEntryForRetry = async (
 
 export const deleteOutboxEntry = async (id: string): Promise<boolean> =>
 	(await runRequest<undefined>('readwrite', (store) => store.delete(id))) !== null
+
+export const updateOwnedOutboxEntryClaim = async (
+	id: string,
+	owner: string,
+	changes: Partial<OutboxEntry>
+): Promise<OwnedOutboxClaimResult> => {
+	const db = await openDb()
+	if (!db) return { status: 'unavailable' }
+
+	try {
+		return await new Promise<OwnedOutboxClaimResult>((resolve) => {
+			let transaction: IDBTransaction
+			let result: OwnedOutboxClaimResult = { status: 'unavailable' }
+			try {
+				transaction = db.transaction(STORE, 'readwrite')
+				const store = transaction.objectStore(STORE)
+				const request = store.get(id)
+				request.onsuccess = () => {
+					const entry = request.result as OutboxEntry | undefined
+					if (!entry) {
+						result = { status: 'missing' }
+						return
+					}
+					if (entry.status !== 'sending' || entry.claimOwner !== owner) {
+						result = { status: 'lost', entry }
+						return
+					}
+					const updated = {
+						...entry,
+						...changes,
+						...(changes.status && changes.status !== 'sending'
+							? { claimOwner: null, claimExpiresAt: null }
+							: {}),
+					}
+					const putRequest = store.put(updated)
+					putRequest.onsuccess = () => {
+						result = { status: 'updated', entry: updated }
+					}
+				}
+				request.onerror = () => transaction.abort()
+			} catch {
+				resolve({ status: 'unavailable' })
+				return
+			}
+			transaction.oncomplete = () => resolve(result)
+			transaction.onerror = () => resolve({ status: 'unavailable' })
+			transaction.onabort = () => resolve({ status: 'unavailable' })
+		})
+	} finally {
+		db.close()
+	}
+}
+
+export const deleteOwnedOutboxEntryClaim = async (
+	id: string,
+	owner: string
+): Promise<OwnedOutboxClaimResult> => {
+	const db = await openDb()
+	if (!db) return { status: 'unavailable' }
+
+	try {
+		return await new Promise<OwnedOutboxClaimResult>((resolve) => {
+			let transaction: IDBTransaction
+			let result: OwnedOutboxClaimResult = { status: 'unavailable' }
+			try {
+				transaction = db.transaction(STORE, 'readwrite')
+				const store = transaction.objectStore(STORE)
+				const request = store.get(id)
+				request.onsuccess = () => {
+					const entry = request.result as OutboxEntry | undefined
+					if (!entry) {
+						result = { status: 'missing' }
+						return
+					}
+					if (entry.status !== 'sending' || entry.claimOwner !== owner) {
+						result = { status: 'lost', entry }
+						return
+					}
+					const deleteRequest = store.delete(id)
+					deleteRequest.onsuccess = () => {
+						result = { status: 'removed' }
+					}
+				}
+				request.onerror = () => transaction.abort()
+			} catch {
+				resolve({ status: 'unavailable' })
+				return
+			}
+			transaction.oncomplete = () => resolve(result)
+			transaction.onerror = () => resolve({ status: 'unavailable' })
+			transaction.onabort = () => resolve({ status: 'unavailable' })
+		})
+	} finally {
+		db.close()
+	}
+}
 
 export const removeOutboxEntryIfIdle = async (id: string): Promise<RemoveOutboxEntryResult> => {
 	const db = await openDb()
