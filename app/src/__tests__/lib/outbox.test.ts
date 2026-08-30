@@ -565,6 +565,24 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
+	it('reports a durable claim failure during a manual local send', async () => {
+		setSyncMode('local')
+		await enqueueText({ text: 'Keep the manual post queued' })
+		const queued = getOutboxSnapshot().entries[0]
+		vi.mocked(outboxDb.claimOutboxEntryForSend).mockResolvedValueOnce({
+			status: 'unavailable',
+		})
+		setOnline(true)
+
+		await flushOutbox({ manual: true })
+
+		expect(postsApi.createPost).not.toHaveBeenCalled()
+		expect(getOutboxSnapshot().entries).toEqual([queued])
+		expect(mockToast.error).toHaveBeenCalledWith(
+			"Couldn't access a queued post on this device. Try again."
+		)
+	})
+
 	it('recovers to an actionable failure when a post status write fails', async () => {
 		await enqueueText({ text: 'Status write can fail' })
 		const entryId = getOutboxSnapshot().entries[0].id

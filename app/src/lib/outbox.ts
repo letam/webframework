@@ -200,7 +200,7 @@ const buildCreateRequest = (entry: OutboxEntry, auth: OutboxAuthState) => ({
 		: {}),
 })
 
-type SyncResult = 'synced' | 'network' | 'failed' | 'retryable' | 'skipped'
+type SyncResult = 'synced' | 'network' | 'failed' | 'retryable' | 'storage' | 'skipped'
 
 const adoptOwnedClaimResult = (
 	id: string,
@@ -304,7 +304,7 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 	// snapshot in another tab from recreating and publishing a post that the user
 	// already removed there.
 	const claim = await claimOutboxEntryForSend(id, outboxClaimOwner)
-	if (claim.status === 'unavailable') return 'retryable'
+	if (claim.status === 'unavailable') return 'storage'
 	if (claim.status === 'missing') {
 		setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
 		return 'skipped'
@@ -426,6 +426,7 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 	let failed = 0
 	let shouldRetry = false
 	let authFailed = false
+	let storageFailed = false
 
 	try {
 		for (const id of ids) {
@@ -447,6 +448,10 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 			if (result === 'synced') synced += 1
 			if (result === 'failed') failed += 1
 			if (result === 'retryable') shouldRetry = true
+			if (result === 'storage') {
+				shouldRetry = true
+				storageFailed = true
+			}
 			if (result === 'network') {
 				shouldRetry = true
 				break
@@ -469,6 +474,9 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 	if (synced > 1) toast(`Synced ${synced} queued posts.`)
 	if (failed > 0) {
 		toast.error("A queued post couldn't be sent. It's still on this device.")
+	}
+	if (storageFailed && options?.manual) {
+		toast.error("Couldn't access a queued post on this device. Try again.")
 	}
 	if (shouldRetry) scheduleRetry()
 	await drainPendingFlush()
