@@ -91,6 +91,11 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 			return
 		}
 		const result = await removeEntry(entry.id)
+		if (result === 'sending') {
+			composerLoad.rollback()
+			toast("This post started sending, so it can't be edited.")
+			return
+		}
 		if (result === 'failed') {
 			composerLoad.rollback()
 			toast.error("Couldn't remove the stored copy. The post is still in your outbox.")
