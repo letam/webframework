@@ -49,6 +49,7 @@ export interface OutboxSnapshot {
 }
 
 const RETRY_DELAYS_MS = [15_000, 30_000, 60_000, 120_000, 300_000] as const
+const STORAGE_ACCESS_ERROR = "Couldn't access a queued post on this device. Try again."
 const outboxClaimOwner = crypto.randomUUID()
 
 const getInitialSyncMode = (): SyncMode => {
@@ -462,10 +463,11 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 		flushLocked = false
 	}
 	if (authFailed) {
+		const manualAuthFailed = options?.manual === true || pendingFlush?.manual === true
 		// Ids latched during a failed auth check would otherwise replay from an
 		// unrelated later pass. Auto mode's backoff below covers the whole queue.
 		pendingFlush = null
-		if (options?.manual) {
+		if (manualAuthFailed) {
 			toast.error("Couldn't reach the server — your posts are still on this device.")
 		}
 	}
@@ -476,7 +478,7 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 		toast.error("A queued post couldn't be sent. It's still on this device.")
 	}
 	if (storageFailed && options?.manual) {
-		toast.error("Couldn't access a queued post on this device. Try again.")
+		toast.error(STORAGE_ACCESS_ERROR)
 	}
 	if (shouldRetry) scheduleRetry()
 	await drainPendingFlush()
@@ -564,7 +566,10 @@ export const retryEntry = async (id: string) => {
 	const entry = snapshot.entries.find((candidate) => candidate.id === id)
 	if (!entry || entry.status !== 'failed') return
 	const reset = await resetFailedOutboxEntryForRetry(id)
-	if (reset.status === 'unavailable') return
+	if (reset.status === 'unavailable') {
+		toast.error(STORAGE_ACCESS_ERROR)
+		return
+	}
 	if (reset.status === 'missing') {
 		setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
 		return

@@ -841,6 +841,26 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
+	it('reports a storage failure while resetting a manual retry', async () => {
+		await enqueueText({ text: 'Retry remains failed' })
+		vi.mocked(postsApi.createPost).mockRejectedValueOnce(new ApiError('bad request', 400))
+		setOnline(true)
+		await flushOutbox()
+		const failed = getOutboxSnapshot().entries[0]
+		mockToast.error.mockClear()
+		vi.mocked(outboxDb.resetFailedOutboxEntryForRetry).mockResolvedValueOnce({
+			status: 'unavailable',
+		})
+
+		await retryEntry(failed.id)
+
+		expect(postsApi.createPost).toHaveBeenCalledOnce()
+		expect(getOutboxSnapshot().entries).toEqual([failed])
+		expect(mockToast.error).toHaveBeenCalledWith(
+			"Couldn't access a queued post on this device. Try again."
+		)
+	})
+
 	it('does not overwrite a live claim from a stale manual retry', async () => {
 		await enqueueText({ text: 'Failed in both tabs' })
 		vi.mocked(postsApi.createPost).mockRejectedValueOnce(new ApiError('bad request', 400))
@@ -947,7 +967,7 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
-	it('clears manual ids latched during an aborted auth verification', async () => {
+	it('reports and clears manual ids latched during an aborted auth verification', async () => {
 		await enqueueText({ text: 'Latched manual post' })
 		await enqueueText({ text: 'Unrelated manual post' })
 		const [latchedId, unrelatedId] = getOutboxSnapshot().entries.map((entry) => entry.id)
@@ -972,6 +992,9 @@ describe('outbox sync engine', () => {
 		await reconnectPass
 
 		expect(postsApi.createPost).not.toHaveBeenCalled()
+		expect(mockToast.error).toHaveBeenCalledWith(
+			"Couldn't reach the server — your posts are still on this device."
+		)
 		auth = { isAuthenticated: true, userId: 1, isAuthResolved: true }
 		vi.mocked(postsApi.createPost).mockResolvedValue(makePost({ id: 87 }))
 
