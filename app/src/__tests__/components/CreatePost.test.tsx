@@ -493,6 +493,39 @@ describe('CreatePost', () => {
 		expect(queued.mediaName).toBe(queued.media.name)
 	})
 
+	it('queues with the live client uuid when connectivity drops during media preparation', async () => {
+		localStorage.setItem(
+			'app-settings',
+			JSON.stringify({ normalizeAudio: true, saveComposerDrafts: false })
+		)
+		let releaseConversion!: (blob: Blob) => void
+		mockConvertWavToWebM.mockReturnValueOnce(
+			new Promise((resolve) => {
+				releaseConversion = resolve
+			})
+		)
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn()
+		render(<CreatePost onPostCreated={onPostCreated} />)
+
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Use recording' }))
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+		await vi.waitFor(() => expect(mockConvertWavToWebM).toHaveBeenCalledOnce())
+		setOnline(false)
+		releaseConversion(new Blob(['converted'], { type: 'audio/webm;codecs=opus' }))
+
+		await waitFor(() => expect(mockEnqueuePost).toHaveBeenCalledOnce())
+		expect(onPostCreated).not.toHaveBeenCalled()
+		expect(mockEnqueuePost).toHaveBeenCalledWith(
+			expect.objectContaining({
+				id: expect.any(String),
+				mediaType: 'audio',
+				media: expect.objectContaining({ type: 'audio/webm;codecs=opus' }),
+			})
+		)
+	})
+
 	it('reuses the online client uuid when a TypeError falls back to the outbox', async () => {
 		const user = userEvent.setup()
 		const onPostCreated = vi.fn().mockRejectedValue(new TypeError('network failed'))

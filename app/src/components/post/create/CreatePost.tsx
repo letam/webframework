@@ -500,6 +500,16 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		try {
 			prepared = await prepareMediaFile()
 			prepareCompleted = true
+			// Connectivity may disappear while a recording is converted. Starting the
+			// mutation offline can pause indefinitely instead of rejecting into fallback.
+			if (!navigator.onLine) {
+				if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
+					toast.error(MEDIA_CAP_TOAST)
+					return
+				}
+				await queuePost(isDraft, prepared, clientUuid)
+				return
+			}
 			setSubmitStatus('submitting')
 			const newPost: CreatePostRequest = {
 				text: postText,
