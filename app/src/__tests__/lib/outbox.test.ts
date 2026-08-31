@@ -1343,6 +1343,48 @@ describe('outbox sync engine', () => {
 		).toBe(144)
 	})
 
+	it('rechecks publication when another tab sends and removes the fallback mid-removal', async () => {
+		await enqueueText({ text: 'Cross-tab race', mayHavePublished: true })
+		const entry = getOutboxSnapshot().entries[0]
+		const published = makePost({ id: 145, body: 'Cross-tab race' })
+		vi.mocked(postsApi.findPostByClientUuid)
+			.mockResolvedValueOnce(null)
+			.mockResolvedValueOnce(published)
+		vi.mocked(outboxDb.removeOutboxEntryIfIdle).mockImplementationOnce(async (id) => {
+			storedEntries.delete(id)
+			return { status: 'missing' }
+		})
+		queryClient.setQueryData(['posts', {}], infiniteData([]))
+		setOnline(true)
+
+		await expect(removeEntry(entry.id)).resolves.toBe('published')
+
+		expect(postsApi.findPostByClientUuid).toHaveBeenCalledTimes(2)
+		expect(postsApi.findPostByClientUuid).toHaveBeenNthCalledWith(2, entry.id, 1)
+		expect(
+			queryClient.getQueryData<InfiniteData<PostsPage>>(['posts', {}])?.pages[0].posts[0].id
+		).toBe(145)
+	})
+
+	it('restores the durable fallback when the missing-row recheck fails', async () => {
+		await enqueueText({ text: 'Keep after race', mayHavePublished: true })
+		const entry = getOutboxSnapshot().entries[0]
+		vi.mocked(postsApi.findPostByClientUuid)
+			.mockResolvedValueOnce(null)
+			.mockRejectedValueOnce(new TypeError('offline again'))
+		vi.mocked(outboxDb.removeOutboxEntryIfIdle).mockImplementationOnce(async (id) => {
+			storedEntries.delete(id)
+			return { status: 'missing' }
+		})
+		setOnline(true)
+
+		await expect(removeEntry(entry.id)).resolves.toBe('failed')
+
+		expect(postsApi.findPostByClientUuid).toHaveBeenCalledTimes(2)
+		expect(storedEntries.get(entry.id)).toEqual(entry)
+		expect(getOutboxSnapshot().entries).toEqual([entry])
+	})
+
 	it('retains a response-lost fallback when it cannot reconcile with the server', async () => {
 		await enqueueText({ text: 'Keep the UUID', mayHavePublished: true })
 		const entry = getOutboxSnapshot().entries[0]

@@ -655,6 +655,7 @@ export const removeEntry = async (id: string): Promise<RemoveEntryResult> => {
 	setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
 
 	let publishedPost: Awaited<ReturnType<typeof findPostByClientUuid>> = null
+	let reconciliationAuthor: number | 'anon' | null = null
 	if (entry?.mayHavePublished) {
 		// This row is the fallback for a live create whose response was lost. Its UUID
 		// is the only durable way to discover that the server may already have committed
@@ -663,10 +664,8 @@ export const removeEntry = async (id: string): Promise<RemoveEntryResult> => {
 		try {
 			auth = isOnline() ? await getKnownAuthState() : null
 			if (!auth || !isOutboxEntryVisible(entry, auth)) throw new Error('Auth unavailable')
-			publishedPost = await findPostByClientUuid(
-				entry.id,
-				auth.isAuthenticated ? (auth.userId as number) : 'anon'
-			)
+			reconciliationAuthor = auth.isAuthenticated ? (auth.userId as number) : 'anon'
+			publishedPost = await findPostByClientUuid(entry.id, reconciliationAuthor)
 		} catch {
 			setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), entry])
 			return 'failed'
@@ -684,6 +683,25 @@ export const removeEntry = async (id: string): Promise<RemoveEntryResult> => {
 		// the visible snapshot and make the caller report that removal did not happen.
 		setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), entry])
 		return 'failed'
+	}
+	if (
+		removal.status === 'missing' &&
+		entry?.mayHavePublished &&
+		!publishedPost &&
+		reconciliationAuthor !== null
+	) {
+		// Another tab may have finished a send between the first lookup and this
+		// transaction. Its successful send deletes the durable row only after the
+		// create returns, so a second lookup closes that race before we report removal.
+		try {
+			publishedPost = await findPostByClientUuid(entry.id, reconciliationAuthor)
+		} catch {
+			// The row disappeared while publication was still ambiguous. Recreate the
+			// durable fallback so a later retry retains the UUID needed to reconcile it.
+			await saveOutboxEntry(entry)
+			setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), entry])
+			return 'failed'
+		}
 	}
 	if (publishedPost) {
 		if (dependencies) applyCreatedPostToCaches(dependencies.queryClient, publishedPost)
