@@ -572,6 +572,7 @@ export const setSyncMode = (mode: SyncMode) => {
 }
 
 export const loadOutbox = async (): Promise<boolean> => {
+	const entryIdsAtLoadStart = new Set(snapshot.entries.map((entry) => entry.id))
 	const loaded = await loadOutboxEntries()
 	if (loaded.status === 'unavailable') {
 		scheduleLoadRetry()
@@ -579,7 +580,12 @@ export const loadOutbox = async (): Promise<boolean> => {
 	}
 	clearLoadRetry()
 	const entriesById = new Map(loaded.entries.map((entry) => [entry.id, entry]))
-	for (const entry of snapshot.entries) entriesById.set(entry.id, entry)
+	// Durable state wins for everything that existed when the read began: another
+	// tab may have sent/deleted it or advanced its status. Preserve only entries
+	// this tab genuinely enqueued while the asynchronous read was in flight.
+	for (const entry of snapshot.entries) {
+		if (!entryIdsAtLoadStart.has(entry.id)) entriesById.set(entry.id, entry)
+	}
 	const entries = [...entriesById.values()]
 	setEntries(entries)
 	for (const entry of entries) {

@@ -1289,6 +1289,47 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([durable])
 	})
 
+	it('discards a stale snapshot entry removed durably by another tab during reload', async () => {
+		await enqueueText({ text: 'Sent in another tab' })
+		const queued = getOutboxSnapshot().entries[0]
+		const failed = { ...queued, status: 'failed' as const, lastError: 'Try again.' }
+		storedEntries.set(failed.id, failed)
+		await loadOutbox()
+		expect(getOutboxSnapshot().entries).toEqual([failed])
+
+		let resolveLoad!: (result: { status: 'loaded'; entries: OutboxEntry[] }) => void
+		vi.mocked(outboxDb.loadOutboxEntries).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveLoad = resolve
+				})
+		)
+		const reload = loadOutbox()
+		storedEntries.delete(failed.id)
+		resolveLoad({ status: 'loaded', entries: [] })
+
+		await expect(reload).resolves.toBe(true)
+		expect(getOutboxSnapshot().entries).toEqual([])
+	})
+
+	it('preserves an entry enqueued while a durable reload is in flight', async () => {
+		let resolveLoad!: (result: { status: 'loaded'; entries: OutboxEntry[] }) => void
+		vi.mocked(outboxDb.loadOutboxEntries).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					resolveLoad = resolve
+				})
+		)
+		const reload = loadOutbox()
+
+		await enqueueText({ text: 'Enqueued during reload' })
+		const enqueued = getOutboxSnapshot().entries[0]
+		resolveLoad({ status: 'loaded', entries: [] })
+
+		await expect(reload).resolves.toBe(true)
+		expect(getOutboxSnapshot().entries).toEqual([enqueued])
+	})
+
 	it('hides a removed entry before its storage deletion resolves', async () => {
 		await enqueueText()
 		const entryId = getOutboxSnapshot().entries[0].id
