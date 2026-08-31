@@ -12,6 +12,7 @@ const mockUseAuth = vi.hoisted(() => vi.fn())
 const mockUseOutbox = vi.hoisted(() => vi.fn())
 const mockEnqueuePost = vi.hoisted(() => vi.fn())
 const mockSetSyncMode = vi.hoisted(() => vi.fn())
+const mockGetEffectiveSyncMode = vi.hoisted(() => vi.fn())
 const mockConvertWavToWebM = vi.hoisted(() => vi.fn())
 const mockToast = vi.hoisted(() =>
 	Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn(), info: vi.fn() })
@@ -29,6 +30,7 @@ vi.mock('@/lib/outbox', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('@/lib/outbox')>()
 	return {
 		enqueuePost: mockEnqueuePost,
+		getEffectiveSyncMode: mockGetEffectiveSyncMode,
 		MAX_QUEUED_MEDIA_BYTES: actual.MAX_QUEUED_MEDIA_BYTES,
 		setSyncMode: mockSetSyncMode,
 	}
@@ -122,6 +124,7 @@ describe('CreatePost', () => {
 			})),
 		})
 		mockUseOutbox.mockReturnValue({ syncMode: 'auto' })
+		mockGetEffectiveSyncMode.mockReturnValue('auto')
 		mockEnqueuePost.mockResolvedValue(true)
 		mockConvertWavToWebM.mockResolvedValue(
 			new Blob(['converted'], { type: 'audio/webm;codecs=opus' })
@@ -130,6 +133,7 @@ describe('CreatePost', () => {
 
 	it('queues an online post in local mode with the local-only toast', async () => {
 		mockUseOutbox.mockReturnValue({ syncMode: 'local' })
+		mockGetEffectiveSyncMode.mockReturnValue('local')
 		const user = userEvent.setup()
 		const onPostCreated = vi.fn()
 		render(<CreatePost onPostCreated={onPostCreated} />)
@@ -147,6 +151,7 @@ describe('CreatePost', () => {
 
 	it('uses the local-only toast for drafts too', async () => {
 		mockUseOutbox.mockReturnValue({ syncMode: 'local' })
+		mockGetEffectiveSyncMode.mockReturnValue('local')
 		const user = userEvent.setup()
 		render(<CreatePost onPostCreated={vi.fn()} />)
 
@@ -358,6 +363,41 @@ describe('CreatePost', () => {
 			)
 		)
 		expect(onPostCreated).not.toHaveBeenCalled()
+	})
+
+	it('uses refreshed auth when snapshotting queued transcription settings', async () => {
+		localStorage.setItem(
+			'app-settings',
+			JSON.stringify({
+				autoTranscribe: true,
+				normalizeAudio: false,
+				saveComposerDrafts: false,
+			})
+		)
+		mockUseAuth.mockReturnValue({
+			isAuthenticated: false,
+			isAuthResolved: false,
+			userId: null,
+			refreshAuthStatus: vi.fn(async () => true),
+			getAuthSnapshot: vi.fn(() => ({
+				isAuthenticated: true,
+				isAuthResolved: true,
+				userId: 7,
+			})),
+		})
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockRejectedValue(new TypeError('network failed'))
+		render(<CreatePost onPostCreated={onPostCreated} />)
+
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Use recording' }))
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+
+		await waitFor(() =>
+			expect(mockEnqueuePost).toHaveBeenCalledWith(
+				expect.objectContaining({ author: 7, autoTranscribe: true, mediaType: 'audio' })
+			)
+		)
 	})
 
 	it('saves drafts with the draft payload and toast', async () => {
@@ -598,6 +638,36 @@ describe('CreatePost', () => {
 				media: expect.objectContaining({ type: 'audio/webm;codecs=opus' }),
 			})
 		)
+	})
+
+	it('queues when another tab selects local mode during media preparation', async () => {
+		localStorage.setItem(
+			'app-settings',
+			JSON.stringify({ normalizeAudio: true, saveComposerDrafts: false })
+		)
+		mockGetEffectiveSyncMode.mockReturnValueOnce('auto').mockReturnValue('local')
+		let releaseConversion!: (blob: Blob) => void
+		mockConvertWavToWebM.mockReturnValueOnce(
+			new Promise((resolve) => {
+				releaseConversion = resolve
+			})
+		)
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn()
+		render(<CreatePost onPostCreated={onPostCreated} />)
+
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Use recording' }))
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+		await vi.waitFor(() => expect(mockConvertWavToWebM).toHaveBeenCalledOnce())
+		releaseConversion(new Blob(['converted'], { type: 'audio/webm;codecs=opus' }))
+
+		await waitFor(() => expect(mockEnqueuePost).toHaveBeenCalledOnce())
+		expect(onPostCreated).not.toHaveBeenCalled()
+		expect(mockEnqueuePost).toHaveBeenCalledWith(
+			expect.objectContaining({ id: expect.any(String), mediaType: 'audio' })
+		)
+		expect(mockToast).toHaveBeenCalledWith('Saved on this device.')
 	})
 
 	it('reuses the online client uuid when a TypeError falls back to the outbox', async () => {

@@ -37,7 +37,13 @@ import { useAuth } from '@/hooks/useAuth'
 import { useOutbox } from '@/hooks/useOutbox'
 import { useComposerDraft } from '@/hooks/useComposerDraft'
 import type { ComposerDraft } from '@/lib/utils/composerDraft'
-import { enqueuePost, MAX_QUEUED_MEDIA_BYTES, setSyncMode, type SyncMode } from '@/lib/outbox'
+import {
+	enqueuePost,
+	getEffectiveSyncMode,
+	MAX_QUEUED_MEDIA_BYTES,
+	setSyncMode,
+	type SyncMode,
+} from '@/lib/outbox'
 import { registerComposerLoader } from '@/lib/composerBridge'
 import type { OutboxEntry } from '@/lib/utils/outboxDb'
 
@@ -415,19 +421,21 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		isDraft: boolean,
 		media: { mediaType: 'audio' | 'video' | 'image'; file: File } | null,
 		id?: string,
-		authorOverride?: OutboxEntry['author']
+		authOverride?: { author: OutboxEntry['author']; isAuthenticated: boolean }
 	) => {
 		const settings = getSettings()
+		const queueAuth = authOverride ?? {
+			author: isAuthenticated && userId !== null ? userId : isAuthResolved ? 'anon' : 'unknown',
+			isAuthenticated,
+		}
 		const stored = await enqueuePost({
 			id,
-			author:
-				authorOverride ??
-				(isAuthenticated && userId !== null ? userId : isAuthResolved ? 'anon' : 'unknown'),
+			author: queueAuth.author,
 			text: postText,
-			visibility: isAuthenticated ? visibility : null,
+			visibility: queueAuth.isAuthenticated ? visibility : null,
 			isDraft,
 			linkPreviewsEnabled: settings.linkPreviews,
-			autoTranscribe: settings.autoTranscribe && isAuthenticated,
+			autoTranscribe: settings.autoTranscribe && queueAuth.isAuthenticated,
 			mediaType: media?.mediaType ?? null,
 			media: media?.file ?? null,
 			mediaName: media?.file.name ?? null,
@@ -444,7 +452,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 		resetComposer()
 		toast(
-			syncMode === 'local'
+			getEffectiveSyncMode() === 'local'
 				? 'Saved on this device.'
 				: isDraft
 					? "Queued — will save to drafts when you're back online."
@@ -472,7 +480,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			return
 		}
 
-		if (syncMode === 'local' || !navigator.onLine) {
+		if (getEffectiveSyncMode() === 'local' || !navigator.onLine) {
 			setSubmitStatus('preparing')
 			try {
 				const prepared = await prepareMediaFile()
@@ -500,8 +508,14 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		// duplicating.
 		const clientUuid = crypto.randomUUID()
 		let expectedAuthor: number | 'anon' = isAuthenticated && userId !== null ? userId : 'anon'
-		let queueAuthor: OutboxEntry['author'] =
-			isAuthenticated && userId !== null ? userId : isAuthResolved ? 'anon' : 'unknown'
+		let queueAuth = {
+			author: (isAuthenticated && userId !== null
+				? userId
+				: isAuthResolved
+					? 'anon'
+					: 'unknown') as OutboxEntry['author'],
+			isAuthenticated,
+		}
 		let authReady = isAuthResolved
 
 		try {
@@ -514,7 +528,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 							resolvedAuth.isAuthenticated && resolvedAuth.userId !== null
 								? resolvedAuth.userId
 								: 'anon'
-						queueAuthor = expectedAuthor
+						queueAuth = {
+							author: expectedAuthor,
+							isAuthenticated: resolvedAuth.isAuthenticated,
+						}
 					}
 				}
 			}
@@ -523,12 +540,12 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			// Connectivity may disappear while a recording is converted. Starting the
 			// mutation offline can pause indefinitely instead of rejecting into fallback.
 			// An unresolved identity is queued as unknown for the same fail-safe reason.
-			if (!authReady || !navigator.onLine) {
+			if (!authReady || getEffectiveSyncMode() === 'local' || !navigator.onLine) {
 				if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
 					toast.error(MEDIA_CAP_TOAST)
 					return
 				}
-				await queuePost(isDraft, prepared, clientUuid, queueAuthor)
+				await queuePost(isDraft, prepared, clientUuid, queueAuth)
 				return
 			}
 			setSubmitStatus('submitting')
@@ -538,7 +555,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				expected_author: expectedAuthor,
 				media_type: prepared?.mediaType,
 				media: prepared?.file ?? null,
-				visibility: isAuthenticated ? visibility : undefined,
+				visibility: queueAuth.isAuthenticated ? visibility : undefined,
 				is_draft: isDraft || undefined,
 			}
 
@@ -551,7 +568,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					toast.error(MEDIA_CAP_TOAST)
 					return
 				}
-				await queuePost(isDraft, prepared, clientUuid, queueAuthor)
+				await queuePost(isDraft, prepared, clientUuid, queueAuth)
 			} else {
 				toast.error('Failed to create post')
 			}

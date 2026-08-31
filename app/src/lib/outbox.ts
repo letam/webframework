@@ -522,6 +522,8 @@ export const subscribeOutbox = (callback: () => void) => {
 
 export const getOutboxSnapshot = () => snapshot
 
+export const getEffectiveSyncMode = () => refreshSyncModeFromStorage()
+
 export const setSyncMode = (mode: SyncMode) => {
 	if (snapshot.syncMode === mode) return
 	publishSnapshot({ ...snapshot, syncMode: mode })
