@@ -67,6 +67,22 @@ export const findPostByClientUuid = async (
 	return revivePost((await response.json()) as Post)
 }
 
+export const cancelPostByClientUuid = async (
+	clientUuid: string,
+	expectedAuthor: number | 'anon'
+): Promise<Post | null> => {
+	const options = await getFetchOptions('POST', {
+		client_uuid: clientUuid,
+		expected_author: expectedAuthor,
+	})
+	const response = await fetch(`${SERVER_API_URL}/posts/idempotency-cancel/`, options)
+	if (response.status === 204) return null
+	if (!response.ok) {
+		throw new ApiError('Failed to cancel the queued post', response.status)
+	}
+	return revivePost((await response.json()) as Post)
+}
+
 const buildPostsUrl = (scope: PostsQueryScope) => {
 	const params = new URLSearchParams()
 

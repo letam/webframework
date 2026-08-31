@@ -1,17 +1,18 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { toast } from '@/components/ui/sonner'
-import { createPost, findPostByClientUuid, transcribePost } from '@/lib/api/posts'
+import { cancelPostByClientUuid, createPost, transcribePost } from '@/lib/api/posts'
 import { ApiError } from '@/lib/api/errors'
 import { applyCreatedPostToCaches, applyUpdatedPostToCaches } from '@/hooks/usePosts'
 import { clearCsrfTokenCache } from '@/lib/utils/fetch'
 import { getSettings } from '@/lib/utils/settings'
 import {
 	claimOutboxEntryForSend,
+	cancelOutboxEntry,
+	deleteCancelledOutboxEntry,
 	deleteOwnedOutboxEntryClaim,
 	inspectOutboxEntry,
 	loadOutboxEntries,
 	OUTBOX_CLAIM_LEASE_MS,
-	removeOutboxEntryIfIdle,
 	renewOutboxEntryClaim,
 	resetFailedOutboxEntryForRetry,
 	saveOutboxEntry,
@@ -50,6 +51,7 @@ export interface OutboxSnapshot {
 
 const RETRY_DELAYS_MS = [15_000, 30_000, 60_000, 120_000, 300_000] as const
 const LOAD_RETRY_DELAY_MS = 1_000
+const CANCELLATION_RETRY_DELAY_MS = 5_000
 const STORAGE_ACCESS_ERROR = "Couldn't access a queued post on this device. Try again."
 const outboxClaimOwner = crypto.randomUUID()
 
@@ -102,6 +104,7 @@ let retryTimer: number | undefined
 let loadRetryTimer: number | undefined
 let retryIndex = 0
 const sendingReconcileTimers = new Map<string, number>()
+const cancellationReconcileTimers = new Map<string, number>()
 let flushLocked = false
 // Flush requests that arrive while a pass holds the lock; replayed when the pass ends.
 // Manual intent is sticky because any explicit request must remain explicit when
@@ -138,6 +141,23 @@ const clearSendingReconcileTimer = (id: string) => {
 	sendingReconcileTimers.delete(id)
 }
 
+const clearCancellationReconcileTimer = (id: string) => {
+	const timer = cancellationReconcileTimers.get(id)
+	if (timer !== undefined && typeof window !== 'undefined') window.clearTimeout(timer)
+	cancellationReconcileTimers.delete(id)
+}
+
+const scheduleCancellationReconciliation = (id: string) => {
+	if (typeof window === 'undefined' || !isOnline() || cancellationReconcileTimers.has(id)) {
+		return
+	}
+	const timer = window.setTimeout(() => {
+		cancellationReconcileTimers.delete(id)
+		void reconcileCancelledEntry(id)
+	}, CANCELLATION_RETRY_DELAY_MS)
+	cancellationReconcileTimers.set(id, timer)
+}
+
 const scheduleSendingReconciliation = (id: string) => {
 	if (typeof window === 'undefined' || sendingReconcileTimers.has(id)) return
 	const timer = window.setTimeout(async () => {
@@ -152,6 +172,10 @@ const scheduleSendingReconciliation = (id: string) => {
 		}
 		if (durable.status === 'found' && durable.entry.status !== 'sending') {
 			setEntries(snapshot.entries.map((entry) => (entry.id === id ? durable.entry : entry)))
+			if (durable.entry.status === 'cancelled') {
+				scheduleCancellationReconciliation(id)
+				return
+			}
 			if (durable.entry.status === 'queued' && snapshot.syncMode === 'auto' && isOnline()) {
 				void flushOutbox()
 			}
@@ -221,6 +245,65 @@ const getKnownAuthState = async () => {
 	return auth.isAuthResolved ? auth : null
 }
 
+type CancellationResult = 'removed' | 'published' | 'pending'
+
+const reconcileCancelledEntry = async (id: string): Promise<CancellationResult> => {
+	const entry = snapshot.entries.find((candidate) => candidate.id === id)
+	if (!entry || entry.status !== 'cancelled') return 'removed'
+	if (!dependencies || !isOnline()) return 'pending'
+
+	let retriedCsrf = false
+	while (true) {
+		try {
+			const auth = await getKnownAuthState()
+			if (!auth) {
+				scheduleCancellationReconciliation(id)
+				return 'pending'
+			}
+			if (!isOutboxEntryVisible(entry, auth)) return 'pending'
+			const expectedAuthor = auth.isAuthenticated ? (auth.userId as number) : 'anon'
+			const publishedPost = await cancelPostByClientUuid(entry.id, expectedAuthor)
+			const cleanup = await deleteCancelledOutboxEntry(id)
+			if (cleanup.status === 'unavailable') {
+				scheduleCancellationReconciliation(id)
+				return 'pending'
+			}
+			if (cleanup.status === 'conflict') {
+				// The server has accepted the cancellation, so a stale tab must not
+				// resurrect the same UUID between acknowledgement and local cleanup.
+				const restored = await cancelOutboxEntry(id, cleanup.entry)
+				if (restored.status === 'cancelled') {
+					setEntries(
+						snapshot.entries.map((candidate) => (candidate.id === id ? restored.entry : candidate))
+					)
+				}
+				scheduleCancellationReconciliation(id)
+				return 'pending'
+			}
+			clearCancellationReconcileTimer(id)
+			setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
+			if (publishedPost && dependencies) {
+				applyCreatedPostToCaches(dependencies.queryClient, publishedPost)
+			}
+			return publishedPost ? 'published' : 'removed'
+		} catch (error) {
+			if (error instanceof ApiError && error.status === 403 && !retriedCsrf) {
+				clearCsrfTokenCache()
+				retriedCsrf = true
+				continue
+			}
+			scheduleCancellationReconciliation(id)
+			return 'pending'
+		}
+	}
+}
+
+const reconcileCancelledEntries = async () => {
+	for (const entry of snapshot.entries.filter((candidate) => candidate.status === 'cancelled')) {
+		await reconcileCancelledEntry(entry.id)
+	}
+}
+
 const buildCreateRequest = (entry: OutboxEntry, auth: OutboxAuthState) => ({
 	text: entry.text,
 	client_uuid: entry.id,
@@ -254,6 +337,7 @@ const adoptOwnedClaimResult = (
 	if (result.status === 'lost') {
 		setEntries(snapshot.entries.map((entry) => (entry.id === id ? result.entry : entry)))
 		if (result.entry.status === 'sending') scheduleSendingReconciliation(id)
+		if (result.entry.status === 'cancelled') scheduleCancellationReconciliation(id)
 		return
 	}
 	if (unavailableFallback) {
@@ -317,6 +401,20 @@ const markFailure = async (entry: OutboxEntry, error: unknown): Promise<SyncResu
 			})
 			return 'failed'
 		}
+		if (error.status === 409) {
+			const result = await updateOwnedClaimAfterSend(entry, {
+				status: 'failed',
+				lastError: 'The server rejected this post.',
+			})
+			if (
+				result.status === 'missing' ||
+				result.status === 'removed' ||
+				(result.status === 'lost' && result.entry.status === 'cancelled')
+			) {
+				return 'skipped'
+			}
+			return 'failed'
+		}
 		if (error.status < 500) {
 			await updateOwnedClaimAfterSend(entry, {
 				status: 'failed',
@@ -349,6 +447,7 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 	if (claim.status === 'not-queued') {
 		setEntries(snapshot.entries.map((candidate) => (candidate.id === id ? claim.entry : candidate)))
 		if (claim.entry.status === 'sending') scheduleSendingReconciliation(id)
+		if (claim.entry.status === 'cancelled') scheduleCancellationReconciliation(id)
 		return 'skipped'
 	}
 	entry = claim.entry
@@ -591,6 +690,7 @@ export const loadOutbox = async (): Promise<boolean> => {
 	setEntries(entries)
 	for (const entry of entries) {
 		if (entry.status === 'sending') scheduleSendingReconciliation(entry.id)
+		if (entry.status === 'cancelled') scheduleCancellationReconciliation(entry.id)
 	}
 	return true
 }
@@ -643,83 +743,33 @@ export const retryEntry = async (id: string) => {
 	if (reset.status === 'conflict') {
 		setEntries(snapshot.entries.map((candidate) => (candidate.id === id ? reset.entry : candidate)))
 		if (reset.entry.status === 'sending') scheduleSendingReconciliation(id)
+		if (reset.entry.status === 'cancelled') scheduleCancellationReconciliation(id)
 		return
 	}
 	setEntries(snapshot.entries.map((candidate) => (candidate.id === id ? reset.entry : candidate)))
 	await runFlush([id], { manual: true })
 }
 
-export type RemoveEntryResult = 'removed' | 'published' | 'sending' | 'failed'
+export type RemoveEntryResult = 'removed' | 'published' | 'pending' | 'failed'
 
 export const removeEntry = async (id: string): Promise<RemoveEntryResult> => {
-	// A 'sending' entry's POST is already in flight — deleting it here couldn't stop
-	// publication, so refuse instead of pretending the post is gone.
 	const entry = snapshot.entries.find((candidate) => candidate.id === id)
-	if (entry?.status === 'sending') return 'sending'
-	// Drop from the snapshot before awaiting the IDB delete: a flush trigger firing
-	// inside that await (backoff timer, reconnect, another enqueue) would still find
-	// the entry and publish the post the user just removed.
-	setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
-
-	let publishedPost: Awaited<ReturnType<typeof findPostByClientUuid>> = null
-	let reconciliationAuthor: number | 'anon' | null = null
-	if (entry?.mayHavePublished) {
-		// This row is the fallback for a live create whose response was lost. Its UUID
-		// is the only durable way to discover that the server may already have committed
-		// the post, so never erase it until that ambiguity has been reconciled.
-		let auth: OutboxAuthState | null
-		try {
-			auth = isOnline() ? await getKnownAuthState() : null
-			if (!auth || !isOutboxEntryVisible(entry, auth)) throw new Error('Auth unavailable')
-			reconciliationAuthor = auth.isAuthenticated ? (auth.userId as number) : 'anon'
-			publishedPost = await findPostByClientUuid(entry.id, reconciliationAuthor)
-		} catch {
-			setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), entry])
-			return 'failed'
-		}
-	}
-
-	const removal = await removeOutboxEntryIfIdle(id)
-	if (removal.status === 'sending') {
-		setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), removal.entry])
-		scheduleSendingReconciliation(id)
-		return 'sending'
-	}
-	if (removal.status === 'unavailable') {
-		// The durable copy still exists and can return after a reload. Put it back in
-		// the visible snapshot and make the caller report that removal did not happen.
-		setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), entry])
+	const cancellation = await cancelOutboxEntry(id, entry)
+	if (cancellation.status === 'unavailable') {
 		return 'failed'
 	}
-	if (
-		removal.status === 'missing' &&
-		entry?.mayHavePublished &&
-		!publishedPost &&
-		reconciliationAuthor !== null
-	) {
-		// Another tab may have finished a send between the first lookup and this
-		// transaction. Its successful send deletes the durable row only after the
-		// create returns, so a second lookup closes that race before we report removal.
-		try {
-			publishedPost = await findPostByClientUuid(entry.id, reconciliationAuthor)
-		} catch {
-			// The row disappeared while publication was still ambiguous. Recreate the
-			// durable fallback so a later retry retains the UUID needed to reconcile it.
-			await saveOutboxEntry(entry)
-			setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), entry])
-			return 'failed'
-		}
+	if (cancellation.status === 'missing') {
+		setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
+		return 'removed'
 	}
-	if (publishedPost) {
-		if (dependencies) applyCreatedPostToCaches(dependencies.queryClient, publishedPost)
-		return 'published'
-	}
-	return 'removed'
+	setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), cancellation.entry])
+	return reconcileCancelledEntry(id)
 }
 
 export const handleOutboxOnline = async () => {
 	resetBackoff()
 	if (!dependencies) return
+	await reconcileCancelledEntries()
 	await flushOutbox()
 }
 
@@ -727,6 +777,7 @@ export const __resetOutboxForTests = () => {
 	resetBackoff()
 	clearLoadRetry()
 	for (const id of sendingReconcileTimers.keys()) clearSendingReconcileTimer(id)
+	for (const id of cancellationReconcileTimers.keys()) clearCancellationReconcileTimer(id)
 	snapshot = { entries: [], flushing: false, syncMode: 'auto' }
 	syncModePersistenceFailed = false
 	dependencies = null

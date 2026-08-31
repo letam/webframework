@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
-import { configureOutbox, flushOutbox, handleOutboxOnline, loadOutbox } from '@/lib/outbox'
+import { configureOutbox, handleOutboxOnline, loadOutbox } from '@/lib/outbox'
 
 interface OutboxProviderProps {
 	children: ReactNode
@@ -25,7 +25,7 @@ export const OutboxProvider = ({ children }: OutboxProviderProps) => {
 
 		let active = true
 		void loadOutbox().then((loaded) => {
-			if (active && loaded) void flushOutbox()
+			if (active && loaded) void handleOutboxOnline()
 		})
 		const onOnline = () => void handleOutboxOnline()
 		window.addEventListener('online', onOnline)
@@ -40,7 +40,7 @@ export const OutboxProvider = ({ children }: OutboxProviderProps) => {
 	// entries visible (and flushable), so it must trigger a pass of its own.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: intentional change triggers, not reads
 	useEffect(() => {
-		if (auth.isAuthResolved) void flushOutbox()
+		if (auth.isAuthResolved) void handleOutboxOnline()
 	}, [auth.isAuthResolved, auth.isAuthenticated, auth.userId])
 
 	return children

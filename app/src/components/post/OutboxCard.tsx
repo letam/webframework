@@ -55,16 +55,12 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 	const handleRemove = async () => {
 		const result = await removeEntry(entry.id)
 		setRemoveOpen(false)
-		if (result === 'sending') {
-			toast("This post is already being sent, so it can't be removed.")
+		if (result === 'failed') {
+			toast.error("Couldn't save this removal on this device. Try again.")
 			return
 		}
-		if (result === 'failed') {
-			toast.error(
-				entry.mayHavePublished
-					? "Couldn't confirm whether this post was already published. Reconnect and try again."
-					: "Couldn't remove this post from this device. Try again."
-			)
+		if (result === 'pending') {
+			toast('Removed from the outbox. The server will confirm when you reconnect.')
 			return
 		}
 		toast(
@@ -85,10 +81,8 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 	}
 
 	const handleEdit = async () => {
-		// Re-read at click time: the rendered entry can predate a pass that has
-		// since picked it up, and loading a sending entry would put its content in
-		// the composer while the send still publishes it. No await sits between
-		// this check and removeEntry's own, so the two cannot disagree.
+		// Re-read at click time so a stale card cannot load content that has already
+		// moved into a send or cancellation decision.
 		const current = getOutboxSnapshot().entries.find((candidate) => candidate.id === entry.id)
 		if (!current) return
 		if (current.status === 'sending') {
@@ -101,11 +95,6 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 			return
 		}
 		const result = await removeEntry(entry.id)
-		if (result === 'sending') {
-			composerLoad.rollback()
-			toast("This post started sending, so it can't be edited.")
-			return
-		}
 		if (result === 'failed') {
 			composerLoad.rollback()
 			toast.error("Couldn't remove the stored copy. The post is still in your outbox.")
@@ -114,6 +103,11 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 		if (result === 'published') {
 			composerLoad.rollback()
 			toast('This post was already published, so it cannot be edited from the outbox.')
+			return
+		}
+		if (result === 'pending') {
+			composerLoad.rollback()
+			toast('Removal is pending. You can edit once the server confirms it was not published.')
 			return
 		}
 		composerLoad.commit()
@@ -223,8 +217,8 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 							{entry.status === 'published'
 								? 'The post is already published. This only clears its leftover copy from this device.'
 								: entry.mayHavePublished
-									? "We'll first check whether this post was already published. If it was, this only clears its local copy."
-									: "It hasn't been posted and will be gone from this device."}
+									? 'The server will cancel this post or confirm if it was already published.'
+									: "It will leave your outbox now. If you're offline, the server will confirm the removal when you reconnect."}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

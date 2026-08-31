@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useOutbox } from '@/hooks/useOutbox'
+import { getVisibleOutboxEntries, useOutbox } from '@/hooks/useOutbox'
 import { __resetOutboxForTests, enqueuePost } from '@/lib/outbox'
 import type { OutboxEntry } from '@/lib/utils/outboxDb'
 
@@ -86,5 +86,33 @@ describe('useOutbox visibility filtering', () => {
 		const { result } = renderHook(() => useOutbox())
 
 		expect(result.current.entries.map((entry) => entry.text)).toEqual(['Unknown session'])
+	})
+
+	it('keeps cancellation tombstones hidden while they await acknowledgement', () => {
+		const cancelled: OutboxEntry = {
+			id: crypto.randomUUID(),
+			createdAt: Date.now(),
+			author: 1,
+			status: 'cancelled',
+			attempts: 0,
+			lastError: null,
+			text: 'Removed words',
+			visibility: 'public',
+			isDraft: false,
+			linkPreviewsEnabled: true,
+			autoTranscribe: false,
+			mediaType: null,
+			media: null,
+			mediaName: null,
+			cancelledAt: Date.now(),
+		}
+
+		expect(
+			getVisibleOutboxEntries([cancelled], {
+				isAuthenticated: true,
+				userId: 1,
+				isAuthResolved: true,
+			})
+		).toEqual([])
 	})
 })

@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from ..models import Post
+from ..models import Post, PostClientRequest
 from . import ViewTestCase
 
 User = get_user_model()
@@ -94,6 +94,82 @@ class PostCreateIdempotencyTests(ViewTestCase):
         )
 
         self.assertEqual(response.status_code, 400)
+
+    def test_cancel_records_a_durable_tombstone(self):
+        """A cancellation prevents future creates after its local row is hidden."""
+        client_uuid = uuid4()
+
+        response = self.client.post(
+            reverse('post-idempotency-cancel'),
+            {'client_uuid': str(client_uuid), 'expected_author': str(self.user.pk)},
+        )
+
+        self.assertEqual(response.status_code, 204)
+        request = PostClientRequest.objects.get(author=self.user, client_uuid=client_uuid)
+        self.assertIsNotNone(request.cancelled_at)
+
+    def test_create_after_cancel_is_rejected(self):
+        """A late retry cannot publish after cancellation won the UUID decision."""
+        client_uuid = str(uuid4())
+        self.client.post(reverse('post-idempotency-cancel'), {'client_uuid': client_uuid})
+
+        response = self.client.post(
+            reverse('post-list'), {'body': 'Too late', 'client_uuid': client_uuid}
+        )
+
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(Post.objects.filter(author=self.user, client_uuid=client_uuid).exists())
+
+    def test_idempotency_check_rejects_a_cancelled_uuid_before_upload(self):
+        """A direct-upload retry stops before presigning after cancellation."""
+        client_uuid = str(uuid4())
+        self.client.post(reverse('post-idempotency-cancel'), {'client_uuid': client_uuid})
+
+        response = self.client.post(
+            reverse('post-idempotency-check'), {'client_uuid': client_uuid}
+        )
+
+        self.assertEqual(response.status_code, 409)
+
+    def test_cancel_after_create_returns_the_existing_post(self):
+        """A committed create wins and cancellation reports the published post."""
+        client_uuid = str(uuid4())
+        created = self.client.post(
+            reverse('post-list'), {'body': 'Won the race', 'client_uuid': client_uuid}
+        )
+
+        response = self.client.post(
+            reverse('post-idempotency-cancel'), {'client_uuid': client_uuid}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['id'], created.data['id'])
+        request = PostClientRequest.objects.get(author=self.user, client_uuid=client_uuid)
+        self.assertIsNone(request.cancelled_at)
+
+    def test_cancel_is_scoped_to_current_author(self):
+        """One author can cancel a UUID without affecting another author's create."""
+        client_uuid = str(uuid4())
+        self.client.post(reverse('post-idempotency-cancel'), {'client_uuid': client_uuid})
+
+        response = self.other_client.post(
+            reverse('post-list'), {'body': 'Different author', 'client_uuid': client_uuid}
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+    def test_cancel_rejects_invalid_uuid_and_changed_session(self):
+        """Cancellation validates both coordination key and queued identity."""
+        invalid = self.client.post(
+            reverse('post-idempotency-cancel'), {'client_uuid': 'not-a-uuid'}
+        )
+        changed_session = self.other_client.post(
+            reverse('post-idempotency-cancel'),
+            {'client_uuid': str(uuid4()), 'expected_author': str(self.user.pk)},
+        )
+
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(changed_session.status_code, 403)
 
     def test_create_rejects_session_that_does_not_match_expected_author(self):
         """A queued create cannot cross from its verified user to another identity."""

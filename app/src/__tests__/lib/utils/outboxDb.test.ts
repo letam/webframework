@@ -4,13 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDBFactory } from 'fake-indexeddb'
 import {
 	claimOutboxEntryForSend,
+	cancelOutboxEntry,
+	deleteCancelledOutboxEntry,
 	deleteOutboxEntry,
 	deleteOwnedOutboxEntryClaim,
 	getOutboxEntry,
 	inspectOutboxEntry,
 	loadOutboxEntries,
 	OUTBOX_CLAIM_LEASE_MS,
-	removeOutboxEntryIfIdle,
 	renewOutboxEntryClaim,
 	resetFailedOutboxEntryForRetry,
 	saveOutboxEntry,
@@ -92,7 +93,6 @@ describe('outbox storage', () => {
 				...entry,
 				status: 'sending',
 				mayHavePublished: true,
-				sendMayBeInFlight: true,
 				claimOwner: 'tab-a',
 				claimExpiresAt: FIXED_NOW + OUTBOX_CLAIM_LEASE_MS,
 			},
@@ -164,7 +164,8 @@ describe('outbox storage', () => {
 		expect(await getOutboxEntry(entry.id)).toBeNull()
 	})
 
-	it('atomically refuses to remove a sending entry', async () => {
+	it('atomically replaces a sending entry with a cancellation tombstone', async () => {
+		vi.spyOn(Date, 'now').mockReturnValue(FIXED_NOW)
 		const entry = makeEntry({
 			status: 'sending',
 			claimOwner: 'tab-a',
@@ -172,42 +173,49 @@ describe('outbox storage', () => {
 		})
 		await saveOutboxEntry(entry)
 
-		await expect(removeOutboxEntryIfIdle(entry.id)).resolves.toEqual({
-			status: 'sending',
-			entry,
-		})
-		expect(await getOutboxEntry(entry.id)).toEqual(entry)
-	})
-
-	it('refuses to remove an expired claim whose request may still be in flight', async () => {
-		vi.spyOn(Date, 'now').mockReturnValue(FIXED_NOW)
-		const entry = makeEntry({
-			status: 'sending',
-			mayHavePublished: true,
-			sendMayBeInFlight: true,
-			claimOwner: 'throttled-tab',
-			claimExpiresAt: FIXED_NOW,
-		})
-		await saveOutboxEntry(entry)
-
-		await expect(removeOutboxEntryIfIdle(entry.id)).resolves.toEqual({
-			status: 'sending',
+		await expect(cancelOutboxEntry(entry.id)).resolves.toEqual({
+			status: 'cancelled',
 			entry: {
 				...entry,
-				status: 'sending',
+				status: 'cancelled',
+				cancelledAt: FIXED_NOW,
+				lastError: null,
 				claimOwner: null,
 				claimExpiresAt: null,
 			},
 		})
-		expect(await getOutboxEntry(entry.id)).toEqual(entry)
+		expect((await getOutboxEntry(entry.id))?.status).toBe('cancelled')
 	})
 
-	it('atomically removes idle entries and reports missing rows', async () => {
+	it('creates a cancellation tombstone from a stale snapshot when the row is missing', async () => {
+		vi.spyOn(Date, 'now').mockReturnValue(FIXED_NOW)
+		const entry = makeEntry({ mayHavePublished: true })
+
+		await expect(cancelOutboxEntry(entry.id, entry)).resolves.toEqual({
+			status: 'cancelled',
+			entry: {
+				...entry,
+				status: 'cancelled',
+				cancelledAt: FIXED_NOW,
+				lastError: null,
+				claimOwner: null,
+				claimExpiresAt: null,
+			},
+		})
+		expect((await getOutboxEntry(entry.id))?.status).toBe('cancelled')
+	})
+
+	it('deletes only acknowledged cancellation tombstones', async () => {
 		const entry = makeEntry()
 		await saveOutboxEntry(entry)
 
-		await expect(removeOutboxEntryIfIdle(entry.id)).resolves.toEqual({ status: 'removed' })
-		await expect(removeOutboxEntryIfIdle(entry.id)).resolves.toEqual({ status: 'missing' })
+		await expect(deleteCancelledOutboxEntry(entry.id)).resolves.toEqual({
+			status: 'conflict',
+			entry,
+		})
+		await cancelOutboxEntry(entry.id)
+		await expect(deleteCancelledOutboxEntry(entry.id)).resolves.toEqual({ status: 'removed' })
+		await expect(deleteCancelledOutboxEntry(entry.id)).resolves.toEqual({ status: 'missing' })
 	})
 
 	it('atomically resets only a failed entry for retry', async () => {
@@ -301,7 +309,8 @@ describe('outbox storage', () => {
 		expect(await claimOutboxEntryForSend('missing', 'tab-a')).toEqual({
 			status: 'unavailable',
 		})
-		expect(await removeOutboxEntryIfIdle('missing')).toEqual({ status: 'unavailable' })
+		expect(await cancelOutboxEntry('missing')).toEqual({ status: 'unavailable' })
+		expect(await deleteCancelledOutboxEntry('missing')).toEqual({ status: 'unavailable' })
 		expect(await resetFailedOutboxEntryForRetry('missing')).toEqual({
 			status: 'unavailable',
 		})

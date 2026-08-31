@@ -15,8 +15,8 @@ export const getVisibleOutboxEntries = (
 	auth: Pick<OutboxAuthState, 'isAuthenticated' | 'userId' | 'isAuthResolved'>
 ) =>
 	auth.isAuthResolved
-		? entries.filter((entry) => isOutboxEntryVisible(entry, auth))
-		: entries.filter((entry) => entry.author === 'unknown')
+		? entries.filter((entry) => entry.status !== 'cancelled' && isOutboxEntryVisible(entry, auth))
+		: entries.filter((entry) => entry.status !== 'cancelled' && entry.author === 'unknown')
 
 export const useOutbox = () => {
 	const snapshot = useSyncExternalStore(subscribeOutbox, getOutboxSnapshot, getOutboxSnapshot)

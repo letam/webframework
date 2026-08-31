@@ -49,7 +49,6 @@ vi.mock('@/lib/utils/outboxDb', () => ({
 			status: 'sending' as const,
 			lastError: null,
 			mayHavePublished: true,
-			sendMayBeInFlight: true,
 			claimOwner: owner,
 			claimExpiresAt: Date.now() + 300_000,
 		}
@@ -76,7 +75,7 @@ vi.mock('@/lib/utils/outboxDb', () => ({
 				...entry,
 				...changes,
 				...(changes.status && changes.status !== 'sending'
-					? { claimOwner: null, claimExpiresAt: null, sendMayBeInFlight: false }
+					? { claimOwner: null, claimExpiresAt: null }
 					: {}),
 			}
 			storedEntries.set(id, updated)
@@ -87,15 +86,24 @@ vi.mock('@/lib/utils/outboxDb', () => ({
 		const entry = storedEntries.get(id)
 		return entry ? { status: 'found' as const, entry } : { status: 'missing' as const }
 	}),
-	removeOutboxEntryIfIdle: vi.fn(async (id: string) => {
+	cancelOutboxEntry: vi.fn(async (id: string, fallback?: OutboxEntry) => {
+		const entry = storedEntries.get(id) ?? fallback
+		if (!entry) return { status: 'missing' as const }
+		const cancelled = {
+			...entry,
+			status: 'cancelled' as const,
+			cancelledAt: entry.cancelledAt ?? Date.now(),
+			lastError: null,
+			claimOwner: null,
+			claimExpiresAt: null,
+		}
+		storedEntries.set(id, cancelled)
+		return { status: 'cancelled' as const, entry: cancelled }
+	}),
+	deleteCancelledOutboxEntry: vi.fn(async (id: string) => {
 		const entry = storedEntries.get(id)
 		if (!entry) return { status: 'missing' as const }
-		if (entry.status === 'sending' || entry.sendMayBeInFlight) {
-			return {
-				status: 'sending' as const,
-				entry: entry.status === 'sending' ? entry : { ...entry, status: 'sending' as const },
-			}
-		}
+		if (entry.status !== 'cancelled') return { status: 'conflict' as const, entry }
 		storedEntries.delete(id)
 		return { status: 'removed' as const }
 	}),
@@ -122,6 +130,7 @@ vi.mock('@/lib/api/posts', () => ({
 	getPost: vi.fn(),
 	createPost: vi.fn(),
 	findPostByClientUuid: vi.fn(),
+	cancelPostByClientUuid: vi.fn(),
 	deletePost: vi.fn(),
 	updatePost: vi.fn(),
 	publishPost: vi.fn(),
@@ -695,7 +704,6 @@ describe('outbox sync engine', () => {
 			status: 'queued' as const,
 			claimOwner: null,
 			claimExpiresAt: null,
-			sendMayBeInFlight: true,
 		}
 		storedEntries.set(entryId, reconciled)
 		setOnline(false)
@@ -1180,39 +1188,44 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
-	it('refuses to remove an entry whose send is already in flight', async () => {
+	it('cancels an entry whose send is already in flight', async () => {
 		await enqueueText()
 		setOnline(true)
-		let release!: (post: Awaited<ReturnType<typeof postsApi.createPost>>) => void
+		let rejectSend!: (error: unknown) => void
 		vi.mocked(postsApi.createPost).mockImplementationOnce(
 			() =>
-				new Promise((resolve) => {
-					release = resolve
+				new Promise((_, reject) => {
+					rejectSend = reject
 				})
 		)
+		vi.mocked(postsApi.cancelPostByClientUuid).mockResolvedValueOnce(null)
 
 		const pass = flushOutbox()
 		await vi.waitFor(() => expect(getOutboxSnapshot().entries[0]?.status).toBe('sending'))
+		const entryId = getOutboxSnapshot().entries[0].id
 
-		expect(await removeEntry(getOutboxSnapshot().entries[0].id)).toBe('sending')
-		expect(getOutboxSnapshot().entries).toHaveLength(1)
+		expect(await removeEntry(entryId)).toBe('removed')
+		expect(postsApi.cancelPostByClientUuid).toHaveBeenCalledWith(entryId, 1)
+		expect(getOutboxSnapshot().entries).toEqual([])
 
-		release(makePost({ id: 95 }))
+		rejectSend(new ApiError('cancelled', 409))
 		await pass
 		expect(getOutboxSnapshot().entries).toEqual([])
+		expect(mockToast.error).not.toHaveBeenCalled()
 	})
 
-	it('refuses removal when another tab has durably claimed the entry', async () => {
-		vi.useFakeTimers()
+	it("replaces another tab's durable claim with a cancellation tombstone", async () => {
 		await enqueueText({ text: 'Claimed elsewhere' })
 		const queued = getOutboxSnapshot().entries[0]
 		const sending = { ...queued, status: 'sending' as const }
 		storedEntries.set(queued.id, sending)
+		setOnline(true)
+		vi.mocked(postsApi.cancelPostByClientUuid).mockResolvedValueOnce(null)
 
-		await expect(removeEntry(queued.id)).resolves.toBe('sending')
+		await expect(removeEntry(queued.id)).resolves.toBe('removed')
 
-		expect(storedEntries.get(queued.id)).toEqual(sending)
-		expect(getOutboxSnapshot().entries).toEqual([sending])
+		expect(storedEntries.has(queued.id)).toBe(false)
+		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
 	it('reconciles a send completed by another tab', async () => {
@@ -1352,34 +1365,39 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([enqueued])
 	})
 
-	it('hides a removed entry before its storage deletion resolves', async () => {
+	it('does not publish while its cancellation transaction is unresolved', async () => {
 		await enqueueText()
 		const entryId = getOutboxSnapshot().entries[0].id
-		let releaseDelete!: (
-			result: Awaited<ReturnType<typeof outboxDb.removeOutboxEntryIfIdle>>
+		let releaseCancellation!: (
+			result: Awaited<ReturnType<typeof outboxDb.cancelOutboxEntry>>
 		) => void
-		vi.mocked(outboxDb.removeOutboxEntryIfIdle).mockImplementationOnce(
+		vi.mocked(outboxDb.cancelOutboxEntry).mockImplementationOnce(
 			() =>
 				new Promise((resolve) => {
-					releaseDelete = resolve
+					releaseCancellation = resolve
 				})
 		)
 
 		const removal = removeEntry(entryId)
+		const cancelled = {
+			...getOutboxSnapshot().entries[0],
+			status: 'cancelled' as const,
+			cancelledAt: Date.now(),
+			claimOwner: null,
+			claimExpiresAt: null,
+		}
+		storedEntries.set(entryId, cancelled)
+		releaseCancellation({ status: 'cancelled', entry: cancelled })
 
-		expect(getOutboxSnapshot().entries).toEqual([])
-		setOnline(true)
-		await flushOutbox()
+		await expect(removal).resolves.toBe('pending')
+		expect(getOutboxSnapshot().entries).toEqual([cancelled])
 		expect(postsApi.createPost).not.toHaveBeenCalled()
-
-		releaseDelete({ status: 'removed' })
-		await expect(removal).resolves.toBe('removed')
 	})
 
-	it('restores a removed entry when its storage deletion fails', async () => {
+	it('keeps an entry visible when its cancellation write fails', async () => {
 		await enqueueText({ text: 'Keep me visible' })
 		const entry = getOutboxSnapshot().entries[0]
-		vi.mocked(outboxDb.removeOutboxEntryIfIdle).mockResolvedValueOnce({
+		vi.mocked(outboxDb.cancelOutboxEntry).mockResolvedValueOnce({
 			status: 'unavailable',
 		})
 
@@ -1389,74 +1407,52 @@ describe('outbox sync engine', () => {
 		expect(storedEntries.has(entry.id)).toBe(true)
 	})
 
-	it('reconciles a response-lost create before removing its durable fallback', async () => {
+	it('reports a post that won the server create/cancel race', async () => {
 		await enqueueText({ text: 'May already exist', mayHavePublished: true })
 		const entry = getOutboxSnapshot().entries[0]
 		const published = makePost({ id: 144, body: 'May already exist' })
-		vi.mocked(postsApi.findPostByClientUuid).mockResolvedValueOnce(published)
+		vi.mocked(postsApi.cancelPostByClientUuid).mockResolvedValueOnce(published)
 		queryClient.setQueryData(['posts', {}], infiniteData([]))
 		setOnline(true)
 
 		await expect(removeEntry(entry.id)).resolves.toBe('published')
 
-		expect(postsApi.findPostByClientUuid).toHaveBeenCalledWith(entry.id, 1)
+		expect(postsApi.cancelPostByClientUuid).toHaveBeenCalledWith(entry.id, 1)
 		expect(storedEntries.has(entry.id)).toBe(false)
 		expect(
 			queryClient.getQueryData<InfiniteData<PostsPage>>(['posts', {}])?.pages[0].posts[0].id
 		).toBe(144)
 	})
 
-	it('rechecks publication when another tab sends and removes the fallback mid-removal', async () => {
-		await enqueueText({ text: 'Cross-tab race', mayHavePublished: true })
+	it('persists a hidden tombstone while offline and reconciles it in local mode', async () => {
+		setSyncMode('local')
+		await enqueueText({ text: 'Offline removal' })
 		const entry = getOutboxSnapshot().entries[0]
-		const published = makePost({ id: 145, body: 'Cross-tab race' })
-		vi.mocked(postsApi.findPostByClientUuid)
-			.mockResolvedValueOnce(null)
-			.mockResolvedValueOnce(published)
-		vi.mocked(outboxDb.removeOutboxEntryIfIdle).mockImplementationOnce(async (id) => {
-			storedEntries.delete(id)
-			return { status: 'missing' }
-		})
-		queryClient.setQueryData(['posts', {}], infiniteData([]))
+
+		await expect(removeEntry(entry.id)).resolves.toBe('pending')
+
+		expect(storedEntries.get(entry.id)?.status).toBe('cancelled')
+		expect(getOutboxSnapshot().entries[0].status).toBe('cancelled')
+		vi.mocked(postsApi.cancelPostByClientUuid).mockResolvedValueOnce(null)
 		setOnline(true)
+		await handleOutboxOnline()
 
-		await expect(removeEntry(entry.id)).resolves.toBe('published')
-
-		expect(postsApi.findPostByClientUuid).toHaveBeenCalledTimes(2)
-		expect(postsApi.findPostByClientUuid).toHaveBeenNthCalledWith(2, entry.id, 1)
-		expect(
-			queryClient.getQueryData<InfiniteData<PostsPage>>(['posts', {}])?.pages[0].posts[0].id
-		).toBe(145)
+		expect(postsApi.cancelPostByClientUuid).toHaveBeenCalledWith(entry.id, 1)
+		expect(storedEntries.has(entry.id)).toBe(false)
+		expect(getOutboxSnapshot().entries).toEqual([])
+		expect(postsApi.createPost).not.toHaveBeenCalled()
 	})
 
-	it('restores the durable fallback when the missing-row recheck fails', async () => {
-		await enqueueText({ text: 'Keep after race', mayHavePublished: true })
-		const entry = getOutboxSnapshot().entries[0]
-		vi.mocked(postsApi.findPostByClientUuid)
-			.mockResolvedValueOnce(null)
-			.mockRejectedValueOnce(new TypeError('offline again'))
-		vi.mocked(outboxDb.removeOutboxEntryIfIdle).mockImplementationOnce(async (id) => {
-			storedEntries.delete(id)
-			return { status: 'missing' }
-		})
-		setOnline(true)
-
-		await expect(removeEntry(entry.id)).resolves.toBe('failed')
-
-		expect(postsApi.findPostByClientUuid).toHaveBeenCalledTimes(2)
-		expect(storedEntries.get(entry.id)).toEqual(entry)
-		expect(getOutboxSnapshot().entries).toEqual([entry])
-	})
-
-	it('retains a response-lost fallback when it cannot reconcile with the server', async () => {
+	it('retains a hidden tombstone when server reconciliation fails', async () => {
 		await enqueueText({ text: 'Keep the UUID', mayHavePublished: true })
 		const entry = getOutboxSnapshot().entries[0]
+		setOnline(true)
+		vi.mocked(postsApi.cancelPostByClientUuid).mockRejectedValueOnce(new TypeError('offline'))
 
-		await expect(removeEntry(entry.id)).resolves.toBe('failed')
+		await expect(removeEntry(entry.id)).resolves.toBe('pending')
 
-		expect(postsApi.findPostByClientUuid).not.toHaveBeenCalled()
-		expect(getOutboxSnapshot().entries).toEqual([entry])
-		expect(storedEntries.get(entry.id)).toEqual(entry)
+		expect(getOutboxSnapshot().entries[0].status).toBe('cancelled')
+		expect(storedEntries.get(entry.id)?.status).toBe('cancelled')
 	})
 
 	it('starts auto-transcription after an authenticated audio entry syncs', async () => {

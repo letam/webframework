@@ -44,14 +44,14 @@ describe('OutboxProvider', () => {
 		mockHandleOutboxOnline.mockResolvedValue(undefined)
 	})
 
-	it('configures the outbox and flushes after the initial load', async () => {
+	it('configures and reconciles the outbox after the initial load', async () => {
 		const queryClient = new QueryClient()
 		const auth = makeAuth(false, null, false)
 		mockUseAuth.mockReturnValue(auth)
 
 		render(providerTree(queryClient))
 
-		await waitFor(() => expect(mockFlushOutbox).toHaveBeenCalledOnce())
+		await waitFor(() => expect(mockHandleOutboxOnline).toHaveBeenCalledOnce())
 		expect(mockLoadOutbox).toHaveBeenCalledOnce()
 		expect(mockConfigureOutbox).toHaveBeenCalledOnce()
 		const dependencies = mockConfigureOutbox.mock.calls[0][0]
@@ -73,20 +73,20 @@ describe('OutboxProvider', () => {
 		render(providerTree(queryClient))
 
 		await waitFor(() => expect(mockLoadOutbox).toHaveBeenCalledOnce())
-		expect(mockFlushOutbox).not.toHaveBeenCalled()
+		expect(mockHandleOutboxOnline).not.toHaveBeenCalled()
 	})
 
-	it('flushes again when the authenticated identity changes', async () => {
+	it('reconciles cancellations and flushes when the authenticated identity changes', async () => {
 		const queryClient = new QueryClient()
 		mockLoadOutbox.mockReturnValue(new Promise<boolean>(() => {}))
 		mockUseAuth.mockReturnValue(makeAuth(true, 1, true))
 		const { rerender } = render(providerTree(queryClient))
-		await waitFor(() => expect(mockFlushOutbox).toHaveBeenCalledOnce())
+		await waitFor(() => expect(mockHandleOutboxOnline).toHaveBeenCalledOnce())
 
 		mockUseAuth.mockReturnValue(makeAuth(true, 2, true))
 		rerender(providerTree(queryClient))
 
-		await waitFor(() => expect(mockFlushOutbox).toHaveBeenCalledTimes(2))
+		await waitFor(() => expect(mockHandleOutboxOnline).toHaveBeenCalledTimes(2))
 	})
 
 	it('handles the window online event', () => {
@@ -114,6 +114,6 @@ describe('OutboxProvider', () => {
 			await load
 		})
 
-		expect(mockFlushOutbox).not.toHaveBeenCalled()
+		expect(mockHandleOutboxOnline).not.toHaveBeenCalled()
 	})
 })

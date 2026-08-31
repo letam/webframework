@@ -291,6 +291,47 @@ describe('posts API', () => {
 		})
 	})
 
+	describe('cancelPostByClientUuid', () => {
+		it('returns null when the server records the cancellation', async () => {
+			const { cancelPostByClientUuid } = await importPostsApi()
+			const { getFetchOptions } = await import('@/lib/utils/fetch')
+			fetchMock.mockResolvedValueOnce(await response({}, true, 204))
+
+			await expect(
+				cancelPostByClientUuid('ef5bf5ee-edaa-4fad-937c-eea66f674c99', 7)
+			).resolves.toBeNull()
+
+			expect(fetchMock).toHaveBeenCalledWith('/api/posts/idempotency-cancel/', expect.any(Object))
+			expect(getFetchOptions).toHaveBeenCalledWith('POST', {
+				client_uuid: 'ef5bf5ee-edaa-4fad-937c-eea66f674c99',
+				expected_author: 7,
+			})
+		})
+
+		it('returns the published post when create won the race', async () => {
+			const { cancelPostByClientUuid } = await importPostsApi()
+			const published = makePost({ id: 88, body: 'Already published' })
+			fetchMock.mockResolvedValueOnce(await response(toServerPost(published)))
+
+			const result = await cancelPostByClientUuid('13cee57b-4299-4fb0-a50f-476f8c43fd1e', 'anon')
+
+			expect(result?.id).toBe(88)
+			expect(result?.created).toBeInstanceOf(Date)
+		})
+
+		it('throws an ApiError when cancellation is not acknowledged', async () => {
+			const { cancelPostByClientUuid } = await importPostsApi()
+			fetchMock.mockResolvedValueOnce(await response({}, false, 503))
+
+			await expect(
+				cancelPostByClientUuid('8d594737-e50f-43ea-9993-764bd49fc652', 7)
+			).rejects.toMatchObject({
+				message: 'Failed to cancel the queued post',
+				status: 503,
+			})
+		})
+	})
+
 	describe('getShareUrl', () => {
 		it('adds the share token only for unlisted posts', async () => {
 			const { getShareUrl } = await importPostsApi()

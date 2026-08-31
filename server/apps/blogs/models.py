@@ -223,6 +223,29 @@ class PostQuerySet(models.QuerySet):
         return queryset.filter(visibility=VISIBILITY_PUBLIC)
 
 
+class PostClientRequest(models.Model):
+    """Serialize create/cancel decisions for one author-owned client UUID."""
+
+    created = models.DateTimeField(auto_now_add=True)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    client_uuid = models.UUIDField()
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        """Keep one durable decision record per author and client UUID."""
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=['author', 'client_uuid'],
+                name='unique_author_post_client_request',
+            ),
+        ]
+
+    def __str__(self):
+        """Return the author-scoped coordination key."""
+        return f'{self.author_id}:{self.client_uuid}'
+
+
 class Post(models.Model):
     """A micro-blog post."""
 

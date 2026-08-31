@@ -173,8 +173,8 @@ describe('OutboxCard', () => {
 		)
 	})
 
-	it('rolls back composer loading when another tab starts sending', async () => {
-		mockRemoveEntry.mockResolvedValueOnce('sending')
+	it('rolls back composer loading while server cancellation is pending', async () => {
+		mockRemoveEntry.mockResolvedValueOnce('pending')
 		const user = userEvent.setup()
 		const entry = makeEntry()
 		mockGetOutboxSnapshot.mockReturnValue({ entries: [entry], flushing: false, syncMode: 'auto' })
@@ -184,7 +184,9 @@ describe('OutboxCard', () => {
 
 		await waitFor(() => expect(mockRemoveEntry).toHaveBeenCalledWith(entry.id))
 		expect(mockRollbackComposerLoad).toHaveBeenCalledOnce()
-		expect(mockToast).toHaveBeenCalledWith("This post started sending, so it can't be edited.")
+		expect(mockToast).toHaveBeenCalledWith(
+			'Removal is pending. You can edit once the server confirms it was not published.'
+		)
 	})
 
 	it('rolls back composer loading when reconciliation finds a published post', async () => {
@@ -275,7 +277,9 @@ describe('OutboxCard', () => {
 		const dialog = screen.getByRole('alertdialog')
 		expect(within(dialog).getByText('Remove queued post?')).toBeInTheDocument()
 		expect(
-			within(dialog).getByText("It hasn't been posted and will be gone from this device.")
+			within(dialog).getByText(
+				"It will leave your outbox now. If you're offline, the server will confirm the removal when you reconnect."
+			)
 		).toBeInTheDocument()
 		await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
 
@@ -293,7 +297,7 @@ describe('OutboxCard', () => {
 		const dialog = screen.getByRole('alertdialog')
 		expect(
 			within(dialog).getByText(
-				"We'll first check whether this post was already published. If it was, this only clears its local copy."
+				'The server will cancel this post or confirm if it was already published.'
 			)
 		).toBeInTheDocument()
 		await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
@@ -316,14 +320,14 @@ describe('OutboxCard', () => {
 
 		await waitFor(() =>
 			expect(mockToast.error).toHaveBeenCalledWith(
-				"Couldn't remove this post from this device. Try again."
+				"Couldn't save this removal on this device. Try again."
 			)
 		)
 		expect(mockToast).not.toHaveBeenCalledWith('Removed.')
 	})
 
-	it('retains an ambiguous fallback when publication cannot be checked', async () => {
-		mockRemoveEntry.mockResolvedValueOnce('failed')
+	it('reports a durable removal that is waiting for server confirmation', async () => {
+		mockRemoveEntry.mockResolvedValueOnce('pending')
 		const user = userEvent.setup()
 		render(<OutboxCard entry={makeEntry({ mayHavePublished: true })} />)
 
@@ -333,8 +337,8 @@ describe('OutboxCard', () => {
 		)
 
 		await waitFor(() =>
-			expect(mockToast.error).toHaveBeenCalledWith(
-				"Couldn't confirm whether this post was already published. Reconnect and try again."
+			expect(mockToast).toHaveBeenCalledWith(
+				'Removed from the outbox. The server will confirm when you reconnect.'
 			)
 		)
 		expect(mockToast).not.toHaveBeenCalledWith('Removed.')

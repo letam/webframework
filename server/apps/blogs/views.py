@@ -67,6 +67,7 @@ from .models import (
     LinkPreview,
     Media,
     Post,
+    PostClientRequest,
     PostView,
     generate_share_token,
 )
@@ -324,6 +325,13 @@ class PostViewSet(viewsets.ModelViewSet):
             return None
         return Post.objects.filter(author=author, client_uuid=parsed_uuid).first()
 
+    def _parse_client_uuid(self, client_uuid):
+        """Validate and normalize a client UUID used by coordination endpoints."""
+        try:
+            return UUID(str(client_uuid))
+        except (AttributeError, TypeError, ValueError):
+            raise ValidationError({'client_uuid': 'A valid UUID is required.'}) from None
+
     def _validate_expected_author(self, request, author):
         """Reject queued creates when the session changed after client verification."""
         expected_author = request.data.get('expected_author')
@@ -349,15 +357,51 @@ class PostViewSet(viewsets.ModelViewSet):
         author = self._create_author()
         self._validate_expected_author(request, author)
         client_uuid = request.data.get('client_uuid')
-        try:
-            parsed_uuid = UUID(str(client_uuid))
-        except (AttributeError, TypeError, ValueError):
-            raise ValidationError({'client_uuid': 'A valid UUID is required.'}) from None
+        parsed_uuid = self._parse_client_uuid(client_uuid)
 
         existing_post = Post.objects.filter(author=author, client_uuid=parsed_uuid).first()
-        if not existing_post:
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        return self._created_post_response(existing_post, status.HTTP_200_OK)
+        if existing_post:
+            return self._created_post_response(existing_post, status.HTTP_200_OK)
+        if PostClientRequest.objects.filter(
+            author=author,
+            client_uuid=parsed_uuid,
+            cancelled_at__isnull=False,
+        ).exists():
+            return Response(
+                {'error': 'This queued post was cancelled.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['post'], url_path='idempotency-cancel')
+    def idempotency_cancel(self, request):
+        """Atomically cancel a UUID unless its post already committed."""
+        author = self._create_author()
+        self._validate_expected_author(request, author)
+        parsed_uuid = self._parse_client_uuid(request.data.get('client_uuid'))
+
+        with transaction.atomic():
+            existing_post = Post.objects.filter(author=author, client_uuid=parsed_uuid).first()
+            if existing_post:
+                return self._created_post_response(existing_post, status.HTTP_200_OK)
+            client_request, _ = PostClientRequest.objects.get_or_create(
+                author=author,
+                client_uuid=parsed_uuid,
+                defaults={'cancelled_at': timezone.now()},
+            )
+            # get_or_create resolves an insert race, then the row lock serializes
+            # the final decision with a create that obtained the UUID first.
+            client_request = PostClientRequest.objects.select_for_update().get(
+                pk=client_request.pk
+            )
+            existing_post = Post.objects.filter(author=author, client_uuid=parsed_uuid).first()
+            if existing_post:
+                return self._created_post_response(existing_post, status.HTTP_200_OK)
+            if client_request.cancelled_at is None:
+                client_request.cancelled_at = timezone.now()
+                client_request.save(update_fields=['cancelled_at'])
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def create(self, request, *args, **kwargs):
         """Create a post and attach validated media when provided."""
@@ -397,9 +441,30 @@ class PostViewSet(viewsets.ModelViewSet):
             request_data.pop(media_field, None)
         serializer = self.get_serializer(data=request_data)
         serializer.is_valid(raise_exception=True)
+        parsed_client_uuid = serializer.validated_data.get('client_uuid')
 
         try:
             with transaction.atomic():
+                if parsed_client_uuid is not None:
+                    client_request, _ = PostClientRequest.objects.get_or_create(
+                        author=author,
+                        client_uuid=parsed_client_uuid,
+                    )
+                    client_request = PostClientRequest.objects.select_for_update().get(
+                        pk=client_request.pk
+                    )
+                    # Repeat the post lookup after acquiring the ledger row. A
+                    # concurrent create may have won while this request validated media.
+                    existing_post = Post.objects.filter(
+                        author=author, client_uuid=parsed_client_uuid
+                    ).first()
+                    if existing_post:
+                        return self._created_post_response(existing_post, status.HTTP_200_OK)
+                    if client_request.cancelled_at is not None:
+                        return Response(
+                            {'error': 'This queued post was cancelled.'},
+                            status=status.HTTP_409_CONFLICT,
+                        )
                 serializer.save(author=author)
                 post = serializer.instance
 
