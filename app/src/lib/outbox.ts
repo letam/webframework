@@ -49,6 +49,7 @@ export interface OutboxSnapshot {
 }
 
 const RETRY_DELAYS_MS = [15_000, 30_000, 60_000, 120_000, 300_000] as const
+const LOAD_RETRY_DELAY_MS = 1_000
 const STORAGE_ACCESS_ERROR = "Couldn't access a queued post on this device. Try again."
 const outboxClaimOwner = crypto.randomUUID()
 
@@ -98,6 +99,7 @@ let snapshot: OutboxSnapshot = {
 let syncModePersistenceFailed = !persistSyncMode(initialSyncMode)
 let dependencies: OutboxDependencies | null = null
 let retryTimer: number | undefined
+let loadRetryTimer: number | undefined
 let retryIndex = 0
 const sendingReconcileTimers = new Map<string, number>()
 let flushLocked = false
@@ -166,6 +168,21 @@ const resetBackoff = () => {
 	}
 	retryTimer = undefined
 	retryIndex = 0
+}
+
+const clearLoadRetry = () => {
+	if (loadRetryTimer !== undefined && typeof window !== 'undefined') {
+		window.clearTimeout(loadRetryTimer)
+	}
+	loadRetryTimer = undefined
+}
+
+const scheduleLoadRetry = () => {
+	if (loadRetryTimer !== undefined || typeof window === 'undefined') return
+	loadRetryTimer = window.setTimeout(() => {
+		loadRetryTimer = undefined
+		void reloadDurableEntriesAndFlush()
+	}, LOAD_RETRY_DELAY_MS)
 }
 
 const scheduleRetry = () => {
@@ -554,14 +571,21 @@ export const setSyncMode = (mode: SyncMode) => {
 	if (mode === 'auto') void reloadDurableEntriesAndFlush()
 }
 
-export const loadOutbox = async () => {
-	const entriesById = new Map((await loadOutboxEntries()).map((entry) => [entry.id, entry]))
+export const loadOutbox = async (): Promise<boolean> => {
+	const loaded = await loadOutboxEntries()
+	if (loaded.status === 'unavailable') {
+		scheduleLoadRetry()
+		return false
+	}
+	clearLoadRetry()
+	const entriesById = new Map(loaded.entries.map((entry) => [entry.id, entry]))
 	for (const entry of snapshot.entries) entriesById.set(entry.id, entry)
 	const entries = [...entriesById.values()]
 	setEntries(entries)
 	for (const entry of entries) {
 		if (entry.status === 'sending') scheduleSendingReconciliation(entry.id)
 	}
+	return true
 }
 
 // `id` lets the composer's online-submit fallback reuse the client_uuid its live
@@ -676,6 +700,7 @@ export const handleOutboxOnline = async () => {
 
 export const __resetOutboxForTests = () => {
 	resetBackoff()
+	clearLoadRetry()
 	for (const id of sendingReconcileTimers.keys()) clearSendingReconcileTimer(id)
 	snapshot = { entries: [], flushing: false, syncMode: 'auto' }
 	syncModePersistenceFailed = false

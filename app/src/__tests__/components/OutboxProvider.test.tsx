@@ -39,7 +39,7 @@ describe('OutboxProvider', () => {
 	beforeEach(() => {
 		vi.clearAllMocks()
 		mockUseAuth.mockReturnValue(makeAuth(false, null, false))
-		mockLoadOutbox.mockResolvedValue(undefined)
+		mockLoadOutbox.mockResolvedValue(true)
 		mockFlushOutbox.mockResolvedValue(undefined)
 		mockHandleOutboxOnline.mockResolvedValue(undefined)
 	})
@@ -66,9 +66,19 @@ describe('OutboxProvider', () => {
 		expect(auth.refreshAuthStatus).toHaveBeenCalledOnce()
 	})
 
+	it('does not treat an unavailable startup load as an empty successful load', async () => {
+		const queryClient = new QueryClient()
+		mockLoadOutbox.mockResolvedValueOnce(false)
+
+		render(providerTree(queryClient))
+
+		await waitFor(() => expect(mockLoadOutbox).toHaveBeenCalledOnce())
+		expect(mockFlushOutbox).not.toHaveBeenCalled()
+	})
+
 	it('flushes again when the authenticated identity changes', async () => {
 		const queryClient = new QueryClient()
-		mockLoadOutbox.mockReturnValue(new Promise<void>(() => {}))
+		mockLoadOutbox.mockReturnValue(new Promise<boolean>(() => {}))
 		mockUseAuth.mockReturnValue(makeAuth(true, 1, true))
 		const { rerender } = render(providerTree(queryClient))
 		await waitFor(() => expect(mockFlushOutbox).toHaveBeenCalledOnce())
@@ -81,7 +91,7 @@ describe('OutboxProvider', () => {
 
 	it('handles the window online event', () => {
 		const queryClient = new QueryClient()
-		mockLoadOutbox.mockReturnValue(new Promise<void>(() => {}))
+		mockLoadOutbox.mockReturnValue(new Promise<boolean>(() => {}))
 		render(providerTree(queryClient))
 
 		act(() => window.dispatchEvent(new Event('online')))
@@ -92,8 +102,8 @@ describe('OutboxProvider', () => {
 	it('does not run the mount flush after unmounting during load', async () => {
 		const queryClient = new QueryClient()
 		let resolveLoad!: () => void
-		const load = new Promise<void>((resolve) => {
-			resolveLoad = resolve
+		const load = new Promise<boolean>((resolve) => {
+			resolveLoad = () => resolve(true)
 		})
 		mockLoadOutbox.mockReturnValue(load)
 		const { unmount } = render(providerTree(queryClient))

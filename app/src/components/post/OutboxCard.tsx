@@ -111,6 +111,11 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 			toast.error("Couldn't remove the stored copy. The post is still in your outbox.")
 			return
 		}
+		if (result === 'published') {
+			composerLoad.rollback()
+			toast('This post was already published, so it cannot be edited from the outbox.')
+			return
+		}
 		composerLoad.commit()
 	}
 

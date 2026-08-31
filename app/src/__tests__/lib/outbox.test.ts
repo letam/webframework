@@ -32,7 +32,10 @@ const mockToast = vi.hoisted(() =>
 
 vi.mock('@/lib/utils/outboxDb', () => ({
 	OUTBOX_CLAIM_LEASE_MS: 300_000,
-	loadOutboxEntries: vi.fn(async () => [...storedEntries.values()]),
+	loadOutboxEntries: vi.fn(async () => ({
+		status: 'loaded' as const,
+		entries: [...storedEntries.values()],
+	})),
 	saveOutboxEntry: vi.fn(async (entry: OutboxEntry) => {
 		storedEntries.set(entry.id, entry)
 		return true
@@ -1254,6 +1257,36 @@ describe('outbox sync engine', () => {
 		await vi.advanceTimersByTimeAsync(1_000)
 
 		expect(getOutboxSnapshot().entries).toEqual([])
+	})
+
+	it('retries a transient startup storage failure and loads durable entries', async () => {
+		vi.useFakeTimers()
+		const durable = {
+			id: crypto.randomUUID(),
+			createdAt: Date.now(),
+			author: 1 as const,
+			status: 'queued' as const,
+			attempts: 0,
+			lastError: null,
+			text: 'Recovered after startup',
+			visibility: 'public' as const,
+			isDraft: false,
+			linkPreviewsEnabled: true,
+			autoTranscribe: false,
+			mediaType: null,
+			media: null,
+			mediaName: null,
+		}
+		vi.mocked(outboxDb.loadOutboxEntries).mockResolvedValueOnce({ status: 'unavailable' })
+
+		await expect(loadOutbox()).resolves.toBe(false)
+		expect(getOutboxSnapshot().entries).toEqual([])
+		storedEntries.set(durable.id, durable)
+
+		await vi.advanceTimersByTimeAsync(1_000)
+
+		expect(outboxDb.loadOutboxEntries).toHaveBeenCalledTimes(2)
+		expect(getOutboxSnapshot().entries).toEqual([durable])
 	})
 
 	it('hides a removed entry before its storage deletion resolves', async () => {

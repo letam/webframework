@@ -24,8 +24,8 @@ export const OutboxProvider = ({ children }: OutboxProviderProps) => {
 		})
 
 		let active = true
-		void loadOutbox().then(() => {
-			if (active) void flushOutbox()
+		void loadOutbox().then((loaded) => {
+			if (active && loaded) void flushOutbox()
 		})
 		const onOnline = () => void handleOutboxOnline()
 		window.addEventListener('online', onOnline)

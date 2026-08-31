@@ -71,7 +71,9 @@ describe('outbox storage', () => {
 		})
 
 		expect(await saveOutboxEntry(entry)).toBe(true)
-		const [loaded] = await loadOutboxEntries()
+		const result = await loadOutboxEntries()
+		expect(result.status).toBe('loaded')
+		const loaded = result.status === 'loaded' ? result.entries[0] : undefined
 
 		expect(loaded?.mediaType).toBe('image')
 		expect(loaded?.mediaName).toBe('queued.png')
@@ -115,7 +117,7 @@ describe('outbox storage', () => {
 		})
 		await saveOutboxEntry(entry)
 
-		expect(await loadOutboxEntries()).toEqual([entry])
+		expect(await loadOutboxEntries()).toEqual({ status: 'loaded', entries: [entry] })
 		expect(await renewOutboxEntryClaim(entry.id, 'tab-b')).toBe(false)
 		now.mockReturnValue(FIXED_NOW + 10_000)
 		expect(await renewOutboxEntryClaim(entry.id, 'tab-a')).toBe(true)
@@ -237,9 +239,11 @@ describe('outbox storage', () => {
 		const entry = makeEntry({ status: 'sending' })
 		await saveOutboxEntry(entry)
 
-		const [loaded] = await loadOutboxEntries()
+		const result = await loadOutboxEntries()
+		expect(result.status).toBe('loaded')
+		const loaded = result.status === 'loaded' ? result.entries[0] : undefined
 
-		expect(loaded.status).toBe('queued')
+		expect(loaded?.status).toBe('queued')
 		expect((await getOutboxEntry(entry.id))?.status).toBe('queued')
 	})
 
@@ -256,7 +260,9 @@ describe('outbox storage', () => {
 		await saveOutboxEntry(oldest)
 		await saveOutboxEntry(middle)
 
-		expect((await loadOutboxEntries()).map((entry) => entry.text)).toEqual([
+		const result = await loadOutboxEntries()
+		expect(result.status).toBe('loaded')
+		expect(result.status === 'loaded' ? result.entries.map((entry) => entry.text) : []).toEqual([
 			'Oldest',
 			'Middle',
 			'Newest',
@@ -280,6 +286,6 @@ describe('outbox storage', () => {
 		expect(await deleteOwnedOutboxEntryClaim('missing', 'tab-a')).toEqual({
 			status: 'unavailable',
 		})
-		expect(await loadOutboxEntries()).toEqual([])
+		expect(await loadOutboxEntries()).toEqual({ status: 'unavailable' })
 	})
 })

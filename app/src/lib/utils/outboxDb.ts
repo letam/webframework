@@ -63,6 +63,10 @@ export type OwnedOutboxClaimResult =
 	| { status: 'lost'; entry: OutboxEntry }
 	| { status: 'unavailable' }
 
+export type LoadOutboxEntriesResult =
+	| { status: 'loaded'; entries: OutboxEntry[] }
+	| { status: 'unavailable' }
+
 const openDb = (): Promise<IDBDatabase | null> =>
 	new Promise((resolve) => {
 		if (typeof indexedDB === 'undefined') {
@@ -451,12 +455,12 @@ export const removeOutboxEntryIfIdle = async (id: string): Promise<RemoveOutboxE
 	}
 }
 
-export const loadOutboxEntries = async (): Promise<OutboxEntry[]> => {
+export const loadOutboxEntries = async (): Promise<LoadOutboxEntriesResult> => {
 	const db = await openDb()
-	if (!db) return []
+	if (!db) return { status: 'unavailable' }
 
 	try {
-		return await new Promise<OutboxEntry[]>((resolve) => {
+		return await new Promise<LoadOutboxEntriesResult>((resolve) => {
 			let entries: OutboxEntry[] = []
 			let transaction: IDBTransaction
 			try {
@@ -470,15 +474,16 @@ export const loadOutboxEntries = async (): Promise<OutboxEntry[]> => {
 						return recovered
 					})
 				}
-				request.onerror = () => resolve([])
+				request.onerror = () => transaction.abort()
 			} catch {
-				resolve([])
+				resolve({ status: 'unavailable' })
 				return
 			}
 
-			transaction.oncomplete = () => resolve(entries.sort((a, b) => a.createdAt - b.createdAt))
-			transaction.onerror = () => resolve([])
-			transaction.onabort = () => resolve([])
+			transaction.oncomplete = () =>
+				resolve({ status: 'loaded', entries: entries.sort((a, b) => a.createdAt - b.createdAt) })
+			transaction.onerror = () => resolve({ status: 'unavailable' })
+			transaction.onabort = () => resolve({ status: 'unavailable' })
 		})
 	} finally {
 		db.close()

@@ -15,7 +15,7 @@ const authValue = vi.hoisted(() => ({
 vi.mock('@/hooks/useAuth', () => ({ useAuth: () => authValue.current }))
 
 vi.mock('@/lib/utils/outboxDb', () => ({
-	loadOutboxEntries: vi.fn(async () => []),
+	loadOutboxEntries: vi.fn(async () => ({ status: 'loaded' as const, entries: [] })),
 	saveOutboxEntry: vi.fn(async () => true),
 	deleteOutboxEntry: vi.fn(async () => true),
 }))

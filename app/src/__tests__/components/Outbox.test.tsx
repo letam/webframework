@@ -187,6 +187,23 @@ describe('OutboxCard', () => {
 		expect(mockToast).toHaveBeenCalledWith("This post started sending, so it can't be edited.")
 	})
 
+	it('rolls back composer loading when reconciliation finds a published post', async () => {
+		mockRemoveEntry.mockResolvedValueOnce('published')
+		const user = userEvent.setup()
+		const entry = makeEntry({ mayHavePublished: true })
+		mockGetOutboxSnapshot.mockReturnValue({ entries: [entry], flushing: false, syncMode: 'auto' })
+		render(<OutboxCard entry={entry} />)
+
+		await user.click(screen.getByRole('button', { name: 'Edit' }))
+
+		await waitFor(() => expect(mockRemoveEntry).toHaveBeenCalledWith(entry.id))
+		expect(mockRollbackComposerLoad).toHaveBeenCalledOnce()
+		expect(mockCommitComposerLoad).not.toHaveBeenCalled()
+		expect(mockToast).toHaveBeenCalledWith(
+			'This post was already published, so it cannot be edited from the outbox.'
+		)
+	})
+
 	it('refuses to edit an entry a flush has since picked up', async () => {
 		const user = userEvent.setup()
 		const entry = makeEntry()
