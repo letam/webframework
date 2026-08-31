@@ -431,7 +431,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		isDraft: boolean,
 		media: { mediaType: 'audio' | 'video' | 'image'; file: File } | null,
 		id?: string,
-		authOverride?: { author: OutboxEntry['author']; isAuthenticated: boolean }
+		authOverride?: { author: OutboxEntry['author']; isAuthenticated: boolean },
+		mayHavePublished = false
 	) => {
 		const settings = getSettings()
 		const queueAuth = authOverride ?? {
@@ -449,6 +450,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			mediaType: media?.mediaType ?? null,
 			media: media?.file ?? null,
 			mediaName: media?.file.name ?? null,
+			...(mayHavePublished ? { mayHavePublished: true } : {}),
 		})
 
 		if (!stored) {
@@ -578,7 +580,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					toast.error(MEDIA_CAP_TOAST)
 					return
 				}
-				await queuePost(isDraft, prepared, clientUuid, queueAuth)
+				await queuePost(isDraft, prepared, clientUuid, queueAuth, true)
 			} else {
 				toast.error('Failed to create post')
 			}

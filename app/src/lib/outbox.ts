@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { toast } from '@/components/ui/sonner'
-import { createPost, transcribePost } from '@/lib/api/posts'
+import { createPost, findPostByClientUuid, transcribePost } from '@/lib/api/posts'
 import { ApiError } from '@/lib/api/errors'
 import { applyCreatedPostToCaches, applyUpdatedPostToCaches } from '@/hooks/usePosts'
 import { clearCsrfTokenCache } from '@/lib/utils/fetch'
@@ -618,7 +618,7 @@ export const retryEntry = async (id: string) => {
 	await runFlush([id], { manual: true })
 }
 
-export type RemoveEntryResult = 'removed' | 'sending' | 'failed'
+export type RemoveEntryResult = 'removed' | 'published' | 'sending' | 'failed'
 
 export const removeEntry = async (id: string): Promise<RemoveEntryResult> => {
 	// A 'sending' entry's POST is already in flight — deleting it here couldn't stop
@@ -629,6 +629,26 @@ export const removeEntry = async (id: string): Promise<RemoveEntryResult> => {
 	// inside that await (backoff timer, reconnect, another enqueue) would still find
 	// the entry and publish the post the user just removed.
 	setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
+
+	let publishedPost: Awaited<ReturnType<typeof findPostByClientUuid>> = null
+	if (entry?.mayHavePublished) {
+		// This row is the fallback for a live create whose response was lost. Its UUID
+		// is the only durable way to discover that the server may already have committed
+		// the post, so never erase it until that ambiguity has been reconciled.
+		let auth: OutboxAuthState | null
+		try {
+			auth = isOnline() ? await getKnownAuthState() : null
+			if (!auth || !isOutboxEntryVisible(entry, auth)) throw new Error('Auth unavailable')
+			publishedPost = await findPostByClientUuid(
+				entry.id,
+				auth.isAuthenticated ? (auth.userId as number) : 'anon'
+			)
+		} catch {
+			setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), entry])
+			return 'failed'
+		}
+	}
+
 	const removal = await removeOutboxEntryIfIdle(id)
 	if (removal.status === 'sending') {
 		setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), removal.entry])
@@ -640,6 +660,10 @@ export const removeEntry = async (id: string): Promise<RemoveEntryResult> => {
 		// the visible snapshot and make the caller report that removal did not happen.
 		setEntries([...snapshot.entries.filter((candidate) => candidate.id !== id), entry])
 		return 'failed'
+	}
+	if (publishedPost) {
+		if (dependencies) applyCreatedPostToCaches(dependencies.queryClient, publishedPost)
+		return 'published'
 	}
 	return 'removed'
 }

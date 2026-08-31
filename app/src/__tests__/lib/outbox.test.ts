@@ -111,6 +111,7 @@ vi.mock('@/lib/api/posts', () => ({
 	getPosts: vi.fn(),
 	getPost: vi.fn(),
 	createPost: vi.fn(),
+	findPostByClientUuid: vi.fn(),
 	deletePost: vi.fn(),
 	updatePost: vi.fn(),
 	publishPost: vi.fn(),
@@ -1290,6 +1291,34 @@ describe('outbox sync engine', () => {
 
 		expect(getOutboxSnapshot().entries).toEqual([entry])
 		expect(storedEntries.has(entry.id)).toBe(true)
+	})
+
+	it('reconciles a response-lost create before removing its durable fallback', async () => {
+		await enqueueText({ text: 'May already exist', mayHavePublished: true })
+		const entry = getOutboxSnapshot().entries[0]
+		const published = makePost({ id: 144, body: 'May already exist' })
+		vi.mocked(postsApi.findPostByClientUuid).mockResolvedValueOnce(published)
+		queryClient.setQueryData(['posts', {}], infiniteData([]))
+		setOnline(true)
+
+		await expect(removeEntry(entry.id)).resolves.toBe('published')
+
+		expect(postsApi.findPostByClientUuid).toHaveBeenCalledWith(entry.id, 1)
+		expect(storedEntries.has(entry.id)).toBe(false)
+		expect(
+			queryClient.getQueryData<InfiniteData<PostsPage>>(['posts', {}])?.pages[0].posts[0].id
+		).toBe(144)
+	})
+
+	it('retains a response-lost fallback when it cannot reconcile with the server', async () => {
+		await enqueueText({ text: 'Keep the UUID', mayHavePublished: true })
+		const entry = getOutboxSnapshot().entries[0]
+
+		await expect(removeEntry(entry.id)).resolves.toBe('failed')
+
+		expect(postsApi.findPostByClientUuid).not.toHaveBeenCalled()
+		expect(getOutboxSnapshot().entries).toEqual([entry])
+		expect(storedEntries.get(entry.id)).toEqual(entry)
 	})
 
 	it('starts auto-transcription after an authenticated audio entry syncs', async () => {

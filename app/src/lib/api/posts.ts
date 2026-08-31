@@ -51,7 +51,7 @@ const revivePost = (post: Post): Post => ({
 	url: `${window.location.origin}/p/${post.id}/`,
 })
 
-const findPostByClientUuid = async (
+export const findPostByClientUuid = async (
 	clientUuid: string,
 	expectedAuthor?: number | 'anon'
 ): Promise<Post | null> => {

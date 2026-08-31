@@ -690,7 +690,11 @@ describe('CreatePost', () => {
 		expect(request.client_uuid).toEqual(expect.any(String))
 		expect(request.expected_author).toBe(7)
 		expect(mockEnqueuePost).toHaveBeenCalledWith(
-			expect.objectContaining({ id: request.client_uuid, text: 'Connection blip' })
+			expect.objectContaining({
+				id: request.client_uuid,
+				text: 'Connection blip',
+				mayHavePublished: true,
+			})
 		)
 	})
 

@@ -266,6 +266,27 @@ describe('OutboxCard', () => {
 		expect(mockToast).toHaveBeenCalledWith('Removed.')
 	})
 
+	it('explains and reports reconciliation when a live create may have succeeded', async () => {
+		mockRemoveEntry.mockResolvedValueOnce('published')
+		const user = userEvent.setup()
+		const entry = makeEntry({ mayHavePublished: true })
+		render(<OutboxCard entry={entry} />)
+
+		await user.click(screen.getByRole('button', { name: 'Remove' }))
+		const dialog = screen.getByRole('alertdialog')
+		expect(
+			within(dialog).getByText(
+				"We'll first check whether this post was already published. If it was, this only clears its local copy."
+			)
+		).toBeInTheDocument()
+		await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
+
+		await waitFor(() => expect(mockRemoveEntry).toHaveBeenCalledWith(entry.id))
+		expect(mockToast).toHaveBeenCalledWith(
+			'This post was already published. Its local copy was cleared.'
+		)
+	})
+
 	it('reports a storage failure instead of claiming the post was removed', async () => {
 		mockRemoveEntry.mockResolvedValueOnce('failed')
 		const user = userEvent.setup()
@@ -279,6 +300,24 @@ describe('OutboxCard', () => {
 		await waitFor(() =>
 			expect(mockToast.error).toHaveBeenCalledWith(
 				"Couldn't remove this post from this device. Try again."
+			)
+		)
+		expect(mockToast).not.toHaveBeenCalledWith('Removed.')
+	})
+
+	it('retains an ambiguous fallback when publication cannot be checked', async () => {
+		mockRemoveEntry.mockResolvedValueOnce('failed')
+		const user = userEvent.setup()
+		render(<OutboxCard entry={makeEntry({ mayHavePublished: true })} />)
+
+		await user.click(screen.getByRole('button', { name: 'Remove' }))
+		await user.click(
+			within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove' })
+		)
+
+		await waitFor(() =>
+			expect(mockToast.error).toHaveBeenCalledWith(
+				"Couldn't confirm whether this post was already published. Reconnect and try again."
 			)
 		)
 		expect(mockToast).not.toHaveBeenCalledWith('Removed.')

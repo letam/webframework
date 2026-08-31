@@ -21,6 +21,8 @@ export interface OutboxEntry {
 	mediaType: 'audio' | 'video' | 'image' | null
 	media: Blob | null
 	mediaName: string | null
+	/** The live create may have committed before its response was lost. */
+	mayHavePublished?: boolean
 	/** Present only while a tab owns an active send lease. */
 	claimOwner?: string | null
 	claimExpiresAt?: number | null

@@ -60,10 +60,20 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 			return
 		}
 		if (result === 'failed') {
-			toast.error("Couldn't remove this post from this device. Try again.")
+			toast.error(
+				entry.mayHavePublished
+					? "Couldn't confirm whether this post was already published. Reconnect and try again."
+					: "Couldn't remove this post from this device. Try again."
+			)
 			return
 		}
-		toast(entry.status === 'published' ? 'Local copy cleared.' : 'Removed.')
+		toast(
+			result === 'published'
+				? 'This post was already published. Its local copy was cleared.'
+				: entry.status === 'published'
+					? 'Local copy cleared.'
+					: 'Removed.'
+		)
 	}
 
 	const handlePostNow = () => {
@@ -207,7 +217,9 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 						<AlertDialogDescription>
 							{entry.status === 'published'
 								? 'The post is already published. This only clears its leftover copy from this device.'
-								: "It hasn't been posted and will be gone from this device."}
+								: entry.mayHavePublished
+									? "We'll first check whether this post was already published. If it was, this only clears its local copy."
+									: "It hasn't been posted and will be gone from this device."}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>
