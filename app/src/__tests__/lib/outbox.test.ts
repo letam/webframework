@@ -937,6 +937,31 @@ describe('outbox sync engine', () => {
 		)
 	})
 
+	it('preserves other queued backoff when a retry reset is unavailable', async () => {
+		vi.useFakeTimers()
+		await enqueueText({ text: 'Failed retry card' })
+		await enqueueText({ text: 'Queued behind backoff' })
+		vi.mocked(postsApi.createPost)
+			.mockRejectedValueOnce(new ApiError('bad request', 400))
+			.mockRejectedValueOnce(new TypeError('offline'))
+		setOnline(true)
+		await flushOutbox()
+		const [failed, queued] = getOutboxSnapshot().entries
+		expect(failed.status).toBe('failed')
+		expect(queued.status).toBe('queued')
+		vi.mocked(outboxDb.resetFailedOutboxEntryForRetry).mockResolvedValueOnce({
+			status: 'unavailable',
+		})
+		vi.mocked(postsApi.createPost).mockClear()
+		vi.mocked(postsApi.createPost).mockResolvedValue(makePost({ id: 117 }))
+
+		await retryEntry(failed.id)
+		await vi.advanceTimersByTimeAsync(15_000)
+
+		expect(postsApi.createPost).toHaveBeenCalledOnce()
+		expect(getOutboxSnapshot().entries).toEqual([failed])
+	})
+
 	it('does not overwrite a live claim from a stale manual retry', async () => {
 		await enqueueText({ text: 'Failed in both tabs' })
 		vi.mocked(postsApi.createPost).mockRejectedValueOnce(new ApiError('bad request', 400))

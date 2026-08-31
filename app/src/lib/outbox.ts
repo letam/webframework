@@ -588,12 +588,10 @@ export const flushOutbox = async (options?: { manual?: boolean }) => {
 }
 
 export const flushEntry = async (id: string) => {
-	resetBackoff()
 	await runFlush([id], { manual: true })
 }
 
 export const retryEntry = async (id: string) => {
-	resetBackoff()
 	const entry = snapshot.entries.find((candidate) => candidate.id === id)
 	if (!entry || entry.status !== 'failed') return
 	const reset = await resetFailedOutboxEntryForRetry(id)
