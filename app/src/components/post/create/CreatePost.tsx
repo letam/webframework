@@ -109,6 +109,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [videoFile, setVideoFile] = useState<File | null>(null)
 	const [imageFile, setImageFile] = useState<File | null>(null)
 	const [submitStatus, setSubmitStatus] = useState<SubmitStatus | ''>('')
+	const [composerLocked, setComposerLocked] = useState(false)
+	const composerLockedRef = useRef(false)
 	const [isFocused, setIsFocused] = useState(false)
 	const [isAudioModalOpen, setIsAudioModalOpen] = useState(false)
 	const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
@@ -150,7 +152,9 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	const loadOutboxEntry = useCallback(
 		(entry: OutboxEntry) => {
-			if (postText.length > 0 || !hasNoMedia) return null
+			if (postText.length > 0 || !hasNoMedia || composerLockedRef.current) return null
+			composerLockedRef.current = true
+			setComposerLocked(true)
 
 			const loadedVisibility = entry.visibility ?? 'public'
 			let loadedMedia: File | null = null
@@ -177,7 +181,13 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			}
 			textareaRef.current?.focus()
 			return {
+				commit: () => {
+					composerLockedRef.current = false
+					setComposerLocked(false)
+				},
 				rollback: () => {
+					composerLockedRef.current = false
+					setComposerLocked(false)
 					const current = composerStateRef.current
 					if (
 						current.text !== entry.text ||
@@ -471,7 +481,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const submitPost = async (isDraft: boolean, e?: React.FormEvent) => {
 		e?.preventDefault()
 
-		if (submitStatus) {
+		if (submitStatus || composerLockedRef.current) {
 			return
 		}
 
@@ -876,7 +886,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 											type="button"
 											variant="ghost"
 											size="sm"
-											disabled={!!submitStatus}
+											disabled={!!submitStatus || composerLocked}
 											onClick={() => void submitPost(true)}
 										>
 											Draft
@@ -889,7 +899,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						<Button
 							type="submit"
 							size="sm"
-							disabled={!canPost || !!submitStatus}
+							disabled={!canPost || !!submitStatus || composerLocked}
 							className="rounded-full px-5 font-medium"
 						>
 							Post

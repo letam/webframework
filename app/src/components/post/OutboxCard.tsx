@@ -99,7 +99,9 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 		if (result === 'failed') {
 			composerLoad.rollback()
 			toast.error("Couldn't remove the stored copy. The post is still in your outbox.")
+			return
 		}
+		composerLoad.commit()
 	}
 
 	return (

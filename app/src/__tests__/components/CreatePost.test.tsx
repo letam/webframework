@@ -193,8 +193,14 @@ describe('CreatePost', () => {
 			'Restored from the outbox'
 		)
 		expect(screen.getByText('restored.png')).toBeInTheDocument()
+		const postButton = screen.getByRole('button', { name: 'Post' })
+		expect(postButton).toBeDisabled()
+		await userEvent.click(postButton)
+		expect(onPostCreated).not.toHaveBeenCalled()
 
-		await userEvent.click(screen.getByRole('button', { name: 'Post' }))
+		act(() => loadHandle?.commit())
+		expect(postButton).toBeEnabled()
+		await userEvent.click(postButton)
 		await waitFor(() => expect(onPostCreated).toHaveBeenCalledTimes(1))
 		expect(onPostCreated).toHaveBeenCalledWith(
 			expect.objectContaining({

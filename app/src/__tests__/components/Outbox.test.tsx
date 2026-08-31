@@ -14,6 +14,7 @@ const mockRemoveEntry = vi.hoisted(() => vi.fn())
 const mockRetryEntry = vi.hoisted(() => vi.fn())
 const mockRequestComposerLoad = vi.hoisted(() => vi.fn())
 const mockRollbackComposerLoad = vi.hoisted(() => vi.fn())
+const mockCommitComposerLoad = vi.hoisted(() => vi.fn())
 const mockCreateObjectURL = vi.hoisted(() => vi.fn(() => 'blob:queued-media'))
 const mockRevokeObjectURL = vi.hoisted(() => vi.fn())
 const mockToast = vi.hoisted(() =>
@@ -77,7 +78,10 @@ describe('OutboxCard', () => {
 		mockFlushOutbox.mockResolvedValue(undefined)
 		mockRemoveEntry.mockResolvedValue('removed')
 		mockRetryEntry.mockResolvedValue(undefined)
-		mockRequestComposerLoad.mockReturnValue({ rollback: mockRollbackComposerLoad })
+		mockRequestComposerLoad.mockReturnValue({
+			commit: mockCommitComposerLoad,
+			rollback: mockRollbackComposerLoad,
+		})
 	})
 
 	it('renders queued and draft states with the current author presentation', () => {
@@ -137,6 +141,7 @@ describe('OutboxCard', () => {
 
 		expect(mockRequestComposerLoad).toHaveBeenCalledWith(entry)
 		await waitFor(() => expect(mockRemoveEntry).toHaveBeenCalledWith(entry.id))
+		expect(mockCommitComposerLoad).toHaveBeenCalledOnce()
 	})
 
 	it('keeps an entry when the composer is occupied', async () => {

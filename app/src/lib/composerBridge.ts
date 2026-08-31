@@ -1,6 +1,8 @@
 import type { OutboxEntry } from '@/lib/utils/outboxDb'
 
 export interface ComposerLoadHandle {
+	/** Makes the loaded entry submittable after its durable outbox copy is removed. */
+	commit: () => void
 	/** Clears the loaded entry only if the composer has not changed since loading. */
 	rollback: () => boolean
 }
