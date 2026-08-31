@@ -458,6 +458,9 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 				shouldRetry = true
 				break
 			}
+			// Auth refresh is asynchronous, so local mode can be selected while it is
+			// in flight. Never claim or send until the automatic boundary is rechecked.
+			if (!options?.manual && refreshSyncModeFromStorage() !== 'auto') break
 			const result = await syncEntry(id, latestAuth)
 			if (result === 'synced') synced += 1
 			if (result === 'failed') failed += 1

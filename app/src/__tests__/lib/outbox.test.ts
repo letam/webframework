@@ -399,6 +399,31 @@ describe('outbox sync engine', () => {
 		])
 	})
 
+	it('stops an automatic send when another tab selects local during auth refresh', async () => {
+		await enqueueText({ text: 'Hold after auth refresh' })
+		let releaseRefresh!: (verified: boolean) => void
+		const refreshAuthStatus = vi.fn(
+			() =>
+				new Promise<boolean>((resolve) => {
+					releaseRefresh = resolve
+				})
+		)
+		configureOutbox({ queryClient, getAuthState: () => auth, refreshAuthStatus })
+		setOnline(true)
+
+		const automaticPass = flushOutbox()
+		await vi.waitFor(() => expect(refreshAuthStatus).toHaveBeenCalledOnce())
+		localStorage.setItem('post-sync-mode', 'local')
+		releaseRefresh(true)
+		await automaticPass
+
+		expect(postsApi.createPost).not.toHaveBeenCalled()
+		expect(getOutboxSnapshot().syncMode).toBe('local')
+		expect(getOutboxSnapshot().entries).toEqual([
+			expect.objectContaining({ text: 'Hold after auth refresh', status: 'queued' }),
+		])
+	})
+
 	it('manually posts one queued entry while local', async () => {
 		setSyncMode('local')
 		await enqueueText()
