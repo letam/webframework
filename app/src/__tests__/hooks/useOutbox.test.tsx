@@ -17,7 +17,6 @@ vi.mock('@/hooks/useAuth', () => ({ useAuth: () => authValue.current }))
 vi.mock('@/lib/utils/outboxDb', () => ({
 	loadOutboxEntries: vi.fn(async () => ({ status: 'loaded' as const, entries: [] })),
 	saveOutboxEntry: vi.fn(async () => true),
-	deleteOutboxEntry: vi.fn(async () => true),
 }))
 
 const setOnline = (online: boolean) => {
@@ -104,7 +103,6 @@ describe('useOutbox visibility filtering', () => {
 			mediaType: null,
 			media: null,
 			mediaName: null,
-			cancelledAt: Date.now(),
 		}
 
 		expect(
