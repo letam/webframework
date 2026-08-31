@@ -51,6 +51,7 @@ const SettingsPage = () => {
 	const [showLinkPreviews, setShowLinkPreviews] = useState(initialSettings.showLinkPreviews)
 	const [videoQuality, setVideoQuality] = useState(initialSettings.videoQuality)
 	const [saveComposerDrafts, setSaveComposerDrafts] = useState(initialSettings.saveComposerDrafts)
+	const [postSyncDefault, setPostSyncDefault] = useState(initialSettings.postSyncDefault)
 	const [isExporting, setIsExporting] = useState(false)
 
 	useEffect(() => {
@@ -61,6 +62,7 @@ const SettingsPage = () => {
 			showLinkPreviews,
 			videoQuality,
 			saveComposerDrafts,
+			postSyncDefault,
 		})
 	}, [
 		normalizeAudio,
@@ -69,6 +71,7 @@ const SettingsPage = () => {
 		showLinkPreviews,
 		videoQuality,
 		saveComposerDrafts,
+		postSyncDefault,
 	])
 
 	const handleExportPosts = async () => {
@@ -195,6 +198,64 @@ const SettingsPage = () => {
 										checked={saveComposerDrafts}
 										onCheckedChange={setSaveComposerDrafts}
 									/>
+								</div>
+							</div>
+						</CardContent>
+					</Card>
+
+					<Card className="mb-4">
+						<CardHeader>
+							<CardTitle>Offline & sync</CardTitle>
+							<CardDescription>Configure how new posts sync</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<div className="space-y-4">
+								<div className="space-y-2">
+									<Label>New posts</Label>
+									<p className="text-sm text-muted-foreground">
+										Choose how the auto-sync switch in the composer starts.
+									</p>
+									<RadioGroup
+										value={postSyncDefault}
+										onValueChange={(value) =>
+											setPostSyncDefault(value as 'auto' | 'local' | 'remember')
+										}
+										className="flex flex-col space-y-1"
+									>
+										<div className="flex items-start space-x-2">
+											<RadioGroupItem value="auto" id="sync-auto" className="mt-0.5" />
+											<div className="space-y-0.5">
+												<Label htmlFor="sync-auto" className="font-normal">
+													Sync automatically
+												</Label>
+												<p className="text-sm text-muted-foreground">
+													Posts go online as soon as possible. Offline posts wait for a connection.
+												</p>
+											</div>
+										</div>
+										<div className="flex items-start space-x-2">
+											<RadioGroupItem value="local" id="sync-local" className="mt-0.5" />
+											<div className="space-y-0.5">
+												<Label htmlFor="sync-local" className="font-normal">
+													Stay on this device
+												</Label>
+												<p className="text-sm text-muted-foreground">
+													Posts wait here until you send them.
+												</p>
+											</div>
+										</div>
+										<div className="flex items-start space-x-2">
+											<RadioGroupItem value="remember" id="sync-remember" className="mt-0.5" />
+											<div className="space-y-0.5">
+												<Label htmlFor="sync-remember" className="font-normal">
+													Remember my last choice
+												</Label>
+												<p className="text-sm text-muted-foreground">
+													Start with whichever mode you used last.
+												</p>
+											</div>
+										</div>
+									</RadioGroup>
 								</div>
 							</div>
 						</CardContent>

@@ -11,6 +11,7 @@ import { FilterControls } from './feed/FilterControls'
 import { ActiveFiltersList } from './feed/ActiveFiltersList'
 import { InfiniteScrollSentinel } from './feed/InfiniteScrollSentinel'
 import { KeyboardShortcutsDialog } from './feed/KeyboardShortcutsDialog'
+import { OutboxList } from './feed/OutboxList'
 
 const Feed: React.FC = () => {
 	const {
@@ -124,6 +125,8 @@ const Feed: React.FC = () => {
 			<div className="my-4">
 				<CreatePost onPostCreated={handlePostCreated} />
 			</div>
+
+			<OutboxList />
 
 			<div className="my-4 max-w-lg mx-auto">
 				<FilterControls

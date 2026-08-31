@@ -7,10 +7,11 @@ import os
 import tempfile
 from datetime import timedelta
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import (
     BooleanField,
     Count,
@@ -36,7 +37,7 @@ from django.utils.dateformat import format as format_date
 from django.views.decorators.http import require_GET
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from werkzeug.http import parse_range_header
@@ -66,6 +67,7 @@ from .models import (
     LinkPreview,
     Media,
     Post,
+    PostClientRequest,
     PostView,
     generate_share_token,
 )
@@ -303,12 +305,103 @@ class PostViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         """Save a post with the authenticated or anonymous author."""
+        serializer.save(author=self._create_author())
+
+    def _create_author(self):
+        """Resolve the author used for a create request."""
         if self.request.user.is_authenticated:
-            serializer.save(author=self.request.user)
-        else:
-            # Anonymous posts are attributed to the dedicated 'anonymous' user
-            # (created by migrations / init_users).
-            serializer.save(author=get_user_model().objects.get(username='anonymous'))
+            return self.request.user
+        # Anonymous posts are attributed to the dedicated 'anonymous' user
+        # (created by migrations / init_users).
+        return get_user_model().objects.get(username='anonymous')
+
+    def _existing_client_post(self, author, client_uuid):
+        """Return an idempotent create match when the client UUID is valid."""
+        if client_uuid in (None, ''):
+            return None
+        try:
+            parsed_uuid = UUID(str(client_uuid))
+        except (AttributeError, TypeError, ValueError):
+            return None
+        return Post.objects.filter(author=author, client_uuid=parsed_uuid).first()
+
+    def _parse_client_uuid(self, client_uuid):
+        """Validate and normalize a client UUID used by coordination endpoints."""
+        try:
+            return UUID(str(client_uuid))
+        except (AttributeError, TypeError, ValueError):
+            raise ValidationError({'client_uuid': 'A valid UUID is required.'}) from None
+
+    def _validate_expected_author(self, request, author):
+        """Reject queued creates when the session changed after client verification."""
+        expected_author = request.data.get('expected_author')
+        if expected_author in (None, ''):
+            return
+        actual_author = str(author.pk) if request.user.is_authenticated else 'anon'
+        if str(expected_author) != actual_author:
+            raise PermissionDenied('The active session no longer matches this queued post.')
+
+    def _created_post_response(self, instance, response_status):
+        """Serialize a fresh or replayed create response."""
+        response_serializer = PostSerializer(instance, context=self.get_serializer_context())
+        headers = (
+            self.get_success_headers(response_serializer.data)
+            if response_status == status.HTTP_201_CREATED
+            else {}
+        )
+        return Response(response_serializer.data, status=response_status, headers=headers)
+
+    @action(detail=False, methods=['post'], url_path='idempotency-check')
+    def idempotency_check(self, request):
+        """Return this author's existing client-UUID post before a direct upload."""
+        author = self._create_author()
+        self._validate_expected_author(request, author)
+        client_uuid = request.data.get('client_uuid')
+        parsed_uuid = self._parse_client_uuid(client_uuid)
+
+        existing_post = Post.objects.filter(author=author, client_uuid=parsed_uuid).first()
+        if existing_post:
+            return self._created_post_response(existing_post, status.HTTP_200_OK)
+        if PostClientRequest.objects.filter(
+            author=author,
+            client_uuid=parsed_uuid,
+            cancelled_at__isnull=False,
+        ).exists():
+            return Response(
+                {'error': 'This queued post was cancelled.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=False, methods=['post'], url_path='idempotency-cancel')
+    def idempotency_cancel(self, request):
+        """Atomically cancel a UUID unless its post already committed."""
+        author = self._create_author()
+        self._validate_expected_author(request, author)
+        parsed_uuid = self._parse_client_uuid(request.data.get('client_uuid'))
+
+        with transaction.atomic():
+            existing_post = Post.objects.filter(author=author, client_uuid=parsed_uuid).first()
+            if existing_post:
+                return self._created_post_response(existing_post, status.HTTP_200_OK)
+            client_request, _ = PostClientRequest.objects.get_or_create(
+                author=author,
+                client_uuid=parsed_uuid,
+                defaults={'cancelled_at': timezone.now()},
+            )
+            # get_or_create resolves an insert race, then the row lock serializes
+            # the final decision with a create that obtained the UUID first.
+            client_request = PostClientRequest.objects.select_for_update().get(
+                pk=client_request.pk
+            )
+            existing_post = Post.objects.filter(author=author, client_uuid=parsed_uuid).first()
+            if existing_post:
+                return self._created_post_response(existing_post, status.HTTP_200_OK)
+            if client_request.cancelled_at is None:
+                client_request.cancelled_at = timezone.now()
+                client_request.save(update_fields=['cancelled_at'])
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def create(self, request, *args, **kwargs):
         """Create a post and attach validated media when provided."""
@@ -321,6 +414,13 @@ class PostViewSet(viewsets.ModelViewSet):
                 {'error': 'Authentication required'},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+
+        author = self._create_author()
+        self._validate_expected_author(request, author)
+        client_uuid = request.data.get('client_uuid')
+        existing_post = self._existing_client_post(author, client_uuid)
+        if existing_post:
+            return self._created_post_response(existing_post, status.HTTP_200_OK)
 
         try:
             media_payload = self._validate_media_payload(request)
@@ -336,49 +436,72 @@ class PostViewSet(viewsets.ModelViewSet):
             )
 
         request_data = _shallow_request_data(request.data)
+        request_data.pop('expected_author', None)
         for media_field in ('media', 'media_type', 's3_file_key'):
             request_data.pop(media_field, None)
         serializer = self.get_serializer(data=request_data)
         serializer.is_valid(raise_exception=True)
+        parsed_client_uuid = serializer.validated_data.get('client_uuid')
 
-        with transaction.atomic():
-            self.perform_create(serializer)
-            post = serializer.instance
+        try:
+            with transaction.atomic():
+                if parsed_client_uuid is not None:
+                    client_request, _ = PostClientRequest.objects.get_or_create(
+                        author=author,
+                        client_uuid=parsed_client_uuid,
+                    )
+                    client_request = PostClientRequest.objects.select_for_update().get(
+                        pk=client_request.pk
+                    )
+                    # Repeat the post lookup after acquiring the ledger row. A
+                    # concurrent create may have won while this request validated media.
+                    existing_post = Post.objects.filter(
+                        author=author, client_uuid=parsed_client_uuid
+                    ).first()
+                    if existing_post:
+                        return self._created_post_response(existing_post, status.HTTP_200_OK)
+                    if client_request.cancelled_at is not None:
+                        return Response(
+                            {'error': 'This queued post was cancelled.'},
+                            status=status.HTTP_409_CONFLICT,
+                        )
+                serializer.save(author=author)
+                post = serializer.instance
 
-            if media_payload:
-                # Pin the Media pk to the Post pk so a direct-upload file lands
-                # under post/<post.id>/media/... on first save (media_file_path
-                # reads instance.id). This intentionally couples the two pks and
-                # lets Media.save() skip its insert-twice fallback; see the note
-                # in Media.save() for the mechanism.
-                media_kwargs = {
-                    'id': post.id,  # pyright: ignore [reportOptionalMemberAccess]
-                    'media_type': media_payload['media_type'],
-                }
-                if media_payload['source'] == 'direct':
-                    media_kwargs['file'] = media_payload['file']
-                else:
-                    media_kwargs['s3_file_key'] = media_payload['s3_file_key']
-                    media_kwargs['duration'] = media_payload['duration']
+                if media_payload:
+                    # Pin the Media pk to the Post pk so a direct-upload file lands
+                    # under post/<post.id>/media/... on first save (media_file_path
+                    # reads instance.id). This intentionally couples the two pks and
+                    # lets Media.save() skip its insert-twice fallback; see the note
+                    # in Media.save() for the mechanism.
+                    media_kwargs = {
+                        'id': post.id,  # pyright: ignore [reportOptionalMemberAccess]
+                        'media_type': media_payload['media_type'],
+                    }
+                    if media_payload['source'] == 'direct':
+                        media_kwargs['file'] = media_payload['file']
+                    else:
+                        media_kwargs['s3_file_key'] = media_payload['s3_file_key']
+                        media_kwargs['duration'] = media_payload['duration']
 
-                media = Media.objects.create(**media_kwargs)
-                post.media = media  # pyright: ignore [reportOptionalMemberAccess]
-                post.save(update_fields=['media'])  # pyright: ignore [reportOptionalMemberAccess]
-                transaction.on_commit(
-                    lambda media_id=media.pk: _enqueue_process_post_media(media_id)
-                )
+                    media = Media.objects.create(**media_kwargs)
+                    post.media = media  # pyright: ignore [reportOptionalMemberAccess]
+                    post.save(update_fields=['media'])  # pyright: ignore [reportOptionalMemberAccess]
+                    transaction.on_commit(
+                        lambda media_id=media.pk: _enqueue_process_post_media(media_id)
+                    )
 
-            if sync_link_previews(post):
-                transaction.on_commit(
-                    lambda post_id=post.pk: _enqueue_fetch_link_previews(post_id)
-                )
+                if sync_link_previews(post):
+                    transaction.on_commit(
+                        lambda post_id=post.pk: _enqueue_fetch_link_previews(post_id)
+                    )
+        except IntegrityError:
+            existing_post = self._existing_client_post(author, client_uuid)
+            if existing_post:
+                return self._created_post_response(existing_post, status.HTTP_200_OK)
+            raise
 
-        # Get the created instance and serialize it with PostSerializer
-        instance = serializer.instance
-        response_serializer = PostSerializer(instance, context=self.get_serializer_context())
-        headers = self.get_success_headers(response_serializer.data)
-
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        return self._created_post_response(serializer.instance, status.HTTP_201_CREATED)
 
     def _validate_media_payload(self, request):
         media = request.data.get('media')

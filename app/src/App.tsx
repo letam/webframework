@@ -8,6 +8,7 @@ import { ThemeProvider } from '@/components/ThemeProvider'
 import { AuthProvider } from '@/hooks/useAuth'
 import { GroundRulesModal } from '@/components/GroundRulesModal'
 import AppErrorBoundary from '@/components/AppErrorBoundary'
+import { OutboxProvider } from '@/components/OutboxProvider'
 import Index from './pages/Index'
 
 const queryClient = new QueryClient()
@@ -28,22 +29,24 @@ const App = () => (
 		<ThemeProvider defaultTheme="system" storageKey="app-theme">
 			<AppErrorBoundary>
 				<AuthProvider>
-					<TooltipProvider>
-						<Toaster />
-						<Sonner />
-						<GroundRulesModal />
-						<BrowserRouter>
-							<Suspense fallback={<RouteFallback />}>
-								<Routes>
-									<Route path="/" element={<Index />} />
-									<Route path="/profile" element={<ProfilePage />} />
-									<Route path="/settings" element={<SettingsPage />} />
-									<Route path="/debug" element={<DebugPage />} />
-									<Route path="*" element={<NotFound />} />
-								</Routes>
-							</Suspense>
-						</BrowserRouter>
-					</TooltipProvider>
+					<OutboxProvider>
+						<TooltipProvider>
+							<Toaster />
+							<Sonner />
+							<GroundRulesModal />
+							<BrowserRouter>
+								<Suspense fallback={<RouteFallback />}>
+									<Routes>
+										<Route path="/" element={<Index />} />
+										<Route path="/profile" element={<ProfilePage />} />
+										<Route path="/settings" element={<SettingsPage />} />
+										<Route path="/debug" element={<DebugPage />} />
+										<Route path="*" element={<NotFound />} />
+									</Routes>
+								</Suspense>
+							</BrowserRouter>
+						</TooltipProvider>
+					</OutboxProvider>
 				</AuthProvider>
 			</AppErrorBoundary>
 		</ThemeProvider>

@@ -4,6 +4,7 @@ import {
 	useMutation,
 	useQueryClient,
 	type InfiniteData,
+	type QueryClient,
 	type QueryKey,
 } from '@tanstack/react-query'
 import type { Post, CreatePostRequest, UpdatePostRequest } from '../types/post'
@@ -103,6 +104,49 @@ const mapPages = (
 	})),
 })
 
+const updateTagsCacheFromFeed = (queryClient: QueryClient) => {
+	const feedData = queryClient.getQueryData<InfiniteData<PostsPage>>(UNSCOPED_POSTS_QUERY_KEY)
+	// Mutating from a scoped view (e.g. Profile) before the feed has ever
+	// loaded must not wipe the tag index with an empty post list.
+	if (!feedData) return
+	queryClient.setQueryData<TagInfo[]>(POST_TAGS_QUERY_KEY, buildTagIndex(flattenPosts(feedData)))
+}
+
+export const applyCreatedPostToCaches = (queryClient: QueryClient, newPost: Post) => {
+	const queries = queryClient.getQueriesData<InfiniteData<PostsPage>>({
+		queryKey: POSTS_QUERY_KEY,
+		predicate: (query) => isPostsQueryKey(query.queryKey),
+	})
+
+	for (const [cachedQueryKey, cachedData] of queries) {
+		if (!cachedData || !shouldPrependPostToScope(getScopeFromQueryKey(cachedQueryKey), newPost)) {
+			continue
+		}
+
+		queryClient.setQueryData<InfiniteData<PostsPage>>(cachedQueryKey, {
+			...cachedData,
+			pages: cachedData.pages.map((page, index) =>
+				index === 0 ? { ...page, posts: prependUniquePost(page.posts, newPost) } : page
+			),
+		})
+	}
+
+	updateTagsCacheFromFeed(queryClient)
+}
+
+export const applyUpdatedPostToCaches = (queryClient: QueryClient, updatedPost: Post) => {
+	queryClient.setQueriesData<InfiniteData<PostsPage>>(
+		{ queryKey: POSTS_QUERY_KEY, predicate: (query) => isPostsQueryKey(query.queryKey) },
+		(data) =>
+			data
+				? mapPages(data, (posts) =>
+						posts.map((post) => (post.id === updatedPost.id ? updatedPost : post))
+					)
+				: data
+	)
+	updateTagsCacheFromFeed(queryClient)
+}
+
 export const usePosts = (
 	scope: PostsQueryScope = DEFAULT_POSTS_SCOPE,
 	options: UsePostsOptions = {}
@@ -123,13 +167,10 @@ export const usePosts = (
 		[queryClient]
 	)
 
-	const updateTagsCacheFromFeed = useCallback(() => {
-		const feedData = queryClient.getQueryData<InfiniteData<PostsPage>>(UNSCOPED_POSTS_QUERY_KEY)
-		// Mutating from a scoped view (e.g. Profile) before the feed has ever
-		// loaded must not wipe the tag index with an empty post list.
-		if (!feedData) return
-		updateTagsCacheFromPosts(flattenPosts(feedData))
-	}, [queryClient, updateTagsCacheFromPosts])
+	const refreshTagsCacheFromFeed = useCallback(
+		() => updateTagsCacheFromFeed(queryClient),
+		[queryClient]
+	)
 
 	const updatePostsCaches = useCallback(
 		(transform: (posts: Post[]) => Post[]) => {
@@ -137,9 +178,9 @@ export const usePosts = (
 				{ queryKey: POSTS_QUERY_KEY, predicate: (query) => isPostsQueryKey(query.queryKey) },
 				(data) => (data ? mapPages(data, transform) : data)
 			)
-			updateTagsCacheFromFeed()
+			refreshTagsCacheFromFeed()
 		},
-		[queryClient, updateTagsCacheFromFeed]
+		[queryClient, refreshTagsCacheFromFeed]
 	)
 
 	const invalidatePinnedScopes = useCallback(() => {
@@ -178,30 +219,7 @@ export const usePosts = (
 
 	const addPostMutation = useMutation({
 		mutationFn: (postData: CreatePostRequest) => createPost(postData),
-		onSuccess: (newPost) => {
-			const queries = queryClient.getQueriesData<InfiniteData<PostsPage>>({
-				queryKey: POSTS_QUERY_KEY,
-				predicate: (query) => isPostsQueryKey(query.queryKey),
-			})
-
-			for (const [cachedQueryKey, cachedData] of queries) {
-				if (
-					!cachedData ||
-					!shouldPrependPostToScope(getScopeFromQueryKey(cachedQueryKey), newPost)
-				) {
-					continue
-				}
-
-				queryClient.setQueryData<InfiniteData<PostsPage>>(cachedQueryKey, {
-					...cachedData,
-					pages: cachedData.pages.map((page, index) =>
-						index === 0 ? { ...page, posts: prependUniquePost(page.posts, newPost) } : page
-					),
-				})
-			}
-
-			updateTagsCacheFromFeed()
-		},
+		onSuccess: (newPost) => applyCreatedPostToCaches(queryClient, newPost),
 	})
 
 	const editPostMutation = useMutation({
@@ -254,7 +272,7 @@ export const usePosts = (
 				})
 			}
 
-			updateTagsCacheFromFeed()
+			refreshTagsCacheFromFeed()
 		},
 	})
 
@@ -292,7 +310,7 @@ export const usePosts = (
 			for (const [cachedQueryKey, cachedData] of context?.previousPosts ?? []) {
 				queryClient.setQueryData(cachedQueryKey, cachedData)
 			}
-			updateTagsCacheFromFeed()
+			refreshTagsCacheFromFeed()
 			console.error('Failed to update like:', error)
 			toast.error('Failed to update like')
 		},

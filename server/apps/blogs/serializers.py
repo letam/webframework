@@ -283,6 +283,8 @@ class PostSerializer(serializers.ModelSerializer):
 class PostCreateSerializer(serializers.ModelSerializer):
     """Serializer for post create payloads."""
 
+    client_uuid = serializers.UUIDField(required=False, allow_null=True, write_only=True)
+
     class Meta:  # pyright: ignore [reportIncompatibleVariableOverride]
         """Serializer metadata."""
 
@@ -297,4 +299,5 @@ class PostCreateSerializer(serializers.ModelSerializer):
             'visibility',
             'is_draft',
             'link_previews_enabled',
+            'client_uuid',
         ]

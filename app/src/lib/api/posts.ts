@@ -7,6 +7,7 @@ import type {
 } from '../../types/post'
 import { SERVER_API_URL, UPLOAD_FILES_TO_S3 } from '../constants'
 import { getFetchOptions } from '../utils/fetch'
+import { ApiError } from './errors'
 
 export interface PostsPage {
 	posts: Post[]
@@ -49,6 +50,38 @@ const revivePost = (post: Post): Post => ({
 	link_previews_enabled: post.link_previews_enabled ?? true,
 	url: `${window.location.origin}/p/${post.id}/`,
 })
+
+export const findPostByClientUuid = async (
+	clientUuid: string,
+	expectedAuthor?: number | 'anon'
+): Promise<Post | null> => {
+	const options = await getFetchOptions('POST', {
+		client_uuid: clientUuid,
+		...(expectedAuthor === undefined ? {} : { expected_author: expectedAuthor }),
+	})
+	const response = await fetch(`${SERVER_API_URL}/posts/idempotency-check/`, options)
+	if (response.status === 204) return null
+	if (!response.ok) {
+		throw new ApiError('Failed to check for an existing post', response.status)
+	}
+	return revivePost((await response.json()) as Post)
+}
+
+export const cancelPostByClientUuid = async (
+	clientUuid: string,
+	expectedAuthor: number | 'anon'
+): Promise<Post | null> => {
+	const options = await getFetchOptions('POST', {
+		client_uuid: clientUuid,
+		expected_author: expectedAuthor,
+	})
+	const response = await fetch(`${SERVER_API_URL}/posts/idempotency-cancel/`, options)
+	if (response.status === 204) return null
+	if (!response.ok) {
+		throw new ApiError('Failed to cancel the queued post', response.status)
+	}
+	return revivePost((await response.json()) as Post)
+}
 
 const buildPostsUrl = (scope: PostsQueryScope) => {
 	const params = new URLSearchParams()
@@ -123,6 +156,12 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 		if (data.link_previews_enabled === false) {
 			formData.append('link_previews_enabled', 'false')
 		}
+		if (data.client_uuid) {
+			formData.append('client_uuid', data.client_uuid)
+		}
+		if (data.expected_author !== undefined) {
+			formData.append('expected_author', String(data.expected_author))
+		}
 
 		// // Debug logging
 		// console.log('Creating post with data:', data)
@@ -134,15 +173,24 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 
 		// Check environment variable to see if we upload to S3 cloud-compatible storage or local storage
 		if (data.media && UPLOAD_FILES_TO_S3) {
+			// A queued retry may be replaying a create whose response was lost. Ask
+			// before presigning or uploading so the same client UUID cannot leave a
+			// second, unattached object behind in S3/R2.
+			if (data.client_uuid) {
+				const existingPost = await findPostByClientUuid(data.client_uuid, data.expected_author)
+				if (existingPost) return existingPost
+			}
+
 			// Get presigned url from backend
 			const options = await getFetchOptions('POST', {
 				file_name: data.media.name,
 				content_type: data.media.type,
 				content_length: data.media.size,
+				...(data.expected_author === undefined ? {} : { expected_author: data.expected_author }),
 			})
 			response = await fetch(`${SERVER_API_URL}/uploads/presign/`, options)
 			if (!response.ok) {
-				throw new Error('Failed to get an upload URL')
+				throw new ApiError('Failed to get an upload URL', response.status)
 			}
 			const presignedUrl = (await response.json()) as { url: string; file_path: string }
 
@@ -157,7 +205,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 				body: data.media,
 			})
 			if (!uploadResponse.ok) {
-				throw new Error('Failed to upload media')
+				throw new ApiError('Failed to upload media', uploadResponse.status)
 			}
 
 			// create post with file url
@@ -178,7 +226,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 		}
 
 		if (!response.ok) {
-			throw new Error('Failed to create post')
+			throw new ApiError('Failed to create post', response.status)
 		}
 		const record: Post = await response.json()
 		return revivePost(record)

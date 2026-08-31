@@ -95,6 +95,32 @@ describe('SettingsPage', () => {
 		expect(getSettings().linkPreviews).toBe(true)
 	})
 
+	it('renders and persists the offline sync default', async () => {
+		const user = userEvent.setup()
+		render(<SettingsPage />)
+
+		expect(screen.getByText('Offline & sync')).toBeInTheDocument()
+		expect(screen.getByText('Configure how new posts sync')).toBeInTheDocument()
+		expect(
+			screen.getByText('Choose how the auto-sync switch in the composer starts.')
+		).toBeInTheDocument()
+
+		expect(screen.getByRole('radio', { name: 'Remember my last choice' })).toBeChecked()
+		expect(screen.getByRole('radio', { name: 'Sync automatically' })).not.toBeChecked()
+		expect(screen.getByRole('radio', { name: 'Stay on this device' })).not.toBeChecked()
+		expect(
+			screen.getByText('Posts go online as soon as possible. Offline posts wait for a connection.')
+		).toBeInTheDocument()
+		expect(screen.getByText('Posts wait here until you send them.')).toBeInTheDocument()
+		expect(screen.getByText('Start with whichever mode you used last.')).toBeInTheDocument()
+
+		await user.click(screen.getByText('Stay on this device'))
+
+		await waitFor(() => {
+			expect(getSettings().postSyncDefault).toBe('local')
+		})
+	})
+
 	it('hides the data export button for anonymous users', () => {
 		render(<SettingsPage />)
 

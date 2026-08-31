@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useCallback, useState, useRef } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/sonner'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,20 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Mic, Video, Image, Loader2, Upload, Globe, Link2, Lock, Bold, Italic } from 'lucide-react'
+import {
+	Mic,
+	Video,
+	Image,
+	Loader2,
+	Upload,
+	Globe,
+	Link2,
+	Lock,
+	Bold,
+	Italic,
+	Cloud,
+	CloudOff,
+} from 'lucide-react'
 import { AudioRecorderModal } from './AudioRecorder'
 import { VideoRecorderModal } from './VideoRecorder'
 import MediaPreview from './MediaPreview'
@@ -21,14 +34,28 @@ import { getSettings } from '@/lib/utils/settings'
 import { applyMarkdownShortcut, toggleMarker } from '@/lib/utils/richText'
 import { modifierKeyLabel } from '@/lib/utils/browser'
 import { useAuth } from '@/hooks/useAuth'
+import { useOutbox } from '@/hooks/useOutbox'
 import { useComposerDraft } from '@/hooks/useComposerDraft'
 import type { ComposerDraft } from '@/lib/utils/composerDraft'
+import {
+	enqueuePost,
+	getEffectiveSyncMode,
+	MAX_QUEUED_MEDIA_BYTES,
+	setSyncMode,
+	type SyncMode,
+} from '@/lib/outbox'
+import { registerComposerLoader } from '@/lib/composerBridge'
+import type { OutboxEntry } from '@/lib/utils/outboxDb'
 
 interface CreatePostProps {
-	onPostCreated: (post: CreatePostRequest) => void
+	onPostCreated: (post: CreatePostRequest) => Promise<void> | void
 }
 
 type SubmitStatus = '' | 'preparing' | 'compressing' | 'submitting'
+
+const MEDIA_CAP_TOAST = `This file is too big to queue (${Math.round(
+	MAX_QUEUED_MEDIA_BYTES / (1024 * 1024)
+)} MB limit).`
 
 const VISIBILITY_OPTIONS = [
 	{
@@ -71,7 +98,8 @@ const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): stri
 }
 
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
-	const { isAuthenticated, isAuthResolved, userId } = useAuth()
+	const { isAuthenticated, isAuthResolved, userId, refreshAuthStatus, getAuthSnapshot } = useAuth()
+	const { syncMode } = useOutbox()
 	const [postText, setPostText] = useState('')
 	const [mediaType, setMediaType] = useState<'text' | 'audio' | 'video' | 'image'>('text')
 	const [visibility, setVisibility] = useState<PostVisibility>('public')
@@ -81,6 +109,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [videoFile, setVideoFile] = useState<File | null>(null)
 	const [imageFile, setImageFile] = useState<File | null>(null)
 	const [submitStatus, setSubmitStatus] = useState<SubmitStatus | ''>('')
+	const [composerLocked, setComposerLocked] = useState(false)
+	const composerLockedRef = useRef(false)
 	const [isFocused, setIsFocused] = useState(false)
 	const [isAudioModalOpen, setIsAudioModalOpen] = useState(false)
 	const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
@@ -88,6 +118,12 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const audioInputRef = useRef<HTMLInputElement>(null)
 	const uploadInputRef = useRef<HTMLInputElement>(null)
 	const imageInputRef = useRef<HTMLInputElement>(null)
+	const composerStateRef = useRef<{
+		text: string
+		visibility: PostVisibility
+		mediaType: 'text' | 'audio' | 'video' | 'image'
+		media: Blob | File | null
+	}>({ text: '', visibility: 'public', mediaType: 'text', media: null })
 
 	const hasNoMedia = !audioBlob && !audioFile && !videoBlob && !videoFile && !imageFile
 	const canPost = !!postText.trim() || !hasNoMedia
@@ -95,6 +131,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const expanded = isFocused || canPost || !!submitStatus
 	const VisibilityIcon =
 		VISIBILITY_OPTIONS.find((option) => option.value === visibility)?.icon ?? Globe
+	const SyncModeIcon = syncMode === 'auto' ? Cloud : CloudOff
 	const modKey = modifierKeyLabel()
 
 	// Read once on mount: autosave should not start or stop mid-compose because
@@ -111,6 +148,77 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				: mediaType === 'image'
 					? imageFile
 					: null
+	composerStateRef.current = { text: postText, visibility, mediaType, media: activeMedia }
+
+	const loadOutboxEntry = useCallback(
+		(entry: OutboxEntry) => {
+			if (postText.length > 0 || !hasNoMedia || composerLockedRef.current) return null
+			composerLockedRef.current = true
+			setComposerLocked(true)
+
+			const loadedVisibility = entry.visibility ?? 'public'
+			let loadedMedia: File | null = null
+			setPostText(entry.text)
+			setVisibility(loadedVisibility)
+			if (entry.media && entry.mediaType) {
+				const file = new File([entry.media], entry.mediaName ?? 'restored', {
+					type: entry.media.type,
+				})
+				loadedMedia = file
+				setMediaType(entry.mediaType)
+				if (entry.mediaType === 'audio') setAudioFile(file)
+				if (entry.mediaType === 'video') setVideoFile(file)
+				if (entry.mediaType === 'image') setImageFile(file)
+			} else {
+				setMediaType('text')
+			}
+			const loadedMediaType = entry.media && entry.mediaType ? entry.mediaType : 'text'
+			composerStateRef.current = {
+				text: entry.text,
+				visibility: loadedVisibility,
+				mediaType: loadedMediaType,
+				media: loadedMedia,
+			}
+			textareaRef.current?.focus()
+			return {
+				commit: () => {
+					composerLockedRef.current = false
+					setComposerLocked(false)
+				},
+				rollback: () => {
+					composerLockedRef.current = false
+					setComposerLocked(false)
+					const current = composerStateRef.current
+					if (
+						current.text !== entry.text ||
+						current.visibility !== loadedVisibility ||
+						current.mediaType !== loadedMediaType ||
+						current.media !== loadedMedia
+					) {
+						return false
+					}
+					setPostText('')
+					setVisibility('public')
+					setAudioBlob(null)
+					setVideoBlob(null)
+					setAudioFile(null)
+					setVideoFile(null)
+					setImageFile(null)
+					setMediaType('text')
+					composerStateRef.current = {
+						text: '',
+						visibility: 'public',
+						mediaType: 'text',
+						media: null,
+					}
+					return true
+				},
+			}
+		},
+		[hasNoMedia, postText]
+	)
+
+	useEffect(() => registerComposerLoader(loadOutboxEntry), [loadOutboxEntry])
 
 	const restoreDraft = useCallback((stored: ComposerDraft) => {
 		setPostText(stored.text)
@@ -265,6 +373,105 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		setMediaType('text')
 	}
 
+	const resetComposer = () => {
+		setPostText('')
+		setVisibility('public')
+		clearMedia()
+		clearStoredDraft()
+		textareaRef.current?.focus()
+	}
+
+	const prepareMediaFile = async (): Promise<{
+		mediaType: 'audio' | 'video' | 'image'
+		file: File
+	} | null> => {
+		let finalMediaType: 'audio' | 'video' | 'image' | undefined
+		let file: File | null = null
+
+		if (mediaType === 'audio' && (audioBlob || audioFile)) {
+			const blob = audioFile || audioBlob
+			if (blob) {
+				finalMediaType = 'audio'
+				if (!(blob instanceof File)) {
+					// Only convert to WebM if normalization is enabled (since normalization converts the blob to WAV)
+					if (getSettings().normalizeAudio) {
+						setSubmitStatus('compressing')
+						const webmBlob = await convertWavToWebM(blob)
+						file = new File([webmBlob], `recording_${Date.now()}.webm`, {
+							type: 'audio/webm;codecs=opus',
+						})
+					} else {
+						const extension = getMediaExtension(blob.type, 'audio')
+						file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
+					}
+				} else {
+					file = blob
+				}
+			}
+		} else if (mediaType === 'video' && (videoBlob || videoFile)) {
+			const blob = videoFile || videoBlob
+			if (blob) {
+				finalMediaType = 'video'
+				if (!(blob instanceof File)) {
+					const extension = getMediaExtension(blob.type, 'video')
+					file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
+				} else {
+					file = blob
+				}
+			}
+		} else if (mediaType === 'image' && imageFile) {
+			finalMediaType = 'image'
+			file = imageFile
+		}
+
+		return finalMediaType && file ? { mediaType: finalMediaType, file } : null
+	}
+
+	const queuePost = async (
+		isDraft: boolean,
+		media: { mediaType: 'audio' | 'video' | 'image'; file: File } | null,
+		id?: string,
+		authOverride?: { author: OutboxEntry['author']; isAuthenticated: boolean },
+		mayHavePublished = false
+	) => {
+		const settings = getSettings()
+		const queueAuth = authOverride ?? {
+			author: isAuthenticated && userId !== null ? userId : isAuthResolved ? 'anon' : 'unknown',
+			isAuthenticated,
+		}
+		const stored = await enqueuePost({
+			id,
+			author: queueAuth.author,
+			text: postText,
+			visibility: queueAuth.isAuthenticated ? visibility : null,
+			isDraft,
+			linkPreviewsEnabled: settings.linkPreviews,
+			autoTranscribe: settings.autoTranscribe && queueAuth.isAuthenticated,
+			mediaType: media?.mediaType ?? null,
+			media: media?.file ?? null,
+			mediaName: media?.file.name ?? null,
+			...(mayHavePublished ? { mayHavePublished: true } : {}),
+		})
+
+		if (!stored) {
+			toast.error(
+				media
+					? "Couldn't queue this post — device storage is full."
+					: "Couldn't save this post on this device."
+			)
+			return
+		}
+
+		resetComposer()
+		toast(
+			getEffectiveSyncMode() === 'local'
+				? 'Saved on this device.'
+				: isDraft
+					? "Queued — will save to drafts when you're back online."
+					: "Queued — will post when you're back online."
+		)
+	}
+
 	// Throw away a restored draft the user did not want back.
 	const discardRestoredDraft = () => {
 		setPostText('')
@@ -276,7 +483,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const submitPost = async (isDraft: boolean, e?: React.FormEvent) => {
 		e?.preventDefault()
 
-		if (submitStatus) {
+		if (submitStatus || composerLockedRef.current) {
 			return
 		}
 
@@ -285,69 +492,98 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			return
 		}
 
+		if (getEffectiveSyncMode() === 'local' || !navigator.onLine) {
+			setSubmitStatus('preparing')
+			try {
+				const prepared = await prepareMediaFile()
+				if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
+					toast.error(MEDIA_CAP_TOAST)
+					return
+				}
+				await queuePost(isDraft, prepared)
+			} catch {
+				toast.error('Failed to create post')
+			} finally {
+				setSubmitStatus('')
+			}
+			return
+		}
+
 		setSubmitStatus('preparing')
+		let prepared: { mediaType: 'audio' | 'video' | 'image'; file: File } | null = null
+		// A TypeError thrown *during* preparation is not a network drop; queueing then
+		// would enqueue the text without its media.
+		let prepareCompleted = false
+
+		// The live request and the fallback queue entry share one client_uuid: if the
+		// create landed but its response was lost, the flush replays instead of
+		// duplicating.
+		const clientUuid = crypto.randomUUID()
+		let expectedAuthor: number | 'anon' = isAuthenticated && userId !== null ? userId : 'anon'
+		let queueAuth = {
+			author: (isAuthenticated && userId !== null
+				? userId
+				: isAuthResolved
+					? 'anon'
+					: 'unknown') as OutboxEntry['author'],
+			isAuthenticated,
+		}
+		let authReady = isAuthResolved
 
 		try {
-			let finalMediaType: 'audio' | 'video' | 'image' | undefined
-			let file: File | null = null
-
-			if (mediaType === 'audio' && (audioBlob || audioFile)) {
-				const blob = audioFile || audioBlob
-				if (blob) {
-					finalMediaType = 'audio'
-					if (!(blob instanceof File)) {
-						// Only convert to WebM if normalization is enabled (since normalization converts the blob to WAV)
-						if (getSettings().normalizeAudio) {
-							setSubmitStatus('compressing')
-							const webmBlob = await convertWavToWebM(blob)
-							file = new File([webmBlob], `recording_${Date.now()}.webm`, {
-								type: 'audio/webm;codecs=opus',
-							})
-						} else {
-							const extension = getMediaExtension(blob.type, 'audio')
-							file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
+			if (!isAuthResolved) {
+				if (await refreshAuthStatus()) {
+					const resolvedAuth = getAuthSnapshot()
+					if (resolvedAuth.isAuthResolved) {
+						authReady = true
+						expectedAuthor =
+							resolvedAuth.isAuthenticated && resolvedAuth.userId !== null
+								? resolvedAuth.userId
+								: 'anon'
+						queueAuth = {
+							author: expectedAuthor,
+							isAuthenticated: resolvedAuth.isAuthenticated,
 						}
-					} else {
-						file = blob
 					}
 				}
-			} else if (mediaType === 'video' && (videoBlob || videoFile)) {
-				const blob = videoFile || videoBlob
-				if (blob) {
-					finalMediaType = 'video'
-					if (!(blob instanceof File)) {
-						const extension = getMediaExtension(blob.type, 'video')
-						file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
-					} else {
-						file = blob
-					}
-				}
-			} else if (mediaType === 'image' && imageFile) {
-				finalMediaType = 'image'
-				file = imageFile
 			}
-
+			prepared = await prepareMediaFile()
+			prepareCompleted = true
+			// Connectivity may disappear while a recording is converted. Starting the
+			// mutation offline can pause indefinitely instead of rejecting into fallback.
+			// An unresolved identity is queued as unknown for the same fail-safe reason.
+			if (!authReady || getEffectiveSyncMode() === 'local' || !navigator.onLine) {
+				if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
+					toast.error(MEDIA_CAP_TOAST)
+					return
+				}
+				await queuePost(isDraft, prepared, clientUuid, queueAuth)
+				return
+			}
 			setSubmitStatus('submitting')
 			const newPost: CreatePostRequest = {
 				text: postText,
-				media_type: finalMediaType,
-				media: file,
-				visibility: isAuthenticated ? visibility : undefined,
+				client_uuid: clientUuid,
+				expected_author: expectedAuthor,
+				media_type: prepared?.mediaType,
+				media: prepared?.file ?? null,
+				visibility: queueAuth.isAuthenticated ? visibility : undefined,
 				is_draft: isDraft || undefined,
 			}
 
 			await onPostCreated(newPost)
-			// Reset form only on success
-			setPostText('')
-			setVisibility('public')
-			clearMedia()
-			// The draft has become a post; there is nothing left to rescue.
-			clearStoredDraft()
+			resetComposer()
 			toast.success(isDraft ? 'Saved to drafts.' : 'Post created successfully!')
-			// Focus back on text area
-			textareaRef.current?.focus()
-		} catch (_error) {
-			toast.error('Failed to create post')
+		} catch (error) {
+			if (error instanceof TypeError && prepareCompleted) {
+				if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
+					toast.error(MEDIA_CAP_TOAST)
+					return
+				}
+				await queuePost(isDraft, prepared, clientUuid, queueAuth, true)
+			} else {
+				toast.error('Failed to create post')
+			}
 		} finally {
 			setSubmitStatus('')
 		}
@@ -552,6 +788,50 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 										: 'Posting...'}
 							</span>
 						)}
+						<TooltipProvider delayDuration={300}>
+							<Tooltip>
+								<DropdownMenu>
+									<DropdownMenuTrigger asChild>
+										<TooltipTrigger asChild>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												className="h-8 w-8 rounded-full text-muted-foreground"
+												disabled={!!submitStatus}
+												aria-label="Auto-sync"
+											>
+												<SyncModeIcon className="h-4 w-4" />
+											</Button>
+										</TooltipTrigger>
+									</DropdownMenuTrigger>
+									<DropdownMenuContent align="end" className="w-72">
+										<DropdownMenuRadioGroup
+											value={syncMode}
+											onValueChange={(value) => setSyncMode(value as SyncMode)}
+										>
+											<DropdownMenuRadioItem value="auto" className="items-start gap-2">
+												<span className="grid gap-0.5">
+													<span>Sync automatically</span>
+													<span className="text-xs text-muted-foreground">
+														Posts go online as soon as possible.
+													</span>
+												</span>
+											</DropdownMenuRadioItem>
+											<DropdownMenuRadioItem value="local" className="items-start gap-2">
+												<span className="grid gap-0.5">
+													<span>Stay on this device</span>
+													<span className="text-xs text-muted-foreground">
+														Posts wait here until you send them.
+													</span>
+												</span>
+											</DropdownMenuRadioItem>
+										</DropdownMenuRadioGroup>
+									</DropdownMenuContent>
+								</DropdownMenu>
+								<TooltipContent>Auto-sync</TooltipContent>
+							</Tooltip>
+						</TooltipProvider>
 						{isAuthenticated && expanded && (
 							<TooltipProvider delayDuration={300}>
 								<Tooltip>
@@ -608,7 +888,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 											type="button"
 											variant="ghost"
 											size="sm"
-											disabled={!!submitStatus}
+											disabled={!!submitStatus || composerLocked}
 											onClick={() => void submitPost(true)}
 										>
 											Draft
@@ -621,7 +901,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						<Button
 							type="submit"
 							size="sm"
-							disabled={!canPost || !!submitStatus}
+							disabled={!canPost || !!submitStatus || composerLocked}
 							className="rounded-full px-5 font-medium"
 						>
 							Post
@@ -651,6 +931,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				<input
 					type="file"
 					ref={imageInputRef}
+					data-testid="composer-image-input"
 					className="hidden"
 					accept="image/*"
 					onChange={handleImageFileChange}

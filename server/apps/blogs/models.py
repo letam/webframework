@@ -223,6 +223,29 @@ class PostQuerySet(models.QuerySet):
         return queryset.filter(visibility=VISIBILITY_PUBLIC)
 
 
+class PostClientRequest(models.Model):
+    """Serialize create/cancel decisions for one author-owned client UUID."""
+
+    created = models.DateTimeField(auto_now_add=True)
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    client_uuid = models.UUIDField()
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        """Keep one durable decision record per author and client UUID."""
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=['author', 'client_uuid'],
+                name='unique_author_post_client_request',
+            ),
+        ]
+
+    def __str__(self):
+        """Return the author-scoped coordination key."""
+        return f'{self.author_id}:{self.client_uuid}'
+
+
 class Post(models.Model):
     """A micro-blog post."""
 
@@ -240,6 +263,7 @@ class Post(models.Model):
     link_previews_enabled = models.BooleanField(default=True)
     pinned_at = models.DateTimeField(null=True, blank=True)
     share_token = models.CharField(max_length=32, default=generate_share_token)
+    client_uuid = models.UUIDField(null=True, blank=True, default=None, editable=False)
 
     objects = PostQuerySet.as_manager()
 
@@ -253,6 +277,13 @@ class Post(models.Model):
         ordering = ['-created', '-id']
         indexes = [
             models.Index(fields=['-created', '-id'], name='blogs_post_feed_idx'),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['author', 'client_uuid'],
+                condition=models.Q(client_uuid__isnull=False),
+                name='unique_author_client_uuid',
+            ),
         ]
 
     def __str__(self):

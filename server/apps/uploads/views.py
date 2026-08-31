@@ -64,10 +64,19 @@ def get_presigned_url(request):
 
     if request.user.is_authenticated:
         user_id = request.user.id
+        actual_author = str(user_id)
     else:
         # Anonymous uploads are keyed under the dedicated 'anonymous' user
         # (created by migrations / init_users).
         user_id = User.objects.get(username='anonymous').id
+        actual_author = 'anon'
+
+    expected_author = data.get('expected_author')
+    if expected_author not in (None, '') and str(expected_author) != actual_author:
+        return JsonResponse(
+            {'error': 'The active session no longer matches this queued post.'},
+            status=403,
+        )
     file_path = f'post/audio/{user_id}/{file_name}'
 
     # check if file path is already used in the database

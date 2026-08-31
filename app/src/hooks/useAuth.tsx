@@ -6,18 +6,11 @@ import { POSTS_QUERY_KEY } from './usePosts'
 
 interface AuthState {
 	isAuthenticated: boolean
-	/** True until the first /auth/status/ resolves. Consumers that key storage on
-	 * the user id (e.g. composer drafts) must wait this out, or they act on the
-	 * pre-resolve `userId === null` and mistake a signed-in user for anonymous. */
+	/** True until the first /auth/status/ attempt finishes. */
 	isAuthLoading: boolean
-	/** True once /auth/status/ has actually answered. Distinct from
-	 * `!isAuthLoading`, which also goes true when the check *failed* — and a
-	 * failed check leaves `userId` at its null default, which is
-	 * indistinguishable from a genuine anonymous visitor. Anything that would
-	 * write the current user's data somewhere keyed on that id must gate on this
-	 * one instead; being wrong there puts a signed-in user's content in the
-	 * shared anonymous slot. Once true it stays true: a later failure does not
-	 * invalidate the last answer we got. */
+	/** True once /auth/status/ has actually answered. A failed request ends loading
+	 * but leaves this false so user-keyed storage cannot mistake an unknown identity
+	 * for a genuine anonymous visitor. Once true it stays true. */
 	isAuthResolved: boolean
 	userId: number | null
 	username: string | null
@@ -27,79 +20,90 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-	refreshAuthStatus: () => Promise<void>
+	refreshAuthStatus: () => Promise<boolean>
+	getAuthSnapshot: () => AuthState
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
+const INITIAL_AUTH_STATE: AuthState = {
+	isAuthenticated: false,
+	isAuthLoading: true,
+	isAuthResolved: false,
+	userId: null,
+	username: null,
+	avatar: null,
+	isStaff: false,
+	isSuperuser: false,
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 	const queryClient = useQueryClient()
 	const hasCheckedAuth = useRef(false)
-	// Last user id we resolved, held in a ref so checkAuthStatus can compare against
-	// it without depending on authState.userId — depending on it would churn the
-	// callback identity and re-fire the mount effect, double-fetching /auth/status/.
-	const lastUserIdRef = useRef<number | null>(null)
-	const [authState, setAuthState] = useState<AuthState>({
-		isAuthenticated: false,
-		isAuthLoading: true,
-		isAuthResolved: false,
-		userId: null,
-		username: null,
-		avatar: null,
-		isStaff: false,
-		isSuperuser: false,
-	})
+	const [authState, setAuthState] = useState<AuthState>(INITIAL_AUTH_STATE)
+	const latestAuthRequestId = useRef(0)
+	// Written before setAuthState commits, so callers that await refreshAuthStatus
+	// (the outbox flush) can read the refreshed identity immediately.
+	const latestAuthRef = useRef<AuthState>(INITIAL_AUTH_STATE)
 
-	const checkAuthStatus = useCallback(async () => {
+	const checkAuthStatus = useCallback(async (): Promise<boolean> => {
+		const requestId = ++latestAuthRequestId.current
 		try {
 			const response = await fetch(`${SERVER_HOST}/auth/status/`)
-			if (response.ok) {
-				const data = await response.json()
-				const newAuthState = {
-					isAuthenticated: data.is_authenticated,
-					isAuthLoading: false,
-					isAuthResolved: true,
-					userId: data.user_id,
-					username: data.username,
-					avatar: data.avatar ?? null,
-					isStaff: data.is_staff || false,
-					isSuperuser: data.is_superuser || false,
-				}
-
-				// If the signed-in user changed, clear the CSRF token cache and
-				// refetch posts so per-user fields (e.g. liked) are up to date.
-				// Skip on the initial check: the first posts fetch already ran
-				// with the session cookie, so its data is correct.
-				if (newAuthState.userId !== lastUserIdRef.current) {
-					clearCsrfTokenCache()
-					if (hasCheckedAuth.current) {
-						queryClient.invalidateQueries({ queryKey: POSTS_QUERY_KEY })
-					}
-				}
-				lastUserIdRef.current = newAuthState.userId
-				hasCheckedAuth.current = true
-
-				setAuthState(newAuthState)
-			} else {
-				// A non-2xx (e.g. a 500 from the auth endpoint) is not an auth answer;
-				// don't swallow it silently. The finally still resolves the loading gate.
+			if (!response.ok) {
 				console.error('Auth status check returned HTTP', response.status)
+				return false
 			}
+
+			const data = await response.json()
+			// A later check may have started after this request captured an older
+			// session cookie. Never let that older answer replace the latest identity,
+			// and tell awaiting senders not to proceed with their stale check.
+			if (requestId !== latestAuthRequestId.current) return false
+			const newAuthState: AuthState = {
+				isAuthenticated: data.is_authenticated,
+				isAuthLoading: false,
+				isAuthResolved: true,
+				userId: data.user_id,
+				username: data.username,
+				avatar: data.avatar ?? null,
+				isStaff: data.is_staff || false,
+				isSuperuser: data.is_superuser || false,
+			}
+
+			// If the signed-in user changed, clear the CSRF token cache and
+			// refetch posts so per-user fields (e.g. liked) are up to date.
+			// Skip on the initial check: the first posts fetch already ran with
+			// the session cookie, so its data is correct.
+			if (newAuthState.userId !== latestAuthRef.current.userId) {
+				clearCsrfTokenCache()
+				if (hasCheckedAuth.current) {
+					queryClient.invalidateQueries({ queryKey: POSTS_QUERY_KEY })
+				}
+			}
+			hasCheckedAuth.current = true
+
+			latestAuthRef.current = newAuthState
+			setAuthState(newAuthState)
+			return true
 		} catch (error) {
 			console.error('Error checking auth status:', error)
+			return false
 		} finally {
-			// Resolve the loading gate after the first attempt, whatever the
-			// outcome (ok, non-2xx, or thrown) — otherwise a failed initial check
-			// would leave consumers waiting forever. Only touch state if still
-			// loading, to avoid a redundant re-render on the happy path.
-			//
-			// `isAuthResolved` deliberately stays false here. The UI can render a
-			// signed-out shell on a failed check and recover when the user acts;
-			// storage keyed on the user id cannot, because the null it would key
-			// on is a default rather than an answer.
-			setAuthState((prev) => (prev.isAuthLoading ? { ...prev, isAuthLoading: false } : prev))
+			// End the UI loading state after a failed attempt, but keep
+			// isAuthResolved false: null is still a default, not an auth answer.
+			if (requestId === latestAuthRequestId.current) {
+				setAuthState((previous) => {
+					if (!previous.isAuthLoading) return previous
+					const next = { ...previous, isAuthLoading: false }
+					latestAuthRef.current = next
+					return next
+				})
+			}
 		}
 	}, [queryClient])
+
+	const getAuthSnapshot = useCallback(() => latestAuthRef.current, [])
 
 	useEffect(() => {
 		checkAuthStatus()
@@ -108,6 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 	const value: AuthContextType = {
 		...authState,
 		refreshAuthStatus: checkAuthStatus,
+		getAuthSnapshot,
 	}
 
 	return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

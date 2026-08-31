@@ -164,6 +164,12 @@ export const usePostHandlers = (
 	const handleAddPost = useCallback(
 		async (postData: CreatePostRequest) => {
 			const settings = getSettings()
+			// `expected_author` is the identity CreatePost verified immediately before
+			// this request. Prefer it when an initial unresolved render refreshed auth.
+			const requestIsAuthenticated =
+				postData.expected_author === undefined
+					? isAuthenticated
+					: postData.expected_author !== 'anon'
 			const newPost = await addPost({
 				...postData,
 				link_previews_enabled: settings.linkPreviews,
@@ -171,7 +177,7 @@ export const usePostHandlers = (
 			const media = newPost.media
 			const shouldAutoTranscribe =
 				settings.autoTranscribe &&
-				isAuthenticated &&
+				requestIsAuthenticated &&
 				media != null &&
 				(media.media_type === 'audio' || media.media_type === 'video') &&
 				!media.transcript_status
