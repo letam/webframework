@@ -538,14 +538,20 @@ export const getOutboxSnapshot = () => snapshot
 
 export const getEffectiveSyncMode = () => refreshSyncModeFromStorage()
 
+const reloadDurableEntriesAndFlush = async () => {
+	await loadOutbox()
+	await flushOutbox()
+}
+
 export const setSyncMode = (mode: SyncMode) => {
 	if (snapshot.syncMode === mode) {
-		if (syncModePersistenceFailed) syncModePersistenceFailed = !persistSyncMode(mode)
+		syncModePersistenceFailed = !persistSyncMode(mode)
+		if (mode === 'auto') void reloadDurableEntriesAndFlush()
 		return
 	}
 	publishSnapshot({ ...snapshot, syncMode: mode })
 	syncModePersistenceFailed = !persistSyncMode(mode)
-	if (mode === 'auto') void flushOutbox()
+	if (mode === 'auto') void reloadDurableEntriesAndFlush()
 }
 
 export const loadOutbox = async () => {

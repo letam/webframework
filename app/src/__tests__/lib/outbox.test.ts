@@ -472,6 +472,31 @@ describe('outbox sync engine', () => {
 		expect(postsApi.createPost).toHaveBeenCalledTimes(1)
 	})
 
+	it('reloads durable entries from another tab before enabling auto-sync', async () => {
+		setSyncMode('local')
+		await enqueueText({ text: 'Queued in another tab' })
+		const durableEntry = getOutboxSnapshot().entries[0]
+
+		// Keep the shared IndexedDB row while simulating a second tab whose module
+		// snapshot completed its initial load before that row existed.
+		__resetOutboxForTests()
+		configureOutbox({
+			queryClient,
+			getAuthState: () => auth,
+			refreshAuthStatus: vi.fn(async () => true),
+		})
+		setSyncMode('local')
+		expect(getOutboxSnapshot().entries).toEqual([])
+		expect(storedEntries.get(durableEntry.id)).toEqual(durableEntry)
+		vi.mocked(postsApi.createPost).mockResolvedValueOnce(makePost({ id: 118 }))
+		setOnline(true)
+
+		setSyncMode('auto')
+
+		await vi.waitFor(() => expect(postsApi.createPost).toHaveBeenCalledOnce())
+		expect(getOutboxSnapshot().entries).toEqual([])
+	})
+
 	it('shows the pinned error when a manual pass cannot verify auth', async () => {
 		setSyncMode('local')
 		auth = { isAuthenticated: false, userId: null, isAuthResolved: false }

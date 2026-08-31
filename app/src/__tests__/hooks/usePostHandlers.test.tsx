@@ -113,6 +113,36 @@ describe('usePostHandlers auto-transcribe create flow', () => {
 		expect(getCachedPosts(queryClient)[0].media?.transcript_status).toBe('pending')
 	})
 
+	it('uses the request author when auth resolved after the hook rendered', async () => {
+		mockUseAuth.mockReturnValue({ isAuthenticated: false })
+		const queryClient = createQueryClient()
+		const createdPost = makePost({
+			id: 52,
+			media: makeMedia({ media_type: 'audio', transcript_status: '' }),
+		})
+		vi.mocked(postsApi.createPost).mockResolvedValueOnce(createdPost)
+		vi.mocked(postsApi.transcribePost).mockResolvedValueOnce(
+			makePost({
+				...createdPost,
+				media: makeMedia({ media_type: 'audio', transcript_status: 'pending' }),
+			})
+		)
+
+		const { result } = renderHook(() => usePostHandlers({}, { enabled: false }), {
+			wrapper: createWrapper(queryClient),
+		})
+
+		await act(async () => {
+			await result.current.addPost({
+				text: 'Fast audio',
+				media_type: 'audio',
+				expected_author: 7,
+			})
+		})
+
+		expect(postsApi.transcribePost).toHaveBeenCalledWith(52)
+	})
+
 	it.each([
 		['setting off', false, true, makePost({ media: makeMedia({ media_type: 'audio' }) })],
 		['anonymous', true, false, makePost({ media: makeMedia({ media_type: 'audio' }) })],
