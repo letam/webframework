@@ -92,7 +92,7 @@ const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): stri
 }
 
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
-	const { isAuthenticated, isAuthResolved, userId } = useAuth()
+	const { isAuthenticated, isAuthResolved, userId, refreshAuthStatus, getAuthSnapshot } = useAuth()
 	const { syncMode } = useOutbox()
 	const [postText, setPostText] = useState('')
 	const [mediaType, setMediaType] = useState<'text' | 'audio' | 'video' | 'image'>('text')
@@ -414,12 +414,15 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const queuePost = async (
 		isDraft: boolean,
 		media: { mediaType: 'audio' | 'video' | 'image'; file: File } | null,
-		id?: string
+		id?: string,
+		authorOverride?: OutboxEntry['author']
 	) => {
 		const settings = getSettings()
 		const stored = await enqueuePost({
 			id,
-			author: isAuthenticated && userId !== null ? userId : isAuthResolved ? 'anon' : 'unknown',
+			author:
+				authorOverride ??
+				(isAuthenticated && userId !== null ? userId : isAuthResolved ? 'anon' : 'unknown'),
 			text: postText,
 			visibility: isAuthenticated ? visibility : null,
 			isDraft,
@@ -496,25 +499,43 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		// create landed but its response was lost, the flush replays instead of
 		// duplicating.
 		const clientUuid = crypto.randomUUID()
+		let expectedAuthor: number | 'anon' = isAuthenticated && userId !== null ? userId : 'anon'
+		let queueAuthor: OutboxEntry['author'] =
+			isAuthenticated && userId !== null ? userId : isAuthResolved ? 'anon' : 'unknown'
+		let authReady = isAuthResolved
 
 		try {
+			if (!isAuthResolved) {
+				if (await refreshAuthStatus()) {
+					const resolvedAuth = getAuthSnapshot()
+					if (resolvedAuth.isAuthResolved) {
+						authReady = true
+						expectedAuthor =
+							resolvedAuth.isAuthenticated && resolvedAuth.userId !== null
+								? resolvedAuth.userId
+								: 'anon'
+						queueAuthor = expectedAuthor
+					}
+				}
+			}
 			prepared = await prepareMediaFile()
 			prepareCompleted = true
 			// Connectivity may disappear while a recording is converted. Starting the
 			// mutation offline can pause indefinitely instead of rejecting into fallback.
-			if (!navigator.onLine) {
+			// An unresolved identity is queued as unknown for the same fail-safe reason.
+			if (!authReady || !navigator.onLine) {
 				if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
 					toast.error(MEDIA_CAP_TOAST)
 					return
 				}
-				await queuePost(isDraft, prepared, clientUuid)
+				await queuePost(isDraft, prepared, clientUuid, queueAuthor)
 				return
 			}
 			setSubmitStatus('submitting')
 			const newPost: CreatePostRequest = {
 				text: postText,
 				client_uuid: clientUuid,
-				expected_author: isAuthenticated && userId !== null ? userId : 'anon',
+				expected_author: expectedAuthor,
 				media_type: prepared?.mediaType,
 				media: prepared?.file ?? null,
 				visibility: isAuthenticated ? visibility : undefined,
@@ -530,7 +551,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					toast.error(MEDIA_CAP_TOAST)
 					return
 				}
-				await queuePost(isDraft, prepared, clientUuid)
+				await queuePost(isDraft, prepared, clientUuid, queueAuthor)
 			} else {
 				toast.error('Failed to create post')
 			}

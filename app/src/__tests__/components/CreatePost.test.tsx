@@ -114,6 +114,12 @@ describe('CreatePost', () => {
 			isAuthenticated: true,
 			isAuthResolved: true,
 			userId: 7,
+			refreshAuthStatus: vi.fn(async () => true),
+			getAuthSnapshot: vi.fn(() => ({
+				isAuthenticated: true,
+				isAuthResolved: true,
+				userId: 7,
+			})),
 		})
 		mockUseOutbox.mockReturnValue({ syncMode: 'auto' })
 		mockEnqueuePost.mockResolvedValue(true)
@@ -271,6 +277,12 @@ describe('CreatePost', () => {
 			isAuthenticated: false,
 			isAuthResolved: true,
 			userId: null,
+			refreshAuthStatus: vi.fn(async () => true),
+			getAuthSnapshot: vi.fn(() => ({
+				isAuthenticated: false,
+				isAuthResolved: true,
+				userId: null,
+			})),
 		})
 		const user = userEvent.setup()
 		const onPostCreated = vi.fn().mockResolvedValue(undefined)
@@ -284,6 +296,68 @@ describe('CreatePost', () => {
 				expect.objectContaining({ text: 'Anonymous words', expected_author: 'anon' })
 			)
 		)
+	})
+
+	it('waits for auth resolution before binding an online create', async () => {
+		let resolveAuth!: (resolved: boolean) => void
+		const refreshAuthStatus = vi.fn(
+			() =>
+				new Promise<boolean>((resolve) => {
+					resolveAuth = resolve
+				})
+		)
+		const getAuthSnapshot = vi.fn(() => ({
+			isAuthenticated: true,
+			isAuthResolved: true,
+			userId: 7,
+		}))
+		mockUseAuth.mockReturnValue({
+			isAuthenticated: false,
+			isAuthResolved: false,
+			userId: null,
+			refreshAuthStatus,
+			getAuthSnapshot,
+		})
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+
+		await user.type(screen.getByPlaceholderText("What's on your mind?"), 'Fast signed-in post')
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+		await vi.waitFor(() => expect(refreshAuthStatus).toHaveBeenCalledOnce())
+		expect(onPostCreated).not.toHaveBeenCalled()
+
+		resolveAuth(true)
+
+		await waitFor(() =>
+			expect(onPostCreated).toHaveBeenCalledWith(
+				expect.objectContaining({ text: 'Fast signed-in post', expected_author: 7 })
+			)
+		)
+		expect(getAuthSnapshot).toHaveBeenCalledOnce()
+	})
+
+	it('queues with an unknown author when online auth cannot resolve', async () => {
+		mockUseAuth.mockReturnValue({
+			isAuthenticated: false,
+			isAuthResolved: false,
+			userId: null,
+			refreshAuthStatus: vi.fn(async () => false),
+			getAuthSnapshot: vi.fn(),
+		})
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn()
+		render(<CreatePost onPostCreated={onPostCreated} />)
+
+		await user.type(screen.getByPlaceholderText("What's on your mind?"), 'Keep until auth works')
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+
+		await waitFor(() =>
+			expect(mockEnqueuePost).toHaveBeenCalledWith(
+				expect.objectContaining({ author: 'unknown', text: 'Keep until auth works' })
+			)
+		)
+		expect(onPostCreated).not.toHaveBeenCalled()
 	})
 
 	it('saves drafts with the draft payload and toast', async () => {
