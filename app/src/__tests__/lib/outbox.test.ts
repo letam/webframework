@@ -8,6 +8,7 @@ import {
 	enqueuePost,
 	flushEntry,
 	flushOutbox,
+	getEffectiveSyncMode,
 	getOutboxSnapshot,
 	handleOutboxOnline,
 	loadOutbox,
@@ -271,6 +272,28 @@ describe('outbox sync engine', () => {
 		setSyncMode('local')
 		expect(listener).toHaveBeenCalledTimes(1)
 		unsubscribe()
+	})
+
+	it('keeps an in-memory local choice authoritative when persistence fails', async () => {
+		localStorage.setItem('post-sync-mode', 'auto')
+		const storageWrite = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+			throw new Error('quota exceeded')
+		})
+
+		try {
+			setSyncMode('local')
+			expect(getOutboxSnapshot().syncMode).toBe('local')
+			expect(getEffectiveSyncMode()).toBe('local')
+
+			await enqueueText({ text: 'Keep local after storage failure' })
+			setOnline(true)
+			await flushOutbox()
+
+			expect(postsApi.createPost).not.toHaveBeenCalled()
+			expect(getOutboxSnapshot().entries).toHaveLength(1)
+		} finally {
+			storageWrite.mockRestore()
+		}
 	})
 
 	it('resets tests to auto without reading storage', () => {
@@ -654,6 +677,30 @@ describe('outbox sync engine', () => {
 		expect(postsApi.createPost).toHaveBeenCalledTimes(1)
 		expect(getOutboxSnapshot().entries.map((entry) => entry.status)).toEqual(['queued', 'queued'])
 		expect(getOutboxSnapshot().entries[0].attempts).toBe(0)
+	})
+
+	it('keeps retrying other queued entries after a manual single-entry success', async () => {
+		vi.useFakeTimers()
+		await enqueueText({ text: 'Send this one now' })
+		await enqueueText({ text: 'Keep this retry scheduled' })
+		const firstId = getOutboxSnapshot().entries[0].id
+		vi.mocked(postsApi.createPost).mockRejectedValueOnce(new TypeError('offline'))
+		setOnline(true)
+		await flushOutbox()
+
+		vi.mocked(postsApi.createPost).mockClear()
+		vi.mocked(postsApi.createPost).mockResolvedValue(makePost({ id: 116 }))
+		await flushEntry(firstId)
+
+		expect(postsApi.createPost).toHaveBeenCalledOnce()
+		expect(getOutboxSnapshot().entries.map((entry) => entry.text)).toEqual([
+			'Keep this retry scheduled',
+		])
+
+		await vi.advanceTimersByTimeAsync(15_000)
+
+		expect(postsApi.createPost).toHaveBeenCalledTimes(2)
+		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
 	it.each([

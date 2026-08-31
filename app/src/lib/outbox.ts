@@ -72,11 +72,13 @@ const getPersistedSyncMode = (): SyncMode | null => {
 }
 
 const persistSyncMode = (mode: SyncMode) => {
-	if (typeof localStorage === 'undefined') return
+	if (typeof localStorage === 'undefined') return false
 	try {
 		localStorage.setItem('post-sync-mode', mode)
+		return true
 	} catch {
 		// Storage can be unavailable in private or restricted browsing contexts.
+		return false
 	}
 }
 
@@ -93,7 +95,7 @@ let snapshot: OutboxSnapshot = {
 }
 // Explicit auto/local defaults override remembered composer history. Persist the
 // resolved startup value so the first automatic flush cannot adopt stale history.
-persistSyncMode(initialSyncMode)
+let syncModePersistenceFailed = !persistSyncMode(initialSyncMode)
 let dependencies: OutboxDependencies | null = null
 let retryTimer: number | undefined
 let retryIndex = 0
@@ -115,6 +117,9 @@ const setEntries = (entries: OutboxEntry[]) => {
 }
 
 const refreshSyncModeFromStorage = () => {
+	// A failed local write leaves the old value readable. Until a later write
+	// succeeds, the explicit in-memory choice is newer and must remain authoritative.
+	if (syncModePersistenceFailed) return snapshot.syncMode
 	const persisted = getPersistedSyncMode()
 	if (persisted && persisted !== snapshot.syncMode) {
 		publishSnapshot({ ...snapshot, syncMode: persisted })
@@ -496,6 +501,15 @@ const runFlush = async (ids: string[], options?: { manual?: boolean }) => {
 	if (storageFailed && options?.manual) {
 		toast.error(STORAGE_ACCESS_ERROR)
 	}
+	if (
+		options?.manual &&
+		refreshSyncModeFromStorage() === 'auto' &&
+		snapshot.entries.some((entry) => entry.status === 'queued')
+	) {
+		// A successful single-entry send resets the shared backoff. Keep remaining
+		// retryable entries live instead of stranding them behind that manual action.
+		shouldRetry = true
+	}
 	if (shouldRetry) scheduleRetry()
 	await drainPendingFlush()
 }
@@ -525,9 +539,12 @@ export const getOutboxSnapshot = () => snapshot
 export const getEffectiveSyncMode = () => refreshSyncModeFromStorage()
 
 export const setSyncMode = (mode: SyncMode) => {
-	if (snapshot.syncMode === mode) return
+	if (snapshot.syncMode === mode) {
+		if (syncModePersistenceFailed) syncModePersistenceFailed = !persistSyncMode(mode)
+		return
+	}
 	publishSnapshot({ ...snapshot, syncMode: mode })
-	persistSyncMode(mode)
+	syncModePersistenceFailed = !persistSyncMode(mode)
 	if (mode === 'auto') void flushOutbox()
 }
 
@@ -633,6 +650,7 @@ export const __resetOutboxForTests = () => {
 	resetBackoff()
 	for (const id of sendingReconcileTimers.keys()) clearSendingReconcileTimer(id)
 	snapshot = { entries: [], flushing: false, syncMode: 'auto' }
+	syncModePersistenceFailed = false
 	dependencies = null
 	flushLocked = false
 	pendingFlush = null
