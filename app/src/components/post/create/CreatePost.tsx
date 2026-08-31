@@ -504,6 +504,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			const newPost: CreatePostRequest = {
 				text: postText,
 				client_uuid: clientUuid,
+				expected_author: isAuthenticated && userId !== null ? userId : 'anon',
 				media_type: prepared?.mediaType,
 				media: prepared?.file ?? null,
 				visibility: isAuthenticated ? visibility : undefined,

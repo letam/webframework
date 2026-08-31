@@ -257,7 +257,31 @@ describe('CreatePost', () => {
 
 		await waitFor(() =>
 			expect(onPostCreated).toHaveBeenCalledWith(
-				expect.objectContaining({ text: 'Hidden link', visibility: 'unlisted' })
+				expect.objectContaining({
+					text: 'Hidden link',
+					visibility: 'unlisted',
+					expected_author: 7,
+				})
+			)
+		)
+	})
+
+	it('binds an anonymous online create to the rendered author', async () => {
+		mockUseAuth.mockReturnValue({
+			isAuthenticated: false,
+			isAuthResolved: true,
+			userId: null,
+		})
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+
+		await user.type(screen.getByPlaceholderText("What's on your mind?"), 'Anonymous words')
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+
+		await waitFor(() =>
+			expect(onPostCreated).toHaveBeenCalledWith(
+				expect.objectContaining({ text: 'Anonymous words', expected_author: 'anon' })
 			)
 		)
 	})
@@ -481,6 +505,7 @@ describe('CreatePost', () => {
 		expect(onPostCreated).toHaveBeenCalledTimes(1)
 		const request = onPostCreated.mock.calls[0][0]
 		expect(request.client_uuid).toEqual(expect.any(String))
+		expect(request.expected_author).toBe(7)
 		expect(mockEnqueuePost).toHaveBeenCalledWith(
 			expect.objectContaining({ id: request.client_uuid, text: 'Connection blip' })
 		)
