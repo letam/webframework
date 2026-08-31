@@ -21,8 +21,10 @@ export interface OutboxEntry {
 	mediaType: 'audio' | 'video' | 'image' | null
 	media: Blob | null
 	mediaName: string | null
-	/** The live create may have committed before its response was lost. */
+	/** A create using this UUID may already have committed on the server. */
 	mayHavePublished?: boolean
+	/** A claimed request may still be running even after its lease expires. */
+	sendMayBeInFlight?: boolean
 	/** Present only while a tab owns an active send lease. */
 	claimOwner?: string | null
 	claimExpiresAt?: number | null
@@ -208,7 +210,13 @@ export const claimOutboxEntryForSend = async (
 						result = { status: 'not-queued', entry }
 						return
 					}
-					const claimed = { ...entry, status: 'sending' as const, lastError: null }
+					const claimed = {
+						...entry,
+						status: 'sending' as const,
+						lastError: null,
+						mayHavePublished: true,
+						sendMayBeInFlight: true,
+					}
 					claimed.claimOwner = owner
 					claimed.claimExpiresAt = Date.now() + OUTBOX_CLAIM_LEASE_MS
 					const putRequest = store.put(claimed)
@@ -347,7 +355,7 @@ export const updateOwnedOutboxEntryClaim = async (
 						...entry,
 						...changes,
 						...(changes.status && changes.status !== 'sending'
-							? { claimOwner: null, claimExpiresAt: null }
+							? { claimOwner: null, claimExpiresAt: null, sendMayBeInFlight: false }
 							: {}),
 					}
 					const putRequest = store.put(updated)
@@ -432,8 +440,11 @@ export const removeOutboxEntryIfIdle = async (id: string): Promise<RemoveOutboxE
 						result = { status: 'missing' }
 						return
 					}
-					if (entry.status === 'sending') {
-						result = { status: 'sending', entry }
+					if (entry.status === 'sending' || entry.sendMayBeInFlight) {
+						result = {
+							status: 'sending',
+							entry: entry.status === 'sending' ? entry : { ...entry, status: 'sending' },
+						}
 						return
 					}
 					const deleteRequest = store.delete(id)

@@ -48,6 +48,8 @@ vi.mock('@/lib/utils/outboxDb', () => ({
 			...entry,
 			status: 'sending' as const,
 			lastError: null,
+			mayHavePublished: true,
+			sendMayBeInFlight: true,
 			claimOwner: owner,
 			claimExpiresAt: Date.now() + 300_000,
 		}
@@ -74,7 +76,7 @@ vi.mock('@/lib/utils/outboxDb', () => ({
 				...entry,
 				...changes,
 				...(changes.status && changes.status !== 'sending'
-					? { claimOwner: null, claimExpiresAt: null }
+					? { claimOwner: null, claimExpiresAt: null, sendMayBeInFlight: false }
 					: {}),
 			}
 			storedEntries.set(id, updated)
@@ -88,7 +90,12 @@ vi.mock('@/lib/utils/outboxDb', () => ({
 	removeOutboxEntryIfIdle: vi.fn(async (id: string) => {
 		const entry = storedEntries.get(id)
 		if (!entry) return { status: 'missing' as const }
-		if (entry.status === 'sending') return { status: 'sending' as const, entry }
+		if (entry.status === 'sending' || entry.sendMayBeInFlight) {
+			return {
+				status: 'sending' as const,
+				entry: entry.status === 'sending' ? entry : { ...entry, status: 'sending' as const },
+			}
+		}
 		storedEntries.delete(id)
 		return { status: 'removed' as const }
 	}),
@@ -665,6 +672,7 @@ describe('outbox sync engine', () => {
 	})
 
 	it('recovers to an actionable failure when a post status write fails', async () => {
+		vi.useFakeTimers()
 		await enqueueText({ text: 'Status write can fail' })
 		const entryId = getOutboxSnapshot().entries[0].id
 		vi.mocked(postsApi.createPost).mockRejectedValueOnce(new ApiError('rejected', 400))
@@ -681,6 +689,20 @@ describe('outbox sync engine', () => {
 			lastError: "Couldn't save this post's status. Try again.",
 		})
 		expect(storedEntries.get(entryId)?.status).toBe('sending')
+
+		const reconciled = {
+			...(storedEntries.get(entryId) as OutboxEntry),
+			status: 'queued' as const,
+			claimOwner: null,
+			claimExpiresAt: null,
+			sendMayBeInFlight: true,
+		}
+		storedEntries.set(entryId, reconciled)
+		setOnline(false)
+		await vi.advanceTimersByTimeAsync(1_000)
+
+		expect(outboxDb.inspectOutboxEntry).toHaveBeenCalledWith(entryId)
+		expect(getOutboxSnapshot().entries).toEqual([reconciled])
 	})
 
 	it('does not post an entry removed from durable storage by another tab', async () => {

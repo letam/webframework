@@ -143,7 +143,7 @@ const scheduleSendingReconciliation = (id: string) => {
 	const timer = window.setTimeout(async () => {
 		sendingReconcileTimers.delete(id)
 		const current = snapshot.entries.find((entry) => entry.id === id)
-		if (current?.status !== 'sending') return
+		if (!current) return
 
 		const durable = await inspectOutboxEntry(id)
 		if (durable.status === 'missing') {
@@ -269,6 +269,7 @@ const adoptOwnedClaimResult = (
 					: entry
 			)
 		)
+		scheduleSendingReconciliation(id)
 	}
 }
 

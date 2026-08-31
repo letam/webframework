@@ -91,6 +91,8 @@ describe('outbox storage', () => {
 			entry: {
 				...entry,
 				status: 'sending',
+				mayHavePublished: true,
+				sendMayBeInFlight: true,
 				claimOwner: 'tab-a',
 				claimExpiresAt: FIXED_NOW + OUTBOX_CLAIM_LEASE_MS,
 			},
@@ -173,6 +175,29 @@ describe('outbox storage', () => {
 		await expect(removeOutboxEntryIfIdle(entry.id)).resolves.toEqual({
 			status: 'sending',
 			entry,
+		})
+		expect(await getOutboxEntry(entry.id)).toEqual(entry)
+	})
+
+	it('refuses to remove an expired claim whose request may still be in flight', async () => {
+		vi.spyOn(Date, 'now').mockReturnValue(FIXED_NOW)
+		const entry = makeEntry({
+			status: 'sending',
+			mayHavePublished: true,
+			sendMayBeInFlight: true,
+			claimOwner: 'throttled-tab',
+			claimExpiresAt: FIXED_NOW,
+		})
+		await saveOutboxEntry(entry)
+
+		await expect(removeOutboxEntryIfIdle(entry.id)).resolves.toEqual({
+			status: 'sending',
+			entry: {
+				...entry,
+				status: 'sending',
+				claimOwner: null,
+				claimExpiresAt: null,
+			},
 		})
 		expect(await getOutboxEntry(entry.id)).toEqual(entry)
 	})
