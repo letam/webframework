@@ -216,7 +216,7 @@ export const OutboxCard = ({ entry }: OutboxCardProps) => {
 						<AlertDialogDescription>
 							{entry.status === 'published'
 								? 'The post is already published. This only clears its leftover copy from this device.'
-								: "It will leave your outbox now. If you're offline, the server will confirm the removal when you reconnect."}
+								: 'It will leave your outbox now. The server will cancel the post, or confirm it was already published.'}
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					<AlertDialogFooter>

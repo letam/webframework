@@ -278,7 +278,7 @@ describe('OutboxCard', () => {
 		expect(within(dialog).getByText('Remove queued post?')).toBeInTheDocument()
 		expect(
 			within(dialog).getByText(
-				"It will leave your outbox now. If you're offline, the server will confirm the removal when you reconnect."
+				'It will leave your outbox now. The server will cancel the post, or confirm it was already published.'
 			)
 		).toBeInTheDocument()
 		await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
@@ -294,13 +294,9 @@ describe('OutboxCard', () => {
 		render(<OutboxCard entry={entry} />)
 
 		await user.click(screen.getByRole('button', { name: 'Remove' }))
-		const dialog = screen.getByRole('alertdialog')
-		expect(
-			within(dialog).getByText(
-				"It will leave your outbox now. If you're offline, the server will confirm the removal when you reconnect."
-			)
-		).toBeInTheDocument()
-		await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
+		await user.click(
+			within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove' })
+		)
 
 		await waitFor(() => expect(mockRemoveEntry).toHaveBeenCalledWith(entry.id))
 		expect(mockToast).toHaveBeenCalledWith(
