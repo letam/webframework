@@ -48,7 +48,6 @@ vi.mock('@/lib/utils/outboxDb', () => ({
 			...entry,
 			status: 'sending' as const,
 			lastError: null,
-			mayHavePublished: true,
 			claimOwner: owner,
 			claimExpiresAt: Date.now() + 300_000,
 		}
@@ -92,7 +91,6 @@ vi.mock('@/lib/utils/outboxDb', () => ({
 		const cancelled = {
 			...entry,
 			status: 'cancelled' as const,
-			cancelledAt: entry.cancelledAt ?? Date.now(),
 			lastError: null,
 			claimOwner: null,
 			claimExpiresAt: null,
@@ -1382,7 +1380,6 @@ describe('outbox sync engine', () => {
 		const cancelled = {
 			...getOutboxSnapshot().entries[0],
 			status: 'cancelled' as const,
-			cancelledAt: Date.now(),
 			claimOwner: null,
 			claimExpiresAt: null,
 		}
@@ -1408,7 +1405,7 @@ describe('outbox sync engine', () => {
 	})
 
 	it('reports a post that won the server create/cancel race', async () => {
-		await enqueueText({ text: 'May already exist', mayHavePublished: true })
+		await enqueueText({ text: 'May already exist' })
 		const entry = getOutboxSnapshot().entries[0]
 		const published = makePost({ id: 144, body: 'May already exist' })
 		vi.mocked(postsApi.cancelPostByClientUuid).mockResolvedValueOnce(published)
@@ -1444,7 +1441,7 @@ describe('outbox sync engine', () => {
 	})
 
 	it('retains a hidden tombstone when server reconciliation fails', async () => {
-		await enqueueText({ text: 'Keep the UUID', mayHavePublished: true })
+		await enqueueText({ text: 'Keep the UUID' })
 		const entry = getOutboxSnapshot().entries[0]
 		setOnline(true)
 		vi.mocked(postsApi.cancelPostByClientUuid).mockRejectedValueOnce(new TypeError('offline'))

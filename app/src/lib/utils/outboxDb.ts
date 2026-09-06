@@ -21,10 +21,6 @@ export interface OutboxEntry {
 	mediaType: 'audio' | 'video' | 'image' | null
 	media: Blob | null
 	mediaName: string | null
-	/** A create using this UUID may already have committed on the server. */
-	mayHavePublished?: boolean
-	/** Present while a hidden removal tombstone awaits server acknowledgement. */
-	cancelledAt?: number
 	/** Present only while a tab owns an active send lease. */
 	claimOwner?: string | null
 	claimExpiresAt?: number | null
@@ -219,7 +215,6 @@ export const claimOutboxEntryForSend = async (
 						...entry,
 						status: 'sending' as const,
 						lastError: null,
-						mayHavePublished: true,
 					}
 					claimed.claimOwner = owner
 					claimed.claimExpiresAt = Date.now() + OUTBOX_CLAIM_LEASE_MS
@@ -325,9 +320,6 @@ export const resetFailedOutboxEntryForRetry = async (
 		db.close()
 	}
 }
-
-export const deleteOutboxEntry = async (id: string): Promise<boolean> =>
-	(await runRequest<undefined>('readwrite', (store) => store.delete(id))) !== null
 
 export const updateOwnedOutboxEntryClaim = async (
 	id: string,
@@ -449,7 +441,6 @@ export const cancelOutboxEntry = async (
 					const cancelled = {
 						...entry,
 						status: 'cancelled' as const,
-						cancelledAt: entry.cancelledAt ?? Date.now(),
 						lastError: null,
 						claimOwner: null,
 						claimExpiresAt: null,

@@ -6,7 +6,6 @@ import {
 	claimOutboxEntryForSend,
 	cancelOutboxEntry,
 	deleteCancelledOutboxEntry,
-	deleteOutboxEntry,
 	deleteOwnedOutboxEntryClaim,
 	getOutboxEntry,
 	inspectOutboxEntry,
@@ -48,8 +47,7 @@ afterEach(() => {
 })
 
 describe('outbox storage', () => {
-	it('round-trips, updates, and deletes an entry', async () => {
-		vi.spyOn(Date, 'now').mockReturnValue(FIXED_NOW)
+	it('round-trips and updates an entry', async () => {
 		const entry = makeEntry()
 
 		expect(await saveOutboxEntry(entry)).toBe(true)
@@ -58,9 +56,6 @@ describe('outbox storage', () => {
 		const failed = { ...entry, status: 'failed' as const, lastError: 'Try again.' }
 		expect(await saveOutboxEntry(failed)).toBe(true)
 		expect(await getOutboxEntry(entry.id)).toEqual(failed)
-
-		expect(await deleteOutboxEntry(entry.id)).toBe(true)
-		expect(await getOutboxEntry(entry.id)).toBeNull()
 	})
 
 	it('round-trips media metadata', async () => {
@@ -92,7 +87,6 @@ describe('outbox storage', () => {
 			entry: {
 				...entry,
 				status: 'sending',
-				mayHavePublished: true,
 				claimOwner: 'tab-a',
 				claimExpiresAt: FIXED_NOW + OUTBOX_CLAIM_LEASE_MS,
 			},
@@ -178,7 +172,6 @@ describe('outbox storage', () => {
 			entry: {
 				...entry,
 				status: 'cancelled',
-				cancelledAt: FIXED_NOW,
 				lastError: null,
 				claimOwner: null,
 				claimExpiresAt: null,
@@ -188,15 +181,13 @@ describe('outbox storage', () => {
 	})
 
 	it('creates a cancellation tombstone from a stale snapshot when the row is missing', async () => {
-		vi.spyOn(Date, 'now').mockReturnValue(FIXED_NOW)
-		const entry = makeEntry({ mayHavePublished: true })
+		const entry = makeEntry()
 
 		await expect(cancelOutboxEntry(entry.id, entry)).resolves.toEqual({
 			status: 'cancelled',
 			entry: {
 				...entry,
 				status: 'cancelled',
-				cancelledAt: FIXED_NOW,
 				lastError: null,
 				claimOwner: null,
 				claimExpiresAt: null,

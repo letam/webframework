@@ -192,7 +192,7 @@ describe('OutboxCard', () => {
 	it('rolls back composer loading when reconciliation finds a published post', async () => {
 		mockRemoveEntry.mockResolvedValueOnce('published')
 		const user = userEvent.setup()
-		const entry = makeEntry({ mayHavePublished: true })
+		const entry = makeEntry()
 		mockGetOutboxSnapshot.mockReturnValue({ entries: [entry], flushing: false, syncMode: 'auto' })
 		render(<OutboxCard entry={entry} />)
 
@@ -278,7 +278,7 @@ describe('OutboxCard', () => {
 		expect(within(dialog).getByText('Remove queued post?')).toBeInTheDocument()
 		expect(
 			within(dialog).getByText(
-				"It will leave your outbox now. If you're offline, the server will confirm the removal when you reconnect."
+				'It will leave your outbox now. The server will cancel the post, or confirm it was already published.'
 			)
 		).toBeInTheDocument()
 		await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
@@ -287,20 +287,16 @@ describe('OutboxCard', () => {
 		expect(mockToast).toHaveBeenCalledWith('Removed.')
 	})
 
-	it('explains and reports reconciliation when a live create may have succeeded', async () => {
+	it('reports reconciliation when the server says the post was published', async () => {
 		mockRemoveEntry.mockResolvedValueOnce('published')
 		const user = userEvent.setup()
-		const entry = makeEntry({ mayHavePublished: true })
+		const entry = makeEntry()
 		render(<OutboxCard entry={entry} />)
 
 		await user.click(screen.getByRole('button', { name: 'Remove' }))
-		const dialog = screen.getByRole('alertdialog')
-		expect(
-			within(dialog).getByText(
-				'The server will cancel this post or confirm if it was already published.'
-			)
-		).toBeInTheDocument()
-		await user.click(within(dialog).getByRole('button', { name: 'Remove' }))
+		await user.click(
+			within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Remove' })
+		)
 
 		await waitFor(() => expect(mockRemoveEntry).toHaveBeenCalledWith(entry.id))
 		expect(mockToast).toHaveBeenCalledWith(
@@ -329,7 +325,7 @@ describe('OutboxCard', () => {
 	it('reports a durable removal that is waiting for server confirmation', async () => {
 		mockRemoveEntry.mockResolvedValueOnce('pending')
 		const user = userEvent.setup()
-		render(<OutboxCard entry={makeEntry({ mayHavePublished: true })} />)
+		render(<OutboxCard entry={makeEntry()} />)
 
 		await user.click(screen.getByRole('button', { name: 'Remove' }))
 		await user.click(

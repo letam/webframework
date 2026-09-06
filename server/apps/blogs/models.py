@@ -224,7 +224,11 @@ class PostQuerySet(models.QuerySet):
 
 
 class PostClientRequest(models.Model):
-    """Serialize create/cancel decisions for one author-owned client UUID."""
+    """Serialize durable create/cancel decisions for one author-owned client UUID.
+
+    These records preserve idempotency across delayed retries. Do not prune them unless
+    the product first defines and enforces a maximum client retry horizon.
+    """
 
     created = models.DateTimeField(auto_now_add=True)
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

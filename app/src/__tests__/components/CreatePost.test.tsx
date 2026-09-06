@@ -693,7 +693,6 @@ describe('CreatePost', () => {
 			expect.objectContaining({
 				id: request.client_uuid,
 				text: 'Connection blip',
-				mayHavePublished: true,
 			})
 		)
 	})
