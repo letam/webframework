@@ -1,4 +1,5 @@
 import { isDesktop, isFirefox, isSafari } from '@/lib/utils/browser'
+import type { PostVisibility } from '@/types/post'
 
 const SETTINGS_KEY = 'app-settings'
 
@@ -10,6 +11,7 @@ export interface AppSettings {
 	showLinkPreviews: boolean
 	saveComposerDrafts: boolean
 	postSyncDefault: 'auto' | 'local' | 'remember'
+	defaultVisibility: PostVisibility
 }
 
 // Determine if audio normalization should be enabled by default
@@ -31,6 +33,10 @@ const defaultSettings: AppSettings = {
 	// mode on reload and the mount flush would silently publish posts the user
 	// explicitly held on this device.
 	postSyncDefault: 'remember',
+	// 'public' matches the product default and the pre-setting behavior. A stored
+	// value only ever widens or narrows the composer's starting point — every post
+	// still shows its visibility before it is sent.
+	defaultVisibility: 'public',
 }
 
 export const getSettings = (): AppSettings => {

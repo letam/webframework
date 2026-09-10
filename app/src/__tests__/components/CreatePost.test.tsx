@@ -262,6 +262,25 @@ describe('CreatePost', () => {
 		expect(composer).toHaveValue('Already writing')
 	})
 
+	it('starts on the default visibility from settings', async () => {
+		localStorage.setItem('app-settings', JSON.stringify({ defaultVisibility: 'private' }))
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+
+		await user.type(screen.getByPlaceholderText("What's on your mind?"), 'Just for me')
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+
+		await waitFor(() =>
+			expect(onPostCreated).toHaveBeenCalledWith(
+				expect.objectContaining({
+					text: 'Just for me',
+					visibility: 'private',
+				})
+			)
+		)
+	})
+
 	it('submits the selected visibility', async () => {
 		const user = userEvent.setup()
 		const onPostCreated = vi.fn().mockResolvedValue(undefined)

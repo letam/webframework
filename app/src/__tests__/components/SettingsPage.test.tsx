@@ -121,6 +121,23 @@ describe('SettingsPage', () => {
 		})
 	})
 
+	it('renders and persists the default post visibility', async () => {
+		const user = userEvent.setup()
+		render(<SettingsPage />)
+
+		expect(screen.getByText('Who can see new posts')).toBeInTheDocument()
+
+		expect(screen.getByRole('radio', { name: 'Public' })).toBeChecked()
+		expect(screen.getByRole('radio', { name: 'Link only' })).not.toBeChecked()
+		expect(screen.getByRole('radio', { name: 'Private' })).not.toBeChecked()
+
+		await user.click(screen.getByRole('radio', { name: 'Private' }))
+
+		await waitFor(() => {
+			expect(getSettings().defaultVisibility).toBe('private')
+		})
+	})
+
 	it('hides the data export button for anonymous users', () => {
 		render(<SettingsPage />)
 

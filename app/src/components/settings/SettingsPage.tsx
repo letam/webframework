@@ -8,7 +8,7 @@ import Navbar from '@/components/Navbar'
 import { getSettings, updateSettings } from '@/lib/utils/settings'
 import { useAuth } from '@/hooks/useAuth'
 import { getPosts, type PostsQueryScope } from '@/lib/api/posts'
-import type { Post } from '@/types/post'
+import type { Post, PostVisibility } from '@/types/post'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 
@@ -52,6 +52,7 @@ const SettingsPage = () => {
 	const [videoQuality, setVideoQuality] = useState(initialSettings.videoQuality)
 	const [saveComposerDrafts, setSaveComposerDrafts] = useState(initialSettings.saveComposerDrafts)
 	const [postSyncDefault, setPostSyncDefault] = useState(initialSettings.postSyncDefault)
+	const [defaultVisibility, setDefaultVisibility] = useState(initialSettings.defaultVisibility)
 	const [isExporting, setIsExporting] = useState(false)
 
 	useEffect(() => {
@@ -63,6 +64,7 @@ const SettingsPage = () => {
 			videoQuality,
 			saveComposerDrafts,
 			postSyncDefault,
+			defaultVisibility,
 		})
 	}, [
 		normalizeAudio,
@@ -72,6 +74,7 @@ const SettingsPage = () => {
 		videoQuality,
 		saveComposerDrafts,
 		postSyncDefault,
+		defaultVisibility,
 	])
 
 	const handleExportPosts = async () => {
@@ -157,6 +160,53 @@ const SettingsPage = () => {
 						</CardHeader>
 						<CardContent>
 							<div className="space-y-4">
+								<div className="space-y-2">
+									<Label>Who can see new posts</Label>
+									<p className="text-sm text-muted-foreground">
+										Choose the visibility the composer starts on. You can still change it on any
+										individual post before you send it.
+									</p>
+									<RadioGroup
+										value={defaultVisibility}
+										onValueChange={(value) => setDefaultVisibility(value as PostVisibility)}
+										className="flex flex-col space-y-1"
+									>
+										<div className="flex items-start space-x-2">
+											<RadioGroupItem value="public" id="visibility-public" className="mt-0.5" />
+											<div className="space-y-0.5">
+												<Label htmlFor="visibility-public" className="font-normal">
+													Public
+												</Label>
+												<p className="text-sm text-muted-foreground">Anyone can see the post.</p>
+											</div>
+										</div>
+										<div className="flex items-start space-x-2">
+											<RadioGroupItem
+												value="unlisted"
+												id="visibility-unlisted"
+												className="mt-0.5"
+											/>
+											<div className="space-y-0.5">
+												<Label htmlFor="visibility-unlisted" className="font-normal">
+													Link only
+												</Label>
+												<p className="text-sm text-muted-foreground">
+													Hidden from the feed; anyone with the link can see it.
+												</p>
+											</div>
+										</div>
+										<div className="flex items-start space-x-2">
+											<RadioGroupItem value="private" id="visibility-private" className="mt-0.5" />
+											<div className="space-y-0.5">
+												<Label htmlFor="visibility-private" className="font-normal">
+													Private
+												</Label>
+												<p className="text-sm text-muted-foreground">Only you can see the post.</p>
+											</div>
+										</div>
+									</RadioGroup>
+								</div>
+
 								<div className="flex items-center justify-between">
 									<div className="space-y-0.5">
 										<Label htmlFor="link-previews">Create link previews</Label>
