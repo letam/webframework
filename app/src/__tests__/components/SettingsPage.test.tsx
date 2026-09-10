@@ -127,14 +127,14 @@ describe('SettingsPage', () => {
 
 		expect(screen.getByText('Who can see new posts')).toBeInTheDocument()
 
-		expect(screen.getByRole('radio', { name: 'Public' })).toBeChecked()
+		expect(screen.getByRole('radio', { name: 'Private' })).toBeChecked()
+		expect(screen.getByRole('radio', { name: 'Public' })).not.toBeChecked()
 		expect(screen.getByRole('radio', { name: 'Link only' })).not.toBeChecked()
-		expect(screen.getByRole('radio', { name: 'Private' })).not.toBeChecked()
 
-		await user.click(screen.getByRole('radio', { name: 'Private' }))
+		await user.click(screen.getByRole('radio', { name: 'Public' }))
 
 		await waitFor(() => {
-			expect(getSettings().defaultVisibility).toBe('private')
+			expect(getSettings().defaultVisibility).toBe('public')
 		})
 	})
 

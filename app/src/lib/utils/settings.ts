@@ -33,10 +33,11 @@ const defaultSettings: AppSettings = {
 	// mode on reload and the mount flush would silently publish posts the user
 	// explicitly held on this device.
 	postSyncDefault: 'remember',
-	// 'public' matches the product default and the pre-setting behavior. A stored
-	// value only ever widens or narrows the composer's starting point — every post
-	// still shows its visibility before it is sent.
-	defaultVisibility: 'public',
+	// Private, so the composer's resting state is the one whose mistakes are
+	// recoverable: publishing something meant to stay private cannot be taken back,
+	// while a private post is one menu change away from public. Every post still
+	// shows its visibility before it is sent.
+	defaultVisibility: 'private',
 }
 
 export const getSettings = (): AppSettings => {

@@ -263,19 +263,21 @@ describe('CreatePost', () => {
 	})
 
 	it('starts on the default visibility from settings', async () => {
-		localStorage.setItem('app-settings', JSON.stringify({ defaultVisibility: 'private' }))
+		// Seeds the non-default value on purpose: with 'private' now the built-in
+		// default, seeding 'private' would pass even if the setting were ignored.
+		localStorage.setItem('app-settings', JSON.stringify({ defaultVisibility: 'public' }))
 		const user = userEvent.setup()
 		const onPostCreated = vi.fn().mockResolvedValue(undefined)
 		render(<CreatePost onPostCreated={onPostCreated} />)
 
-		await user.type(screen.getByPlaceholderText("What's on your mind?"), 'Just for me')
+		await user.type(screen.getByPlaceholderText("What's on your mind?"), 'For everyone')
 		await user.click(screen.getByRole('button', { name: 'Post' }))
 
 		await waitFor(() =>
 			expect(onPostCreated).toHaveBeenCalledWith(
 				expect.objectContaining({
-					text: 'Just for me',
-					visibility: 'private',
+					text: 'For everyone',
+					visibility: 'public',
 				})
 			)
 		)
@@ -516,7 +518,7 @@ describe('CreatePost', () => {
 			expect.objectContaining({
 				author: 7,
 				text: 'Write this later',
-				visibility: 'public',
+				visibility: 'private',
 				mediaType: null,
 			})
 		)
