@@ -30,6 +30,8 @@ interface PaginatedPostsResponse {
 export interface AuthorStats {
 	post_count: number
 	likes_received: number
+	/** Only ever populated for the requesting user's own drafts; 0 for anyone else. */
+	draft_count: number
 }
 
 const revivePost = (post: Post): Post => ({

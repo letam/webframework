@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { Home, Menu, LogOut, Settings } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { FileText, Home, Menu, LogOut, Settings } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { EchoMark } from '@/components/EchoMark'
 import { useAuth } from '@/hooks/useAuth'
@@ -17,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { identityGradient } from '@/lib/utils/identity'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
+import { getAuthorStats } from '@/lib/api/posts'
 
 const navLinkClass =
 	'rounded-md text-foreground/60 transition-colors hover:text-foreground/80 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
@@ -43,7 +45,17 @@ const GithubIcon = ({ className }: { className?: string }) => (
 )
 
 const Navbar = () => {
-	const { isAuthenticated, refreshAuthStatus, avatar, username } = useAuth()
+	const { isAuthenticated, refreshAuthStatus, avatar, username, userId } = useAuth()
+
+	// Shares the profile's cache entry, so this adds no extra request on a page
+	// that already loads stats. draft_count is server-side, unlike the paginated list.
+	const { data: stats } = useQuery({
+		queryKey: ['profile-stats', userId],
+		queryFn: () => getAuthorStats(userId as number),
+		enabled: isAuthenticated && userId != null,
+	})
+	const draftCount = stats?.draft_count ?? 0
+	const draftCountLabel = draftCount > 99 ? '99+' : String(draftCount)
 	const [dropdownOpen, setDropdownOpen] = useState(false)
 	const userInitial = username?.[0]?.toUpperCase() ?? '?'
 	const renderProfileAvatar = () => (
@@ -89,6 +101,19 @@ const Navbar = () => {
 								<span>Home</span>
 							</div>
 						</Link>
+						{isAuthenticated && (
+							<Link to="/drafts" className={navLinkClass}>
+								<div className="flex items-center gap-1">
+									<FileText className="h-4 w-4" />
+									<span>Drafts</span>
+									{draftCount > 0 && (
+										<span className="ml-0.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground/70 tabular-nums">
+											{draftCountLabel}
+										</span>
+									)}
+								</div>
+							</Link>
+						)}
 						<Link to="/settings" className={navLinkClass}>
 							<div className="flex items-center gap-1">
 								<Settings className="h-4 w-4" />
@@ -151,6 +176,19 @@ const Navbar = () => {
 									<span>Home</span>
 								</Link>
 							</DropdownMenuItem>
+							{isAuthenticated && (
+								<DropdownMenuItem asChild>
+									<Link to="/drafts" className="flex items-center gap-2">
+										<FileText className="h-4 w-4" />
+										<span>Drafts</span>
+										{draftCount > 0 && (
+											<span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-foreground/70 tabular-nums">
+												{draftCountLabel}
+											</span>
+										)}
+									</Link>
+								</DropdownMenuItem>
+							)}
 							<DropdownMenuItem asChild>
 								<Link to="/settings" className="flex items-center gap-2">
 									<Settings className="h-4 w-4" />

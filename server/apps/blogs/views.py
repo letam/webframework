@@ -929,6 +929,13 @@ class PostViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Drafts are author-private, so only ever report the requester's own. Asking
+        # about anyone else reports 0 rather than leaking that they have unpublished work.
+        is_self = request.user.is_authenticated and request.user.id == author_id
+        draft_count = (
+            Post.objects.filter(author_id=author_id, is_draft=True).count() if is_self else 0
+        )
+
         return Response(
             {
                 'post_count': Post.objects.visible_to(request.user)
@@ -937,6 +944,7 @@ class PostViewSet(viewsets.ModelViewSet):
                 'likes_received': Like.objects.filter(
                     post__in=Post.objects.visible_to(request.user).filter(author_id=author_id)
                 ).count(),
+                'draft_count': draft_count,
             }
         )
 

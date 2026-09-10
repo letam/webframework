@@ -3,16 +3,6 @@ import { useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Camera, Loader2, MoreHorizontal, Pin, Trash2 } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import {
 	DropdownMenu,
@@ -34,6 +24,7 @@ import { cn } from '@/lib/utils'
 import type { Post as PostType } from '@/types/post'
 import { groupPostsByDate, type PostGroupMode } from '@/utils/postGroups'
 import { InfiniteScrollSentinel } from './feed/InfiniteScrollSentinel'
+import { DraftsList } from './drafts/DraftsList'
 
 type ProfilePostView = 'all' | PostGroupMode
 
@@ -47,8 +38,6 @@ const Profile: React.FC = () => {
 	const { isAuthenticated, userId, username, avatar, refreshAuthStatus } = useAuth()
 	const queryClient = useQueryClient()
 	const avatarInputRef = useRef<HTMLInputElement | null>(null)
-	const [publishAllOpen, setPublishAllOpen] = useState(false)
-	const [isPublishingAll, setIsPublishingAll] = useState(false)
 	const [isAvatarUploading, setIsAvatarUploading] = useState(false)
 	const [postView, setPostView] = useState<ProfilePostView>('all')
 	const profileQueriesEnabled = isAuthenticated && userId != null
@@ -58,7 +47,6 @@ const Profile: React.FC = () => {
 		{ enabled: profileQueriesEnabled }
 	)
 	const liked = usePostHandlers({ liked: true }, { enabled: profileQueriesEnabled })
-	const drafts = usePostHandlers({ drafts: true }, { enabled: profileQueriesEnabled })
 
 	const myPosts = mine.posts
 	const pinnedIds = useMemo(() => new Set(pinned.posts.map((post) => post.id)), [pinned.posts])
@@ -99,7 +87,7 @@ const Profile: React.FC = () => {
 		return (letters || username?.[0] || '?').toUpperCase()
 	}, [displayName, username])
 	const profileAvatar = avatar ?? myPosts[0]?.author.avatar ?? null
-	const error = mine.error ?? pinned.error ?? liked.error ?? drafts.error
+	const error = mine.error ?? pinned.error ?? liked.error
 
 	if (!isAuthenticated) {
 		return (
@@ -242,18 +230,6 @@ const Profile: React.FC = () => {
 				/>
 			</>
 		)
-	}
-
-	const handlePublishAll = async () => {
-		setIsPublishingAll(true)
-		try {
-			for (const draft of drafts.posts) {
-				await drafts.handlePublishPost(draft.id)
-			}
-			setPublishAllOpen(false)
-		} finally {
-			setIsPublishingAll(false)
-		}
 	}
 
 	const refreshProfileAvatar = async () => {
@@ -435,45 +411,9 @@ const Profile: React.FC = () => {
 				</TabsContent>
 
 				<TabsContent value="drafts" className="space-y-4 mt-4">
-					{drafts.posts.length > 1 && (
-						<div className="max-w-lg mx-auto flex justify-end">
-							<Button
-								type="button"
-								variant="ghost"
-								size="sm"
-								onClick={() => setPublishAllOpen(true)}
-							>
-								Publish all
-							</Button>
-						</div>
-					)}
-					{renderPosts(
-						drafts.posts,
-						'No drafts yet. Drafts you save from the composer land here.',
-						drafts
-					)}
+					<DraftsList enabled={profileQueriesEnabled} />
 				</TabsContent>
 			</Tabs>
-
-			<AlertDialog open={publishAllOpen} onOpenChange={setPublishAllOpen}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Publish {drafts.posts.length} drafts?</AlertDialogTitle>
-						<AlertDialogDescription>
-							This will publish each draft and move it into your public post list.
-							{drafts.hasNextPage
-								? ' Only the drafts loaded so far will be published — scroll the list to load the rest first.'
-								: ''}
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel disabled={isPublishingAll}>Cancel</AlertDialogCancel>
-						<AlertDialogAction onClick={() => void handlePublishAll()} disabled={isPublishingAll}>
-							Publish
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
 
 			{/* Bottom padding */}
 			<div className="h-96"></div>
