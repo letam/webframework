@@ -36,6 +36,20 @@ export const getProfileStatsQueryKey = (authorId: number | null | undefined) =>
 export const getAuthorStatsQueryKey = (authorId: number) =>
 	[...AUTHOR_STATS_QUERY_KEY, authorId] as const
 
+/**
+ * Refetch the author aggregates from `/posts/stats/`.
+ *
+ * `post_count` and `draft_count` are computed server-side over every post, not over the
+ * paginated pages held in the `['posts', ...]` caches, so the cache surgery that keeps
+ * those pages current cannot keep these right. Every path that creates, publishes or
+ * removes a post has to call this — including the outbox, which syncs without ever
+ * touching the `usePosts` mutations.
+ */
+export const invalidateAuthorAggregates = (queryClient: QueryClient) => {
+	queryClient.invalidateQueries({ queryKey: PROFILE_STATS_QUERY_KEY })
+	queryClient.invalidateQueries({ queryKey: AUTHOR_STATS_QUERY_KEY })
+}
+
 const DEFAULT_POSTS_SCOPE: PostsQueryScope = {}
 const UNSCOPED_POSTS_QUERY_KEY = [...POSTS_QUERY_KEY, DEFAULT_POSTS_SCOPE] as const
 
@@ -190,11 +204,8 @@ export const usePosts = (
 		[queryClient, refreshTagsCacheFromFeed]
 	)
 
-	// post_count and draft_count come from the server, not the paginated list, so
-	// cache surgery on the post pages cannot keep them right.
-	const invalidateAuthorAggregates = useCallback(() => {
-		queryClient.invalidateQueries({ queryKey: PROFILE_STATS_QUERY_KEY })
-		queryClient.invalidateQueries({ queryKey: AUTHOR_STATS_QUERY_KEY })
+	const invalidateAggregates = useCallback(() => {
+		invalidateAuthorAggregates(queryClient)
 	}, [queryClient])
 
 	const invalidatePinnedScopes = useCallback(() => {
@@ -235,7 +246,7 @@ export const usePosts = (
 		mutationFn: (postData: CreatePostRequest) => createPost(postData),
 		onSuccess: (newPost) => {
 			applyCreatedPostToCaches(queryClient, newPost)
-			invalidateAuthorAggregates()
+			invalidateAggregates()
 		},
 	})
 
@@ -252,7 +263,7 @@ export const usePosts = (
 		mutationFn: (id: number) => deletePost(id),
 		onSuccess: (_, id) => {
 			updatePostsCaches((prev = []) => prev.filter((post) => post.id !== id))
-			invalidateAuthorAggregates()
+			invalidateAggregates()
 		},
 	})
 
@@ -292,7 +303,7 @@ export const usePosts = (
 
 			refreshTagsCacheFromFeed()
 			// Publishing moves a post between the two aggregates at once.
-			invalidateAuthorAggregates()
+			invalidateAggregates()
 		},
 	})
 

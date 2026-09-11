@@ -2,7 +2,11 @@ import type { QueryClient } from '@tanstack/react-query'
 import { toast } from '@/components/ui/sonner'
 import { cancelPostByClientUuid, createPost, transcribePost } from '@/lib/api/posts'
 import { ApiError } from '@/lib/api/errors'
-import { applyCreatedPostToCaches, applyUpdatedPostToCaches } from '@/hooks/usePosts'
+import {
+	applyCreatedPostToCaches,
+	applyUpdatedPostToCaches,
+	invalidateAuthorAggregates,
+} from '@/hooks/usePosts'
 import { clearCsrfTokenCache } from '@/lib/utils/fetch'
 import { getSettings } from '@/lib/utils/settings'
 import {
@@ -284,6 +288,7 @@ const reconcileCancelledEntry = async (id: string): Promise<CancellationResult> 
 			setEntries(snapshot.entries.filter((candidate) => candidate.id !== id))
 			if (publishedPost && dependencies) {
 				applyCreatedPostToCaches(dependencies.queryClient, publishedPost)
+				invalidateAuthorAggregates(dependencies.queryClient)
 			}
 			return publishedPost ? 'published' : 'removed'
 		} catch (error) {
@@ -308,7 +313,10 @@ const buildCreateRequest = (entry: OutboxEntry, auth: OutboxAuthState) => ({
 	text: entry.text,
 	client_uuid: entry.id,
 	expected_author: auth.isAuthenticated ? (auth.userId as number) : ('anon' as const),
-	...(entry.visibility === null ? {} : { visibility: entry.visibility }),
+	// An entry queued before auth resolved carries the composer's choice, because at
+	// queue time there was no identity to judge it against. Anonymous posts all land
+	// on one shared account, so a visibility there is a promise the server cannot keep.
+	...(auth.isAuthenticated && entry.visibility !== null ? { visibility: entry.visibility } : {}),
 	is_draft: entry.isDraft,
 	link_previews_enabled: entry.linkPreviewsEnabled,
 	...(entry.media && entry.mediaName && entry.mediaType
@@ -490,7 +498,10 @@ const syncEntry = async (id: string, auth: OutboxAuthState): Promise<SyncResult>
 				} else {
 					adoptOwnedClaimResult(entry.id, completion)
 				}
-				if (dependencies) applyCreatedPostToCaches(dependencies.queryClient, post)
+				if (dependencies) {
+					applyCreatedPostToCaches(dependencies.queryClient, post)
+					invalidateAuthorAggregates(dependencies.queryClient)
+				}
 				resetBackoff()
 
 				if (

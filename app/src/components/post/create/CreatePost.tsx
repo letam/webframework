@@ -445,7 +445,11 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			id,
 			author: queueAuth.author,
 			text: postText,
-			visibility: queueAuth.isAuthenticated ? visibility : null,
+			// Only a resolved anonymous author drops the choice; anonymous posts share one
+			// account and cannot keep a privacy promise. An unresolved identity keeps it, so
+			// a session that later resolves as signed in still publishes what was chosen
+			// rather than falling back to the server's public default.
+			visibility: queueAuth.author === 'anon' ? null : visibility,
 			isDraft,
 			linkPreviewsEnabled: settings.linkPreviews,
 			autoTranscribe: settings.autoTranscribe && queueAuth.isAuthenticated,
