@@ -880,6 +880,60 @@ describe('outbox sync engine', () => {
 		expect(getOutboxSnapshot().entries).toEqual([])
 	})
 
+	it('keeps an unknown entry\u2019s chosen visibility when the session resolves as signed in', async () => {
+		// Queued before auth resolved (offline at launch), so the composer could not yet
+		// know whether it was allowed to send a visibility. The choice must survive until
+		// an identity exists to judge it against, or a private post publishes publicly.
+		await enqueueText({
+			author: 'unknown',
+			text: 'Private while unresolved',
+			visibility: 'private',
+		})
+		auth = { isAuthenticated: true, userId: 1, isAuthResolved: true }
+		vi.mocked(postsApi.createPost).mockResolvedValue(makePost({ id: 80 }))
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(postsApi.createPost).toHaveBeenCalledWith(
+			expect.objectContaining({ text: 'Private while unresolved', visibility: 'private' })
+		)
+	})
+
+	it('drops an unknown entry\u2019s visibility when the session resolves as anonymous', async () => {
+		// Anonymous posts all land on one shared account, so a visibility there would be a
+		// promise the server cannot keep. Omitting it is the honest outcome.
+		await enqueueText({
+			author: 'unknown',
+			text: 'Private while signed out',
+			visibility: 'private',
+		})
+		auth = { isAuthenticated: false, userId: null, isAuthResolved: true }
+		vi.mocked(postsApi.createPost).mockResolvedValue(makePost({ id: 81 }))
+		setOnline(true)
+
+		await flushOutbox()
+
+		expect(postsApi.createPost).toHaveBeenCalledWith(
+			expect.not.objectContaining({ visibility: expect.anything() })
+		)
+	})
+
+	it('invalidates author aggregates after a queued post syncs', async () => {
+		// post_count and draft_count are server aggregates, so the cache surgery in
+		// applyCreatedPostToCaches cannot keep the navbar badge or the drafts heading right.
+		const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+		await enqueueText({ text: 'Counts toward the badge', isDraft: true })
+		vi.mocked(postsApi.createPost).mockResolvedValue(makePost({ id: 82 }))
+		setOnline(true)
+
+		await flushOutbox()
+
+		const keys = invalidateQueries.mock.calls.map((call) => call[0]?.queryKey)
+		expect(keys).toContainEqual(['profile-stats'])
+		expect(keys).toContainEqual(['author-stats'])
+	})
+
 	it('flushes oldest first and emits one plural batch toast', async () => {
 		const now = vi.spyOn(Date, 'now')
 		now.mockReturnValueOnce(10).mockReturnValueOnce(20).mockReturnValueOnce(30)

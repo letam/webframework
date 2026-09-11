@@ -572,15 +572,18 @@ describe('CreatePost', () => {
 		expect(mockToast).toHaveBeenCalledWith("Queued — will save to drafts when you're back online.")
 	})
 
-	it.each([
-		['anon', true],
-		['unknown', false],
-	] as const)('records a signed-out %s author when auth-resolved is %s', async (author, known) => {
+	it('records a resolved signed-out author and sends no visibility', async () => {
 		setOnline(false)
 		mockUseAuth.mockReturnValue({
 			isAuthenticated: false,
-			isAuthResolved: known,
+			isAuthResolved: true,
 			userId: null,
+			refreshAuthStatus: vi.fn(async () => true),
+			getAuthSnapshot: vi.fn(() => ({
+				isAuthenticated: false,
+				isAuthResolved: true,
+				userId: null,
+			})),
 		})
 		const user = userEvent.setup()
 		render(<CreatePost onPostCreated={vi.fn()} />)
@@ -590,7 +593,36 @@ describe('CreatePost', () => {
 
 		await waitFor(() =>
 			expect(mockEnqueuePost).toHaveBeenCalledWith(
-				expect.objectContaining({ author, visibility: null })
+				expect.objectContaining({ author: 'anon', visibility: null })
+			)
+		)
+	})
+
+	it('keeps the chosen visibility when it queues before auth resolves', async () => {
+		// Offline at launch, so the session cookie cannot be checked. Discarding the
+		// choice here would publish this publicly once the session resolves as signed
+		// in, because the server defaults an absent visibility to public.
+		setOnline(false)
+		mockUseAuth.mockReturnValue({
+			isAuthenticated: false,
+			isAuthResolved: false,
+			userId: null,
+			refreshAuthStatus: vi.fn(async () => false),
+			getAuthSnapshot: vi.fn(() => ({
+				isAuthenticated: false,
+				isAuthResolved: false,
+				userId: null,
+			})),
+		})
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+
+		await user.type(screen.getByPlaceholderText("What's on your mind?"), 'Unresolved queue')
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+
+		await waitFor(() =>
+			expect(mockEnqueuePost).toHaveBeenCalledWith(
+				expect.objectContaining({ author: 'unknown', visibility: 'private' })
 			)
 		)
 	})
