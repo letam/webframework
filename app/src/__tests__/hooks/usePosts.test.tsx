@@ -147,6 +147,43 @@ describe('usePosts hook', () => {
 		expect(getCachedPosts(queryClient, ['posts', { drafts: true }])).toEqual([])
 	})
 
+	it.each([
+		['publishing a draft', 'publishPost'],
+		['deleting a post', 'removePost'],
+	] as const)('invalidates the author aggregates after %s', async (_label, action) => {
+		// The badge and profile totals are server counts, so cache surgery on the
+		// post pages cannot keep them right — they have to be refetched.
+		const queryClient = createQueryClient()
+		const author = makeAuthor({ id: 42 })
+		const draft = makePost({ id: 15, author, is_draft: true })
+		queryClient.setQueryData(['posts', { drafts: true }], infiniteData([draft]))
+		queryClient.setQueryData(['profile-stats', 42], {
+			post_count: 1,
+			likes_received: 0,
+			draft_count: 1,
+		})
+		queryClient.setQueryData(['author-stats', 42], {
+			post_count: 1,
+			likes_received: 0,
+			draft_count: 1,
+		})
+		vi.mocked(postsApi.publishPost).mockResolvedValueOnce(makePost({ id: 15, author }))
+		vi.mocked(postsApi.deletePost).mockResolvedValueOnce(undefined)
+		const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+
+		const { result } = renderHook(() => usePosts({}, { enabled: false }), {
+			wrapper: createWrapper(queryClient),
+		})
+
+		await act(async () => {
+			await result.current[action](draft.id)
+		})
+
+		const invalidated = invalidate.mock.calls.map(([args]) => args?.queryKey)
+		expect(invalidated).toContainEqual(['profile-stats'])
+		expect(invalidated).toContainEqual(['author-stats'])
+	})
+
 	it('updates regenerated share tokens across caches', async () => {
 		const queryClient = createQueryClient()
 		const post = makePost({ id: 16, visibility: 'unlisted', share_token: 'old-token' })

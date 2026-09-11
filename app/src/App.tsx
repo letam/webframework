@@ -15,6 +15,7 @@ const queryClient = new QueryClient()
 
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage'))
 const SettingsPage = React.lazy(() => import('./components/settings/SettingsPage'))
+const DraftsPage = React.lazy(() => import('./pages/DraftsPage'))
 const DebugPage = React.lazy(() => import('./pages/DebugPage'))
 const NotFound = React.lazy(() => import('./pages/NotFound'))
 
@@ -39,6 +40,7 @@ const App = () => (
 									<Routes>
 										<Route path="/" element={<Index />} />
 										<Route path="/profile" element={<ProfilePage />} />
+										<Route path="/drafts" element={<DraftsPage />} />
 										<Route path="/settings" element={<SettingsPage />} />
 										<Route path="/debug" element={<DebugPage />} />
 										<Route path="*" element={<NotFound />} />

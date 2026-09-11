@@ -96,6 +96,27 @@ class LikeTests(ViewTestCase):
         self.assertEqual(response.data['post_count'], 2)
         self.assertEqual(response.data['likes_received'], 3)
 
+    def test_stats_reports_own_draft_count(self):
+        """The stats endpoint should report the requester's own unpublished drafts."""
+        Post.objects.create(author=self.user, head='Draft', body='Body', is_draft=True)
+        Post.objects.create(author=self.user, head='Draft two', body='Body', is_draft=True)
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('post-stats'), {'author': self.user.id})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['draft_count'], 2)
+
+    def test_stats_hides_another_authors_draft_count(self):
+        """Drafts are author-private, so another user's count must never be exposed."""
+        Post.objects.create(author=self.other_user, head='Draft', body='Body', is_draft=True)
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse('post-stats'), {'author': self.other_user.id})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['draft_count'], 0)
+
     def test_stats_requires_a_valid_author(self):
         """The stats endpoint should reject missing or non-integer authors."""
         for params in ({}, {'author': 'abc'}):

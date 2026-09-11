@@ -102,7 +102,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const { syncMode } = useOutbox()
 	const [postText, setPostText] = useState('')
 	const [mediaType, setMediaType] = useState<'text' | 'audio' | 'video' | 'image'>('text')
-	const [visibility, setVisibility] = useState<PostVisibility>('public')
+	// Read once on mount, like draftsEnabled: the composer's starting visibility
+	// should not change under the user because another tab edited the setting.
+	const [defaultVisibility] = useState<PostVisibility>(() => getSettings().defaultVisibility)
+	const [visibility, setVisibility] = useState<PostVisibility>(defaultVisibility)
 	const [audioBlob, setAudioBlob] = useState<Blob | null>(null)
 	const [videoBlob, setVideoBlob] = useState<Blob | null>(null)
 	const [audioFile, setAudioFile] = useState<File | null>(null)
@@ -123,7 +126,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		visibility: PostVisibility
 		mediaType: 'text' | 'audio' | 'video' | 'image'
 		media: Blob | File | null
-	}>({ text: '', visibility: 'public', mediaType: 'text', media: null })
+	}>({ text: '', visibility: defaultVisibility, mediaType: 'text', media: null })
 
 	const hasNoMedia = !audioBlob && !audioFile && !videoBlob && !videoFile && !imageFile
 	const canPost = !!postText.trim() || !hasNoMedia
@@ -156,7 +159,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			composerLockedRef.current = true
 			setComposerLocked(true)
 
-			const loadedVisibility = entry.visibility ?? 'public'
+			const loadedVisibility = entry.visibility ?? defaultVisibility
 			let loadedMedia: File | null = null
 			setPostText(entry.text)
 			setVisibility(loadedVisibility)
@@ -198,7 +201,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						return false
 					}
 					setPostText('')
-					setVisibility('public')
+					setVisibility(defaultVisibility)
 					setAudioBlob(null)
 					setVideoBlob(null)
 					setAudioFile(null)
@@ -207,7 +210,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					setMediaType('text')
 					composerStateRef.current = {
 						text: '',
-						visibility: 'public',
+						visibility: defaultVisibility,
 						mediaType: 'text',
 						media: null,
 					}
@@ -215,7 +218,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				},
 			}
 		},
-		[hasNoMedia, postText]
+		[defaultVisibility, hasNoMedia, postText]
 	)
 
 	useEffect(() => registerComposerLoader(loadOutboxEntry), [loadOutboxEntry])
@@ -375,7 +378,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	const resetComposer = () => {
 		setPostText('')
-		setVisibility('public')
+		setVisibility(defaultVisibility)
 		clearMedia()
 		clearStoredDraft()
 		textareaRef.current?.focus()
@@ -473,7 +476,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	// Throw away a restored draft the user did not want back.
 	const discardRestoredDraft = () => {
 		setPostText('')
-		setVisibility('public')
+		setVisibility(defaultVisibility)
 		clearMedia()
 		clearStoredDraft()
 	}
@@ -875,6 +878,29 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 										</DropdownMenuContent>
 									</DropdownMenu>
 									<TooltipContent>Visibility</TooltipContent>
+								</Tooltip>
+							</TooltipProvider>
+						)}
+						{!isAuthenticated && isAuthResolved && expanded && (
+							<TooltipProvider delayDuration={300}>
+								<Tooltip>
+									<TooltipTrigger asChild>
+										{/* A disabled button swallows pointer events, so the tooltip needs a
+										    wrapper of its own to stay reachable. */}
+										<span className="inline-flex">
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												className="h-8 w-8 rounded-full text-muted-foreground"
+												disabled
+												aria-label="Visibility"
+											>
+												<Globe className="h-4 w-4" />
+											</Button>
+										</span>
+									</TooltipTrigger>
+									<TooltipContent>Posts made while signed out are always public</TooltipContent>
 								</Tooltip>
 							</TooltipProvider>
 						)}

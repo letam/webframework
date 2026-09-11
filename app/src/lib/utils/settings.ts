@@ -1,4 +1,5 @@
 import { isDesktop, isFirefox, isSafari } from '@/lib/utils/browser'
+import type { PostVisibility } from '@/types/post'
 
 const SETTINGS_KEY = 'app-settings'
 
@@ -10,6 +11,7 @@ export interface AppSettings {
 	showLinkPreviews: boolean
 	saveComposerDrafts: boolean
 	postSyncDefault: 'auto' | 'local' | 'remember'
+	defaultVisibility: PostVisibility
 }
 
 // Determine if audio normalization should be enabled by default
@@ -31,6 +33,11 @@ const defaultSettings: AppSettings = {
 	// mode on reload and the mount flush would silently publish posts the user
 	// explicitly held on this device.
 	postSyncDefault: 'remember',
+	// Private, so the composer's resting state is the one whose mistakes are
+	// recoverable: publishing something meant to stay private cannot be taken back,
+	// while a private post is one menu change away from public. Every post still
+	// shows its visibility before it is sent.
+	defaultVisibility: 'private',
 }
 
 export const getSettings = (): AppSettings => {

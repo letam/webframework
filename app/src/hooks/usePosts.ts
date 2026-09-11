@@ -28,6 +28,13 @@ import { buildTagIndex } from '../utils/tags'
 
 export const POSTS_QUERY_KEY = ['posts'] as const
 export const POST_TAGS_QUERY_KEY = ['posts', 'tags'] as const
+/** Author aggregates from `/posts/stats/`. Two call sites cache it under two keys. */
+export const PROFILE_STATS_QUERY_KEY = ['profile-stats'] as const
+export const AUTHOR_STATS_QUERY_KEY = ['author-stats'] as const
+export const getProfileStatsQueryKey = (authorId: number | null | undefined) =>
+	[...PROFILE_STATS_QUERY_KEY, authorId] as const
+export const getAuthorStatsQueryKey = (authorId: number) =>
+	[...AUTHOR_STATS_QUERY_KEY, authorId] as const
 
 const DEFAULT_POSTS_SCOPE: PostsQueryScope = {}
 const UNSCOPED_POSTS_QUERY_KEY = [...POSTS_QUERY_KEY, DEFAULT_POSTS_SCOPE] as const
@@ -183,6 +190,13 @@ export const usePosts = (
 		[queryClient, refreshTagsCacheFromFeed]
 	)
 
+	// post_count and draft_count come from the server, not the paginated list, so
+	// cache surgery on the post pages cannot keep them right.
+	const invalidateAuthorAggregates = useCallback(() => {
+		queryClient.invalidateQueries({ queryKey: PROFILE_STATS_QUERY_KEY })
+		queryClient.invalidateQueries({ queryKey: AUTHOR_STATS_QUERY_KEY })
+	}, [queryClient])
+
 	const invalidatePinnedScopes = useCallback(() => {
 		queryClient.invalidateQueries({
 			queryKey: POSTS_QUERY_KEY,
@@ -219,7 +233,10 @@ export const usePosts = (
 
 	const addPostMutation = useMutation({
 		mutationFn: (postData: CreatePostRequest) => createPost(postData),
-		onSuccess: (newPost) => applyCreatedPostToCaches(queryClient, newPost),
+		onSuccess: (newPost) => {
+			applyCreatedPostToCaches(queryClient, newPost)
+			invalidateAuthorAggregates()
+		},
 	})
 
 	const editPostMutation = useMutation({
@@ -235,6 +252,7 @@ export const usePosts = (
 		mutationFn: (id: number) => deletePost(id),
 		onSuccess: (_, id) => {
 			updatePostsCaches((prev = []) => prev.filter((post) => post.id !== id))
+			invalidateAuthorAggregates()
 		},
 	})
 
@@ -273,6 +291,8 @@ export const usePosts = (
 			}
 
 			refreshTagsCacheFromFeed()
+			// Publishing moves a post between the two aggregates at once.
+			invalidateAuthorAggregates()
 		},
 	})
 

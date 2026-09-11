@@ -13,6 +13,7 @@ import {
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAuthorStats, getShareUrl } from '@/lib/api/posts'
+import { getAuthorStatsQueryKey } from '@/hooks/usePosts'
 import { useAuth } from '@/hooks/useAuth'
 import { identityGradient } from '@/lib/utils/identity'
 import { formatShortTime } from '@/lib/utils/time'
@@ -28,7 +29,7 @@ const AuthorHoverCard: React.FC<{ author: Author; children: React.ReactNode }> =
 }) => {
 	const [open, setOpen] = useState(false)
 	const { data: stats } = useQuery({
-		queryKey: ['author-stats', author.id],
+		queryKey: getAuthorStatsQueryKey(author.id),
 		queryFn: () => getAuthorStats(author.id),
 		enabled: open,
 		staleTime: 60_000,

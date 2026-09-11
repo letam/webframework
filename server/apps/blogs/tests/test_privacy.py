@@ -172,9 +172,17 @@ class PostPrivacyTests(ViewTestCase):
         author_response = self.author_client.get(reverse('post-stats'), {'author': self.author.id})
         super_response = self.super_client.get(reverse('post-stats'), {'author': self.author.id})
 
-        self.assertEqual(anon_response.data, {'post_count': 1, 'likes_received': 1})
-        self.assertEqual(author_response.data, {'post_count': 3, 'likes_received': 3})
-        self.assertEqual(super_response.data, {'post_count': 1, 'likes_received': 1})
+        # draft_count is the author's own unpublished work: 1 for them, 0 for everyone
+        # else — a superuser included, since this endpoint answers as a reader.
+        self.assertEqual(
+            anon_response.data, {'post_count': 1, 'likes_received': 1, 'draft_count': 0}
+        )
+        self.assertEqual(
+            author_response.data, {'post_count': 3, 'likes_received': 3, 'draft_count': 1}
+        )
+        self.assertEqual(
+            super_response.data, {'post_count': 1, 'likes_received': 1, 'draft_count': 0}
+        )
 
     def test_share_token_serialization_is_author_only(self):
         """Authors and superusers see share tokens; other visible readers get null."""
