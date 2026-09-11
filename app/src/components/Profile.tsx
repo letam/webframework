@@ -17,6 +17,7 @@ import { Post } from './post/Post'
 import { LoginModal } from './LoginModal'
 import { useAuth } from '@/hooks/useAuth'
 import { usePostHandlers } from '@/hooks/usePostHandlers'
+import { getProfileStatsQueryKey } from '@/hooks/usePosts'
 import { getAuthorStats } from '@/lib/api/posts'
 import { removeAvatar, uploadAvatar } from '@/lib/api/users'
 import { identityGradient } from '@/lib/utils/identity'
@@ -64,7 +65,7 @@ const Profile: React.FC = () => {
 	// header totals come from a server aggregate, with the loaded pages as a
 	// fallback while it loads.
 	const { data: stats } = useQuery({
-		queryKey: ['profile-stats', userId],
+		queryKey: getProfileStatsQueryKey(userId),
 		queryFn: () => getAuthorStats(userId as number),
 		enabled: profileQueriesEnabled,
 		staleTime: 60_000,
@@ -234,7 +235,7 @@ const Profile: React.FC = () => {
 
 	const refreshProfileAvatar = async () => {
 		await refreshAuthStatus()
-		await queryClient.invalidateQueries({ queryKey: ['profile-stats', userId] })
+		await queryClient.invalidateQueries({ queryKey: getProfileStatsQueryKey(userId) })
 	}
 
 	const handleAvatarFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {

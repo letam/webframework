@@ -19,6 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { identityGradient } from '@/lib/utils/identity'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { getAuthorStats } from '@/lib/api/posts'
+import { getProfileStatsQueryKey } from '@/hooks/usePosts'
 
 const navLinkClass =
 	'rounded-md text-foreground/60 transition-colors hover:text-foreground/80 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
@@ -50,7 +51,7 @@ const Navbar = () => {
 	// Shares the profile's cache entry, so this adds no extra request on a page
 	// that already loads stats. draft_count is server-side, unlike the paginated list.
 	const { data: stats } = useQuery({
-		queryKey: ['profile-stats', userId],
+		queryKey: getProfileStatsQueryKey(userId),
 		queryFn: () => getAuthorStats(userId as number),
 		enabled: isAuthenticated && userId != null,
 	})

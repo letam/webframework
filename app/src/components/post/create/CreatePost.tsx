@@ -881,6 +881,29 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 								</Tooltip>
 							</TooltipProvider>
 						)}
+						{!isAuthenticated && isAuthResolved && expanded && (
+							<TooltipProvider delayDuration={300}>
+								<Tooltip>
+									<TooltipTrigger asChild>
+										{/* A disabled button swallows pointer events, so the tooltip needs a
+										    wrapper of its own to stay reachable. */}
+										<span className="inline-flex">
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												className="h-8 w-8 rounded-full text-muted-foreground"
+												disabled
+												aria-label="Visibility"
+											>
+												<Globe className="h-4 w-4" />
+											</Button>
+										</span>
+									</TooltipTrigger>
+									<TooltipContent>Posts made while signed out are always public</TooltipContent>
+								</Tooltip>
+							</TooltipProvider>
+						)}
 						{isAuthenticated && expanded && canPost && (
 							<TooltipProvider delayDuration={300}>
 								<Tooltip>

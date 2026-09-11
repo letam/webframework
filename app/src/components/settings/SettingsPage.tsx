@@ -164,7 +164,8 @@ const SettingsPage = () => {
 									<Label>Who can see new posts</Label>
 									<p className="text-sm text-muted-foreground">
 										Choose the visibility the composer starts on. You can still change it on any
-										individual post before you send it.
+										individual post before you send it. Posts made while signed out are always
+										public.
 									</p>
 									<RadioGroup
 										value={defaultVisibility}

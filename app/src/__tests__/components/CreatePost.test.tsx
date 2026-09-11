@@ -283,6 +283,37 @@ describe('CreatePost', () => {
 		)
 	})
 
+	it('never sends a private default on an anonymous post, and says so', async () => {
+		// The private default is global, but an anonymous author has no private feed to
+		// post into — the server would publish it publicly. Say that in the composer
+		// rather than letting the settings screen's promise stand.
+		localStorage.setItem('app-settings', JSON.stringify({ defaultVisibility: 'private' }))
+		mockUseAuth.mockReturnValue({
+			isAuthenticated: false,
+			isAuthResolved: true,
+			userId: null,
+			refreshAuthStatus: vi.fn(async () => true),
+			getAuthSnapshot: vi.fn(() => ({
+				isAuthenticated: false,
+				isAuthResolved: true,
+				userId: null,
+			})),
+		})
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+
+		await user.type(screen.getByPlaceholderText("What's on your mind?"), 'Anonymous words')
+
+		// The control is present but inert, so the public outcome is visible up front.
+		expect(screen.getByRole('button', { name: 'Visibility' })).toBeDisabled()
+
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+
+		await waitFor(() => expect(onPostCreated).toHaveBeenCalled())
+		expect(onPostCreated.mock.calls[0][0].visibility).toBeUndefined()
+	})
+
 	it('submits the selected visibility', async () => {
 		const user = userEvent.setup()
 		const onPostCreated = vi.fn().mockResolvedValue(undefined)

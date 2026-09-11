@@ -5,6 +5,7 @@ import { LoginModal } from '@/components/LoginModal'
 import { DraftsList } from '@/components/drafts/DraftsList'
 import { useAuth } from '@/hooks/useAuth'
 import { getAuthorStats } from '@/lib/api/posts'
+import { getProfileStatsQueryKey } from '@/hooks/usePosts'
 
 const DraftsPage: React.FC = () => {
 	const { isAuthenticated, userId } = useAuth()
@@ -13,7 +14,7 @@ const DraftsPage: React.FC = () => {
 	// The list is paginated, so its length only counts loaded pages. The server
 	// aggregate is the only honest total to put next to the heading.
 	const { data: stats } = useQuery({
-		queryKey: ['profile-stats', userId],
+		queryKey: getProfileStatsQueryKey(userId),
 		queryFn: () => getAuthorStats(userId as number),
 		enabled,
 	})
