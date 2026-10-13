@@ -415,8 +415,11 @@ probes are included in the final integration gate.
 ## Practice interface and local enablement
 
 The React app lazily loads `/practice` for room creation and `/practice/rooms/:id`
-for joining and practicing. `VITE_PRACTICE_ENABLED=true` shows its navigation entry;
-it defaults off for existing instances. Use the existing login/signup dialogs before
+for joining and practicing. The build-time `VITE_PRACTICE_ENABLED=true` flag shows its
+desktop and mobile navigation entries; it defaults off for existing instances. Docker
+and Fly builds require `--build-arg VITE_PRACTICE_ENABLED=true`. Rebuild to change the
+compiled navigation; the runtime backend flag controls service availability separately.
+Use the existing login/signup dialogs before
 an explicit invitation exchange. The page clears the invitation fragment immediately
 and keeps it only in memory until join; refreshing before joining requires reopening
 the invitation. A host can copy, rotate or revoke the link, remove participants, and

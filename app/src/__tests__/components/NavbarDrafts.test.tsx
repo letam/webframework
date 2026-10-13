@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Navbar from '@/components/Navbar'
 import { getAuthorStats } from '@/lib/api/posts'
 
@@ -44,6 +44,10 @@ const renderNavbar = (children: ReactNode) =>
 			<MemoryRouter>{children}</MemoryRouter>
 		</QueryClientProvider>
 	)
+
+afterEach(() => {
+	vi.unstubAllEnvs()
+})
 
 describe('Navbar drafts entry', () => {
 	beforeEach(() => {
@@ -108,5 +112,39 @@ describe('Navbar drafts entry', () => {
 
 		expect(screen.queryByRole('link', { name: /Drafts/ })).not.toBeInTheDocument()
 		expect(getAuthorStats).not.toHaveBeenCalled()
+	})
+
+	it('shows the enabled practice route in both desktop and mobile navigation', async () => {
+		vi.stubEnv('VITE_PRACTICE_ENABLED', 'true')
+		vi.resetModules()
+		const { default: PracticeNavbar } = await import('@/components/Navbar')
+		renderNavbar(<PracticeNavbar />)
+
+		expect(screen.getByRole('link', { name: 'Practice' })).toHaveAttribute('href', '/practice')
+		fireEvent.pointerDown(screen.getByRole('button', { name: '' }), {
+			button: 0,
+			ctrlKey: false,
+			pointerType: 'mouse',
+		})
+		expect(await screen.findByRole('menuitem', { name: 'Practice' })).toHaveAttribute(
+			'href',
+			'/practice'
+		)
+	})
+
+	it('hides practice in both navigation menus when the build flag is disabled', async () => {
+		vi.stubEnv('VITE_PRACTICE_ENABLED', 'false')
+		vi.resetModules()
+		const { default: PracticeNavbar } = await import('@/components/Navbar')
+		renderNavbar(<PracticeNavbar />)
+
+		expect(screen.queryByRole('link', { name: 'Practice' })).not.toBeInTheDocument()
+		fireEvent.pointerDown(screen.getByRole('button', { name: '' }), {
+			button: 0,
+			ctrlKey: false,
+			pointerType: 'mouse',
+		})
+		await screen.findByRole('menuitem', { name: 'Home' })
+		expect(screen.queryByRole('menuitem', { name: 'Practice' })).not.toBeInTheDocument()
 	})
 })
