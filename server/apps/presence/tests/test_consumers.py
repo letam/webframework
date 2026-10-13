@@ -66,6 +66,14 @@ class ProtocolTests(SimpleTestCase):
         self.assertEqual(parse_message('{"v":1,"type":"heartbeat"}', limit=2048), 'heartbeat')
         self.assertIsNone(parse_message(json.dumps(hello(analytics=False)), limit=2048).visitor_id)
 
+    def test_analytics_hello_requires_a_non_null_uuid(self):
+        """Analytics consent requires an identifier before any lease or hashing work."""
+        for visitor_id in (None, False, 0, [], {}):
+            with self.subTest(visitor_id=visitor_id):
+                with self.assertRaises(ProtocolError) as error:
+                    parse_message(json.dumps({**hello(), 'visitor_id': visitor_id}), limit=2048)
+                self.assertEqual(error.exception.code, 'invalid_message')
+
     @override_settings(
         PRESENCE_TRUSTED_PROXY_NETWORKS=['10.0.0.0/8'], PRESENCE_PROXY_IP_HEADER='fly-client-ip'
     )
@@ -300,6 +308,7 @@ class RedisConsumerTests(TransactionTestCase):
                 ({'v': 1, 'type': 'inactive'}, 'hello_required'),
                 ({'v': 7, 'type': 'heartbeat'}, 'unsupported_version'),
                 (hello(scope='unknown'), 'unknown_scope'),
+                ({**hello(), 'visitor_id': None}, 'invalid_message'),
                 ('{', 'invalid_message'),
                 ('x' * 2049, 'invalid_message'),
                 (b'binary', 'invalid_message'),

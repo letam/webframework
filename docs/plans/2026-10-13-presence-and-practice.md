@@ -79,7 +79,9 @@ Endpoint: `WS /ws/presence/`. Send one JSON text hello within 10 seconds:
 {"v":1,"type":"hello","scope":"reading","analytics":true,"visible":true,"visitor_id":"0e78152d-1908-41b3-9d11-f8cc6439fabb"}
 ```
 
-`visitor_id` must be a canonical, lowercase UUID4. The future browser client creates a
+`visitor_id` must be a canonical, lowercase UUID4. An `analytics:true` hello requires
+a non-null string ID; missing, null and malformed IDs return `invalid_message`.
+The future browser client creates a
 random ID in localStorage only when DNT/GPC are absent and storage works. Ordinary tabs
 in the same origin/scope share that ID. It is an analytics key and never authenticates
 anything. Scopes on distinct origins have independent browser identities.
