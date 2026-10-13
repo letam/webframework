@@ -62,6 +62,15 @@ realtime-down:
 test-presence:
     REQUIRE_REALTIME_TESTS=1 uv run python server/manage.py test apps.presence
 
+# Durable domain, Redis sockets and the two-Daphne crash/retry probe.
+test-practice:
+    REQUIRE_REALTIME_TESTS=1 uv run python server/manage.py test apps.practice
+    uv run python admin/dev/check-practice-processes.py
+
+# Record a local pilot measurement; this does not claim production capacity.
+pilot-practice:
+    uv run python admin/dev/check-practice-processes.py --pilot
+
 # Schedule daily via the instance's existing scheduler (no request-triggered retention).
 prune-presence:
     uv run python server/manage.py prune_presence_statistics

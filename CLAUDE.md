@@ -402,11 +402,19 @@ Multi-stage Dockerfile:
 - **Media streaming**: Supports HTTP range requests for Safari audio/video compatibility
 - **Open Graph**: Post detail pages (`/p/<id>/`) render OG metadata for social sharing
 
-## Optional realtime presence
+## Optional realtime presence and practice
 
-The first Channels/Redis presence phase is implemented behind `REALTIME_ENABLED` and
-`PRESENCE_ENABLED`. HTTP-only instances still boot without Redis. See
+Channels/Redis capabilities are implemented behind `REALTIME_ENABLED`, `PRESENCE_ENABLED`
+and `PRACTICE_ENABLED`. HTTP-only instances still boot without Redis. Practice requires
+Postgres, explicit `PRACTICE_ORIGINS` and authenticated same-origin sessions. See
 `docs/plans/2026-10-13-presence-and-practice.md` for the authoritative protocol, privacy
 semantics, local Compose setup, trusted reverse-proxy boundary, real-service tests and
 retention command. Use `just asgi` for Daphne development and `just realtime-up` for
-loopback Postgres/Redis. Practice rooms and the public reading-page client are later phases.
+loopback Postgres/Redis. The lazy `/practice` and `/practice/rooms/:id` routes use the
+existing auth/CSRF helpers; `VITE_PRACTICE_ENABLED=true` opts into the navigation link.
+For local session flows, leave `VITE_SERVER_HOST` empty and use Vite's same-origin
+`/auth/`, `/api/` and `/ws/` proxies (`VITE_WS_PROXY_TARGET` defaults to port 8000).
+Run `just test-practice` with real Postgres and `TEST_REDIS_URL`; `just pilot-practice`
+records a local measurement. The gated browser test needs `PRACTICE_E2E=1` and an enabled
+backend. Its optional `PLAYWRIGHT_CHROME_EXECUTABLE` selects an installed Chrome when
+bundled Chromium is unavailable. The public reading-page client remains a separate phase.

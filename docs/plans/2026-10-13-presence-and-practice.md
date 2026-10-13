@@ -465,3 +465,46 @@ ESLint and the production build passed. Existing Biome/ESLint/bundle warnings re
 Practice coverage includes clock skew, delayed samples, independent timer/membership/
 presence ordering, StrictMode cleanup, wake resync, lost acknowledgements and bounded
 denied-handshake recovery. The real browser flow is part of the integration gate below.
+
+
+## Final integration verification and rollback
+
+The final 2026-10-13 checks passed:
+
+- Real Postgres 18.3 / Redis 7.4.8: all 95 presence/practice tests (65 presence,
+  30 practice), plus separate two-Daphne presence and practice probes. Practice's
+  probe kills a worker immediately after the committed transaction returns and
+  before notification/ack, then verifies identical-UUID retry. Physical Redis
+  stop/restart verifies safe degraded closure, readiness 503/200 and timer recovery.
+- Ordinary disabled SQLite backend: 386 tests passed with 42 intentional dependency/
+  built-shell skips. Redis/Postgres coverage ran separately above, and all seven
+  built-shell CSP tests passed against the final production frontend shell.
+- Frontend: all 366 tests, TypeScript 7, Biome, ESLint and production build passed.
+  Existing one Biome warning, eight ESLint warnings and bundle warning remain.
+- All 25 Playwright tests against the final Daphne/Postgres/Redis backend passed:
+  the 24 existing kit checks and the two-account practice flow. Controlled displayed
+  skew measured 76 ms with device clocks offset by ±5 minutes; the final asymmetric
+  200 ms downlink sample measured 54 ms. Desktop and 390×844 viewport reviews passed.
+- The local pilot held 100 sockets across ten rooms/two processes and a normal
+  heartbeat interval; observations and limits are recorded in the
+  [pilot report](../reports/2026-10-13-practice-pilot.md).
+- Ruff/format, migration drift, Django system checks, startup shell syntax, just
+  recipe parsing and CI YAML validation passed. CI runs the real-service suites and
+  both process probes; its browser job enables rooms on disposable Postgres/Redis.
+
+`just test-practice` requires a Postgres `DATABASE_URL` and `TEST_REDIS_URL`, and fails
+rather than substituting SQLite/omitting required Redis checks. The process probe
+creates and drops its own database and cleans only its random Redis namespace; the
+supplied role needs CREATEDB. `--redis-binary /path/to/redis-server` optionally owns a
+separate temporary Redis process for physical outage testing, leaving existing services
+alone. `just pilot-practice` adds the documented local measurement. Logs and metrics
+contain no invitation secrets or session credentials.
+
+Disable `PRACTICE_ENABLED` and rebuild without the frontend navigation flag to roll
+back rooms. Retain migrations, rooms and command outcomes; no destructive schema
+rollback is needed. Disable `REALTIME_ENABLED` only when also disabling public presence.
+Use `/readyz/` for dependency health and keep the existing `/healthz/` platform check.
+Keep account/API/room sockets on one origin and verify actual proxy trust, upgrade and
+idle behavior before rollout. Real-phone Safari background/sleep/wake checks, production
+capacity sizing and off-machine backup/restore were not performed in this local task.
+No production deployment, DNS, credentials or reading-site integration was changed.
