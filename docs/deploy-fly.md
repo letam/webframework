@@ -153,6 +153,32 @@ GNU `sed`, and never sets `SECRET_KEY`.
 
 ## Post-deploy verification
 
+For an optional practice instance, enable `REALTIME_ENABLED` and `PRACTICE_ENABLED`,
+use a separate Postgres database and private Redis service, and configure the exact HTTPS
+`PRACTICE_ORIGINS` together with the instance's HTTP/CSRF host settings. Build the frontend
+with `VITE_PRACTICE_ENABLED=true` for its navigation entry. Accounts, HTTP API and room
+sockets share an origin with secure host-only session cookies. Do not reuse an unrelated
+production instance's database or widen its cookie domain. No deployment is created by
+the kit feature. The protocol and full setup are in
+[presence and practice](plans/2026-10-13-presence-and-practice.md).
+
+Route dependency checks through `/readyz/` while preserving the existing `/healthz/`
+platform check. Verify WebSocket upgrades/idle limits through the actual proxy, configure
+only verified proxy peer CIDRs, size every ASGI/background worker's Postgres pool, and
+test off-machine backups by restoring them before keeping practice history. Keep an
+instance available for active rooms; autosuspend and transport retries are not a durable
+timer scheduler. Deadline expiry remains recoverable even with all workers stopped.
+
+Rollback rooms by disabling `PRACTICE_ENABLED` and the frontend navigation flag; retain
+the room migrations/data. Existing sockets will fail their next authorization check or
+worker restart. Disabling `REALTIME_ENABLED` additionally returns startup to Gunicorn and
+disables public presence. Retain its statistics pruning schedule. Room command results
+are retained for each room's lifetime; deleting a room cascades its memberships/commands.
+Observe sanitized service/rate errors, readiness, command latency, socket counts and
+Redis memory before increasing budgets. The
+[local pilot](reports/2026-10-13-practice-pilot.md) is an implementation measurement,
+not a production sizing guarantee.
+
 ```bash
 curl -s https://webframework.fly.dev/healthz/        # {"status": "ok"}
 curl -s https://webframework.fly.dev/api/posts/ | head
