@@ -20,7 +20,10 @@ fails readiness and causes sockets to send a safe error and close.
 
 `server/start-prod.sh` selects Daphne for enabled realtime and preserves its migration,
 expired-session cleanup and supervised `db_worker`. HTTP-only startup retains the
-existing two Gunicorn workers. Daphne transport pings complement application leases;
+existing two Gunicorn workers. Production startup and `just asgi` set Daphne's shared
+frame/message byte cap to the largest enabled `PRESENCE_MESSAGE_LIMIT` or
+`PRACTICE_MESSAGE_LIMIT`. Disabled features do not affect that transport cap, and each
+consumer still enforces its own limit. Daphne transport pings complement application leases;
 they do not count a hidden page as active. Run multiple Daphne processes behind the
 instance's reverse proxy when needed; they share Postgres and Redis.
 
@@ -515,3 +518,21 @@ Keep account/API/room sockets on one origin and verify actual proxy trust, upgra
 idle behavior before rollout. Real-phone Safari background/sleep/wake checks, production
 capacity sizing and off-machine backup/restore were not performed in this local task.
 No production deployment, DNS, credentials or reading-site integration was changed.
+
+## PR review verification
+
+The review fixes reject null analytics visitor IDs, load Vite proxy targets from mode
+env files, expose the practice build argument and mobile navigation, and align Daphne's
+transport cap with the enabled feature limits. Follow-up checks on 2026-10-13 passed:
+
+- 391 backend tests with 41 intentional dependency/build skips; all 100 presence/practice
+  tests passed separately against real Postgres and Redis, including the malformed socket
+  regression.
+- Four production entrypoint smoke tests used real settings with isolated migration,
+  worker and server stand-ins. Both practice-cap regressions fail against the previous
+  entrypoint; enabled-feature caps and HTTP-only Gunicorn selection pass after the fix.
+- All 371 frontend tests, TypeScript 7, Biome, ESLint and production builds with both
+  practice flag values passed. Built navigation contains zero Practice links with the
+  flag disabled and both desktop/mobile links with it enabled. Existing lint warnings remain.
+- Ruff/format, startup shell syntax, just recipe parsing and whitespace checks passed.
+  A full Docker image build was unavailable because the local Docker daemon was stopped.

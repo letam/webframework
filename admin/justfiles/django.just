@@ -49,7 +49,10 @@ list:
 
 # Serve HTTP and WebSockets with Daphne (set realtime variables in server/.env).
 asgi:
-    PYTHONPATH=server ASGI_ENABLED=True uv run daphne -b 127.0.0.1 -p 8000 --websocket-max-message-size 2048 --websocket-max-frame-size 2048 config.asgi:application
+    #!/usr/bin/env bash
+    set -euo pipefail
+    realtime_message_limit="$(PYTHONPATH=server uv run python -c 'from config.settings import REALTIME_MESSAGE_LIMIT; print(REALTIME_MESSAGE_LIMIT)')"
+    PYTHONPATH=server ASGI_ENABLED=True uv run daphne -b 127.0.0.1 -p 8000 --websocket-max-message-size "$realtime_message_limit" --websocket-max-frame-size "$realtime_message_limit" config.asgi:application
 
 # Local durable/ephemeral dependencies; ports are confined to loopback.
 realtime-up:
