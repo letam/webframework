@@ -82,7 +82,7 @@ def parse_message(text, *, limit):
     if not isinstance(scope, str) or not 1 <= len(scope) <= 64:
         raise ProtocolError()
     visitor_id = message.get('visitor_id')
-    if visitor_id is not None:
+    if message['analytics']:
         if not isinstance(visitor_id, str):
             raise ProtocolError()
         try:
