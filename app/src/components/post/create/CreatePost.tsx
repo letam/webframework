@@ -30,6 +30,7 @@ import { VideoRecorderModal } from './VideoRecorder'
 import MediaPreview from './MediaPreview'
 import type { CreatePostRequest, PostVisibility } from '@/types/post'
 import { convertWavToWebM, getAudioExtension } from '@/lib/utils/audio'
+import type { CaptureAction } from '@/lib/utils/capture'
 import { getSettings } from '@/lib/utils/settings'
 import { applyMarkdownShortcut, toggleMarker } from '@/lib/utils/richText'
 import { modifierKeyLabel } from '@/lib/utils/browser'
@@ -301,15 +302,25 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		setPostText(e.target.value)
 	}
 
-	const handleAudioCaptured = (blob: Blob) => {
+	const postAfterCaptureRef = useRef(false)
+	const handleAudioCaptured = (blob: Blob, action: CaptureAction = 'attach') => {
 		setAudioBlob(blob)
+		setAudioFile(null)
 		setMediaType('audio')
+		setIsAudioModalOpen(false)
+		if (action === 'post') postAfterCaptureRef.current = true
 	}
-
-	const handleVideoCaptured = (blob: Blob) => {
+	const handleVideoCaptured = (blob: Blob, action: CaptureAction = 'attach') => {
 		setVideoBlob(blob)
 		setVideoFile(null)
 		setMediaType('video')
+		setIsVideoModalOpen(false)
+		if (action === 'post') postAfterCaptureRef.current = true
+	}
+	const uploadInsteadOfRecording = () => {
+		setIsAudioModalOpen(false)
+		setIsVideoModalOpen(false)
+		uploadInputRef.current?.click()
 	}
 
 	const handleAudioFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -399,10 +410,12 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					// Only convert to WebM if normalization is enabled (since normalization converts the blob to WAV)
 					if (getSettings().normalizeAudio) {
 						setSubmitStatus('compressing')
-						const webmBlob = await convertWavToWebM(blob)
-						file = new File([webmBlob], `recording_${Date.now()}.webm`, {
-							type: 'audio/webm;codecs=opus',
-						})
+						const encoded = await convertWavToWebM(blob)
+						file = new File(
+							[encoded],
+							`recording_${Date.now()}.${getMediaExtension(encoded.type, 'audio')}`,
+							{ type: encoded.type }
+						)
 					} else {
 						const extension = getMediaExtension(blob.type, 'audio')
 						file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
@@ -597,6 +610,14 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const handleSubmit = (e: React.FormEvent) => {
 		void submitPost(false, e)
 	}
+
+	const submitPostRef = useRef(submitPost)
+	submitPostRef.current = submitPost
+	useEffect(() => {
+		if (!postAfterCaptureRef.current || (!audioBlob && !videoBlob)) return
+		postAfterCaptureRef.current = false
+		void submitPostRef.current(false)
+	}, [audioBlob, videoBlob])
 
 	const openUploadFileSelector = () => {
 		uploadInputRef.current?.click()
@@ -970,19 +991,15 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			<AudioRecorderModal
 				open={isAudioModalOpen}
 				onOpenChange={setIsAudioModalOpen}
-				onAudioCaptured={(blob) => {
-					handleAudioCaptured(blob)
-					setIsAudioModalOpen(false)
-				}}
+				onAudioCaptured={handleAudioCaptured}
+				onUploadInstead={uploadInsteadOfRecording}
 			/>
 
 			<VideoRecorderModal
 				open={isVideoModalOpen}
 				onOpenChange={setIsVideoModalOpen}
-				onVideoCaptured={(blob) => {
-					handleVideoCaptured(blob)
-					setIsVideoModalOpen(false)
-				}}
+				onVideoCaptured={handleVideoCaptured}
+				onUploadInstead={uploadInsteadOfRecording}
 			/>
 		</div>
 	)
