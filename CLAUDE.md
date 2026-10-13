@@ -402,10 +402,11 @@ Multi-stage Dockerfile:
 - **Media streaming**: Supports HTTP range requests for Safari audio/video compatibility
 - **Open Graph**: Post detail pages (`/p/<id>/`) render OG metadata for social sharing
 
-## Optional realtime infrastructure
+## Optional realtime presence
 
-Channels, Redis and Daphne are available behind `REALTIME_ENABLED`; HTTP-only
-instances still boot without Redis. See `docs/plans/2026-10-13-presence-and-practice.md`
-for local setup, readiness and ASGI regression checks. Use `just asgi` for Daphne
-and `just realtime-up` for loopback Postgres/Redis. The private presence reporting API and `just prune-presence` retention command are
-available; live socket routes follow separately.
+The first Channels/Redis presence phase is implemented behind `REALTIME_ENABLED` and
+`PRESENCE_ENABLED`. HTTP-only instances still boot without Redis. See
+`docs/plans/2026-10-13-presence-and-practice.md` for the authoritative protocol, privacy
+semantics, local Compose setup, trusted reverse-proxy boundary, real-service tests and
+retention command. Use `just asgi` for Daphne development and `just realtime-up` for
+loopback Postgres/Redis. Practice rooms and the public reading-page client are later phases.
