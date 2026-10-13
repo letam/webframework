@@ -58,6 +58,10 @@ realtime-up:
 realtime-down:
     docker compose -f compose.realtime.yml down
 
+# Integration checks require both real Redis and Postgres.
+test-presence:
+    REQUIRE_REALTIME_TESTS=1 uv run python server/manage.py test apps.presence
+
 # Schedule daily via the instance's existing scheduler (no request-triggered retention).
 prune-presence:
     uv run python server/manage.py prune_presence_statistics

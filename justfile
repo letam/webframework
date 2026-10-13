@@ -12,8 +12,8 @@ default:
 # job, which needs a browser install) so a green `just verify` predicts green
 # CI. Pins ruff/biome to CI's versions so local and CI enforce the same tools.
 verify:
-    uvx ruff@0.15.20 check --no-fix server/
-    uvx ruff@0.15.20 format --check server/
+    uvx ruff@0.15.20 check --no-fix server/ admin/dev/check-presence-processes.py
+    uvx ruff@0.15.20 format --check server/ admin/dev/check-presence-processes.py
     uv run python server/manage.py test apps
     cd app && bun install --frozen-lockfile
     cd app && bunx @biomejs/biome@2.3.11 ci .

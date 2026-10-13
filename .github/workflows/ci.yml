@@ -22,8 +22,8 @@ jobs:
         with:
           prune-cache: false
       # The repo config sets [tool.ruff] fix=true; CI must never mutate files.
-      - run: uvx ruff@0.15.20 check --no-fix server/
-      - run: uvx ruff@0.15.20 format --check server/
+      - run: uvx ruff@0.15.20 check --no-fix server/ admin/dev/check-presence-processes.py
+      - run: uvx ruff@0.15.20 format --check server/ admin/dev/check-presence-processes.py
 
   backend:
     name: Backend tests
@@ -50,6 +50,50 @@ jobs:
       # settings.py auto-creates a dev server/.env on first run. The 'apps'
       # label is required: bare 'test' from the repo root discovers 0 tests.
       - run: uv run python server/manage.py test apps
+  realtime:
+    name: Presence (Postgres + Redis + Daphne)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.3
+        env:
+          POSTGRES_DB: presence_test
+          POSTGRES_USER: presence_test
+          POSTGRES_PASSWORD: presence_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U presence_test -d presence_test"
+          --health-interval 2s --health-timeout 2s --health-retries 30
+      redis:
+        image: redis:7.4.8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s --health-timeout 2s --health-retries 30
+    env:
+      SECRET_KEY: ci-test-key-only
+      DEBUG: 'True'
+      USE_LOCAL_FILE_STORAGE: 'True'
+      DATABASE_URL: postgresql://presence_test:presence_test@127.0.0.1:5432/presence_test
+      REALTIME_ENABLED: 'True'
+      ASGI_ENABLED: 'True'
+      PRESENCE_ENABLED: 'True'
+      REALTIME_REDIS_URL: redis://127.0.0.1:6379/0
+      TEST_REDIS_URL: redis://127.0.0.1:6379/0
+      REALTIME_PREFIX: ci-presence
+      PRESENCE_HASH_KEY: ci-only-hmac-key-with-at-least-32-characters
+      PRESENCE_STATS_TOKEN: ci-only-bearer-token-with-at-least-32-characters
+      PRESENCE_SCOPES: '{"reading":{"origins":["http://localhost:5173"]}}'
+      REQUIRE_REALTIME_TESTS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked
+      - run: uv run python server/manage.py test apps.presence
+      - run: uv run python admin/dev/check-presence-processes.py
+
   frontend:
     name: Frontend checks
     runs-on: ubuntu-latest
@@ -102,14 +146,14 @@ jobs:
           DJANGO_SUPERUSER_PASSWORD: e2e_admin_password
       - name: Start backend
         run: |
-          uv run python server/manage.py runserver 0.0.0.0:8000 > /tmp/django-runserver.log 2>&1 &
+          (PYTHONPATH=server ASGI_ENABLED=True uv run daphne -b 0.0.0.0 -p 8000 --websocket-max-message-size 2048 --websocket-max-frame-size 2048 config.asgi:application) > /tmp/django-asgi.log 2>&1 &
           for attempt in {1..30}; do
             if curl --fail --silent http://localhost:8000/healthz/ > /dev/null; then
               exit 0
             fi
             sleep 1
           done
-          cat /tmp/django-runserver.log
+          cat /tmp/django-asgi.log
           echo "Backend did not become ready" >&2
           exit 1
       - uses: oven-sh/setup-bun@v2

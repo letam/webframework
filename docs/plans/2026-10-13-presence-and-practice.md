@@ -223,13 +223,46 @@ separately checks database and, when realtime is enabled, Redis, returning 503 f
 unavailable dependency without exposing credentials. Production routing should use
 readiness to detect dependency failure while preserving its existing platform health check.
 
-Run `uv run python server/manage.py test apps.presence` for the presence suite.
-Set `DATABASE_URL` to a test Postgres database and `TEST_REDIS_URL` to a disposable
-Redis instance to exercise concurrent writes, leases and socket recovery; otherwise
-the real-service cases are skipped. Cross-process probing and CI wiring follow in
-the next commit. Load measurements, real reverse-proxy behavior and device sleep/wake
-remain deployment/integration gates.
+Ordinary tests run with SQLite and realtime disabled. The dedicated CI job uses real
+Postgres and Redis, runs `apps.presence`, then runs
+`uv run python admin/dev/check-presence-processes.py`. The latter creates/drops an isolated
+database (the supplied Postgres role needs CREATEDB), starts two actual Daphne processes,
+and verifies cross-process counts, tab deduplication, privacy headers, private statistics,
+abrupt process restart and recovery after ephemeral Redis state loss. It cleans only its
+random Redis namespace. `REQUIRE_REALTIME_TESTS=1` prevents an integration run from silently
+substituting SQLite or skipping Redis. Local integration example:
+
+```sh
+DATABASE_URL=postgresql://webframework:webframework-local@127.0.0.1:5433/webframework \
+TEST_REDIS_URL=redis://127.0.0.1:6380/0 just test-presence
+DATABASE_URL=postgresql://webframework:webframework-local@127.0.0.1:5433/webframework \
+TEST_REDIS_URL=redis://127.0.0.1:6380/0 \
+uv run python admin/dev/check-presence-processes.py
+```
+
+The existing browser suite additionally runs against Daphne to preserve the HTTP UI flow.
+Do not claim a production socket capacity from this implementation: load measurements,
+actual reverse-proxy upgrade/idle behavior, off-machine backups/restore and real-device
+sleep/wake are deployment/integration gates. No hosting resources, DNS or production
+credentials are created by these changes.
 
 Disable `PRESENCE_ENABLED` to close its routes; disable `REALTIME_ENABLED` to return the
 startup script to HTTP-only Gunicorn. Retain the migration and durable rows during rollback;
 no schema deletion or user-data rollback is needed. Keep the retention schedule running.
+
+Verification on 2026-10-13:
+
+- Real Postgres 18.3 / Redis 7.4.8: all 65 presence tests passed, including concurrent
+  daily records, midnight renewal, expiry, privacy, limits, peak races and bounded cleanup.
+- Two actual Daphne processes: rejected origins, shared counts, private reporting,
+  abrupt worker restart and lost-state reconnect passed with application close codes.
+  A separate disposable Redis process also passed physical stop/restart, degraded close,
+  readiness 503/200, count recovery and durable-visit checks.
+- Existing SQLite backend run: 353 tests passed with 29 intentional skips (24 Redis-only,
+  four Postgres-only, one built-shell check before its build). Real-service coverage above
+  and the seven built-shell CSP checks were run separately and passed.
+- Frontend: typecheck, Biome, ESLint, 355 unit tests, production build, and all 24 existing
+  Playwright tests against Daphne passed. Existing frontend lint/bundle warnings remain.
+- Ruff, migration drift, Django system checks, startup shell syntax and Compose configuration
+  validation passed. Docker services were not launched because Docker Desktop was stopped;
+  the real-service checks used isolated temporary local processes instead.
