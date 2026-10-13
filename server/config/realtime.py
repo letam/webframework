@@ -13,6 +13,8 @@ def validate_realtime(config):
     if not config['REALTIME_ENABLED']:
         if config['PRESENCE_ENABLED']:
             raise ImproperlyConfigured('PRESENCE_ENABLED requires REALTIME_ENABLED.')
+        if config.get('PRACTICE_ENABLED'):
+            raise ImproperlyConfigured('PRACTICE_ENABLED requires REALTIME_ENABLED.')
         return
     try:
         redis_url = urlsplit(config['REALTIME_REDIS_URL'])
@@ -25,6 +27,53 @@ def validate_realtime(config):
         raise ImproperlyConfigured('REALTIME_ENABLED requires a redis:// or rediss:// URL.')
     if not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', config['REALTIME_PREFIX']):
         raise ImproperlyConfigured('REALTIME_PREFIX must be a short instance namespace.')
+    if config.get('PRACTICE_ENABLED'):
+        origins = config.get('PRACTICE_ORIGINS')
+        if not isinstance(origins, list) or not origins or len(origins) > 100:
+            raise ImproperlyConfigured('PRACTICE_ORIGINS requires explicit origins.')
+        for origin in origins:
+            if not isinstance(origin, str):
+                raise ImproperlyConfigured('Practice origins must be strings.')
+            try:
+                parsed = urlsplit(origin)
+                _ = parsed.port
+            except ValueError as error:
+                raise ImproperlyConfigured('Practice origins require valid ports.') from error
+            if (
+                parsed.scheme not in ('http', 'https')
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+                or '*' in origin
+                or parsed.hostname.startswith('.')
+                or (not config['DEBUG'] and parsed.scheme != 'https')
+            ):
+                raise ImproperlyConfigured('Practice origins must be exact HTTP(S) origins.')
+        positive = (
+            'PRACTICE_HEARTBEAT_SECONDS',
+            'PRACTICE_LEASE_SECONDS',
+            'PRACTICE_MAX_ROOM_CONNECTIONS',
+            'PRACTICE_MAX_USER_CONNECTIONS',
+            'PRACTICE_MAX_MEMBERS',
+            'PRACTICE_MAX_CONNECTIONS',
+            'PRACTICE_MAX_CONNECTIONS_PER_IP',
+            'PRACTICE_IP_MESSAGE_RATE',
+            'PRACTICE_IP_CONNECT_RATE',
+            'PRACTICE_MESSAGE_LIMIT',
+            'PRACTICE_MESSAGE_RATE',
+            'PRACTICE_HTTP_RATE',
+            'PRACTICE_CONNECT_RATE',
+            'PRACTICE_RATE_WINDOW_SECONDS',
+        )
+        if any(config[name] < 1 for name in positive):
+            raise ImproperlyConfigured('Practice limits and intervals must be positive.')
+        if config['PRACTICE_HEARTBEAT_SECONDS'] >= config['PRACTICE_LEASE_SECONDS']:
+            raise ImproperlyConfigured('Practice heartbeat must be shorter than lease.')
+        if config['PRACTICE_MAX_USER_CONNECTIONS'] > config['PRACTICE_MAX_ROOM_CONNECTIONS']:
+            raise ImproperlyConfigured('Practice user connection cap exceeds room cap.')
     if not config['PRESENCE_ENABLED']:
         return
     if len(config['PRESENCE_HASH_KEY']) < 32:

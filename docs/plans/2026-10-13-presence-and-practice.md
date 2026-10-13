@@ -1,10 +1,9 @@
 # Presence and practice implementation
 
-Implemented first phase: optional Channels/Daphne infrastructure and anonymous
-presence with private daily visitor statistics. Practice rooms and timers are the
-next phase; they have no models, routes or user interface in this change. The
-reading-page client and its privacy copy are a separate repository integration.
-This document is the kit's source for the implemented presence protocol.
+Implemented capabilities: optional Channels/Daphne infrastructure, anonymous
+presence with private daily visitor statistics, and durable practice room APIs.
+The reading-page client and its privacy copy are a separate repository integration.
+This document is the kit's source for the implemented protocols.
 
 ## Instance capabilities
 
@@ -266,3 +265,58 @@ Verification on 2026-10-13:
 - Ruff, migration drift, Django system checks, startup shell syntax and Compose configuration
   validation passed. Docker services were not launched because Docker Desktop was stopped;
   the real-service checks used isolated temporary local processes instead.
+
+## Durable practice rooms
+
+`PRACTICE_ENABLED` defaults to false. Enabling it requires `REALTIME_ENABLED`, a
+Postgres database, Redis, and an explicit comma-separated `PRACTICE_ORIGINS` allowlist.
+Presence and practice are independent capabilities: rooms can run with public presence
+disabled. Installing migrations keeps existing SQLite/HTTP instances working. Disabled
+practice endpoints return 404; `GET /api/practice/capabilities/` returns `{"enabled":false}`.
+
+The existing account and session system authenticates participants. All writes use
+CSRF-protected POSTs and responses are uncached. Knowing a room UUID grants no access.
+Room creation returns a high-entropy invitation secret once; only its SHA-256 hash is
+stored. Put the secret in the invitation URL fragment and exchange it through the join
+POST. Never put it in a query string, socket URL or analytics event. Invitation rotation
+invalidates old secrets without changing existing memberships; invitation revocation
+prevents further joins. A voluntary leaver can rejoin with a current invitation. A host
+revocation prevents that account from rejoining the room with any invitation in v1.
+
+| API | Request and result |
+| --- | --- |
+| `POST /api/practice/rooms/` | `{title,duration_minutes?}`; default 10 minutes, integer range 1–120. Returns 201 `{snapshot,invitation_secret}`. |
+| `GET /api/practice/rooms/<uuid>/` | Authorized current `room.snapshot`. |
+| `POST .../<uuid>/join/` | `{invitation_secret}` grants membership; returns the current snapshot. |
+| `POST .../<uuid>/leave/` | `{}` revokes the caller's membership and returns `{left:true}`; the host closes instead. |
+| `POST .../<uuid>/invite/rotate/` | Host-only `{}`; returns `{snapshot,invitation_secret}`. |
+| `POST .../<uuid>/invite/revoke/` | Host-only `{}`; returns a snapshot. |
+| `POST .../<uuid>/members/<user_id>/revoke/` | Host-only `{}` revokes a participant; returns a snapshot. |
+
+`PracticeRoom` holds the host, configured duration, run ID, timer status, remaining
+milliseconds, deadline, revision and closure timestamp. `RoomMembership` has a unique
+room/account pair and distinguishes voluntary leave from host revocation. `RoomCommand`
+retains each request UUID, payload hash, actor and accepted/rejected outcome for the room's
+lifetime. Command UUIDs are unique across the room, and retries must match both actor and
+payload. Deleting a room cascades its memberships and command records; host and command
+actors are protected from account deletion while their durable room records remain.
+
+Every timer mutation locks the room row in a synchronous Postgres transaction. The
+service checks membership and host authority, recognizes retries before checking the
+expected revision, applies one transition and records the outcome in the same commit.
+An accepted start/resume uses a server deadline; pause saves the remaining duration;
+reset restores or explicitly changes the duration and increments the run ID. Close
+invalidates the invitation and rejects further controls. Host disconnection does not
+pause the timer or transfer authority.
+
+A running deadline that has elapsed is normalized to completed by the next authorized
+snapshot or command. That normalization increments the revision once, even if no worker
+was running at expiry. A late pause cannot revive the run. A retry returns the stored
+outcome together with a fresh snapshot, so a committed command remains idempotent after
+an acknowledgement or broadcast is lost. Redis is never the durable timer record.
+
+Durable API verification on 2026-10-13: all 17 domain/API/boundary tests passed on
+Postgres 18.3, including two competing commands accepting exactly one revision,
+CSRF/permission/invitation checks, malformed inputs and sanitized storage failures.
+Ordinary SQLite regression coverage remains available with practice disabled.
+Redis-dependent transport verification is documented below as that capability is integrated.
