@@ -32,7 +32,13 @@ supervise_worker() {
 }
 supervise_worker &
 
-# The web server is authoritative. `exec` makes gunicorn PID 1, so if it exits
+# The web server is authoritative. `exec` makes the server PID 1, so if it exits
 # the container exits (non-zero on crash) and Fly restarts the machine.
+if python -c 'from config.settings import REALTIME_ENABLED; raise SystemExit(0 if REALTIME_ENABLED else 1)'; then
+  echo 'start-prod.sh: starting daphne…' >&2
+  # Transport keepalive is distinct from application presence heartbeats.
+  presence_message_limit="$(python -c 'from config.settings import PRESENCE_MESSAGE_LIMIT; print(PRESENCE_MESSAGE_LIMIT)')"
+  exec daphne -b 0.0.0.0 -p 8000 --websocket-max-message-size "$presence_message_limit" --websocket-max-frame-size "$presence_message_limit" --ping-interval 20 --ping-timeout 30 --websocket_timeout -1 config.asgi:application
+fi
 echo 'start-prod.sh: starting gunicorn…' >&2
 exec gunicorn --bind :8000 --workers 2 config.wsgi

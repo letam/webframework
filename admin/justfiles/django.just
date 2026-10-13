@@ -46,3 +46,14 @@ collectstatic:
 # Show all available just commands
 list:
     just --list
+
+# Serve HTTP and WebSockets with Daphne (set realtime variables in server/.env).
+asgi:
+    PYTHONPATH=server ASGI_ENABLED=True uv run daphne -b 127.0.0.1 -p 8000 --websocket-max-message-size 2048 --websocket-max-frame-size 2048 config.asgi:application
+
+# Local durable/ephemeral dependencies; ports are confined to loopback.
+realtime-up:
+    docker compose -f compose.realtime.yml up -d --wait
+
+realtime-down:
+    docker compose -f compose.realtime.yml down
