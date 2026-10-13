@@ -200,6 +200,14 @@ const Navbar = () => {
 									</Link>
 								</DropdownMenuItem>
 							)}
+							{practiceNavigationEnabled && (
+								<DropdownMenuItem asChild>
+									<Link to="/practice" className="flex items-center gap-2">
+										<Timer className="h-4 w-4" />
+										<span>Practice</span>
+									</Link>
+								</DropdownMenuItem>
+							)}
 							<DropdownMenuItem asChild>
 								<Link to="/settings" className="flex items-center gap-2">
 									<Settings className="h-4 w-4" />

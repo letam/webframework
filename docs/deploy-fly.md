@@ -156,7 +156,17 @@ GNU `sed`, and never sets `SECRET_KEY`.
 For an optional practice instance, enable `REALTIME_ENABLED` and `PRACTICE_ENABLED`,
 use a separate Postgres database and private Redis service, and configure the exact HTTPS
 `PRACTICE_ORIGINS` together with the instance's HTTP/CSRF host settings. Build the frontend
-with `VITE_PRACTICE_ENABLED=true` for its navigation entry. Accounts, HTTP API and room
+with `VITE_PRACTICE_ENABLED=true` for its desktop and mobile navigation entry. This is
+a build-time flag, defaults to false in Docker, and requires rebuilding the frontend;
+the runtime `PRACTICE_ENABLED` backend setting cannot change compiled navigation.
+Pass it to the Docker/Fly build explicitly:
+
+```sh
+docker build --build-arg VITE_PRACTICE_ENABLED=true --tag webframework-practice .
+fly deploy --config admin/configs/fly-postgres.toml --app <name> --build-arg VITE_PRACTICE_ENABLED=true
+```
+
+Accounts, HTTP API and room
 sockets share an origin with secure host-only session cookies. Do not reuse an unrelated
 production instance's database or widen its cookie domain. No deployment is created by
 the kit feature. The protocol and full setup are in
