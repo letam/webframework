@@ -343,7 +343,7 @@ See `app/.env.development.local.sample` for template:
   is a reference snapshot; do not deploy with it.
 - **Migrations**: run on boot via `server/start-prod.sh`, not via `release_command` (a release
   VM has no access to the storage volume)
-- **Server**: Gunicorn on port 8000
+- **Server**: Gunicorn on port 8000 by default; opt-in realtime uses Daphne ASGI on the same port
 - **Static files**: Served by WhiteNoise at `/static/`
 - **VM**: 512MB RAM, 1 shared CPU, Toronto (`yyz`)
 - **Runbook**: `docs/deploy-fly.md`
@@ -401,3 +401,10 @@ Multi-stage Dockerfile:
 - **Sentry**: Env-gated error monitoring (`SENTRY_DSN` backend, `VITE_SENTRY_DSN` + `SENTRY_FRONTEND_INGEST_FOR_CSP` frontend)
 - **Media streaming**: Supports HTTP range requests for Safari audio/video compatibility
 - **Open Graph**: Post detail pages (`/p/<id>/`) render OG metadata for social sharing
+
+## Optional realtime infrastructure
+
+Channels, Redis and Daphne are available behind `REALTIME_ENABLED`; HTTP-only
+instances still boot without Redis. See `docs/plans/2026-10-13-presence-and-practice.md`
+for local setup, readiness and ASGI regression checks. Use `just asgi` for Daphne
+and `just realtime-up` for loopback Postgres/Redis. Presence routes follow separately.

@@ -10,7 +10,13 @@ const NODE_ENV = process.env.NODE_ENV ?? ''
 export default defineConfig(() => ({
 	server: {
 		host: '::',
-		// port: 8080,
+		// Socket handshakes retain the browser Origin; Django validates it.
+		proxy: {
+			'/ws/': {
+				target: process.env.VITE_WS_PROXY_TARGET || 'http://127.0.0.1:8000',
+				ws: true,
+			},
+		},
 	},
 	plugins: [tailwindcss(), react()],
 	resolve: {

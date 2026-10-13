@@ -22,6 +22,8 @@ from csp.constants import SELF
 from django.utils.log import DEFAULT_LOGGING
 from environs import Env
 
+from config.realtime import validate_realtime
+
 # Configure logging
 LOGGING = {
     'version': 1,
@@ -152,6 +154,51 @@ if not DEBUG:
     CSRF_COOKIE_HTTPONLY = True
     SECURE_HSTS_SECONDS = 60 * 60 * 24 * 30  # 30 days; raise once proven stable
 
+# Instances can configure their own HTTP hostname without copying kit constants.
+if env.list('ALLOWED_HOSTS', default=[]):
+    ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
+
+# Realtime is an explicit instance capability. Existing HTTP-only kit instances
+# keep booting without Redis; enabled instances never substitute process-local state.
+REALTIME_ENABLED = env.bool('REALTIME_ENABLED', default=False)
+ASGI_ENABLED = REALTIME_ENABLED or env.bool('ASGI_ENABLED', default=False)
+REALTIME_REDIS_URL = env.str('REALTIME_REDIS_URL', default='')
+REALTIME_PREFIX = env.str('REALTIME_PREFIX', default='webframework')
+PRESENCE_ENABLED = env.bool('PRESENCE_ENABLED', default=False)
+PRESENCE_SCOPES = env.json('PRESENCE_SCOPES', default={})
+PRESENCE_HASH_KEY = env.str('PRESENCE_HASH_KEY', default='')
+PRESENCE_STATS_TOKEN = env.str('PRESENCE_STATS_TOKEN', default='')
+PRESENCE_TIME_ZONE = env.str('PRESENCE_TIME_ZONE', default='UTC')
+PRESENCE_TRUSTED_PROXY_NETWORKS = env.list('PRESENCE_TRUSTED_PROXY_NETWORKS', default=[])
+PRESENCE_PROXY_IP_HEADER = env.str('PRESENCE_PROXY_IP_HEADER', default='x-real-ip')
+PRESENCE_RETENTION_DAYS = env.int('PRESENCE_RETENTION_DAYS', default=400)
+PRESENCE_LEASE_SECONDS = env.int('PRESENCE_LEASE_SECONDS', default=60)
+PRESENCE_HEARTBEAT_SECONDS = env.int('PRESENCE_HEARTBEAT_SECONDS', default=20)
+PRESENCE_MAX_CONNECTIONS = env.int('PRESENCE_MAX_CONNECTIONS', default=10000)
+PRESENCE_MAX_SCOPE_CONNECTIONS = env.int('PRESENCE_MAX_SCOPE_CONNECTIONS', default=10000)
+PRESENCE_MAX_CONNECTIONS_PER_IP = env.int('PRESENCE_MAX_CONNECTIONS_PER_IP', default=50)
+PRESENCE_MESSAGE_LIMIT = env.int('PRESENCE_MESSAGE_LIMIT', default=2048)
+PRESENCE_REDIS_MAX_CONNECTIONS = env.int('PRESENCE_REDIS_MAX_CONNECTIONS', default=128)
+PRESENCE_OBSERVATION_SECONDS = env.float('PRESENCE_OBSERVATION_SECONDS', default=3)
+PRESENCE_HELLO_SECONDS = env.float('PRESENCE_HELLO_SECONDS', default=10)
+PRESENCE_MESSAGE_RATE = env.int('PRESENCE_MESSAGE_RATE', default=12)
+PRESENCE_IP_MESSAGE_RATE = env.int('PRESENCE_IP_MESSAGE_RATE', default=600)
+PRESENCE_CONNECT_RATE = env.int('PRESENCE_CONNECT_RATE', default=120)
+PRESENCE_RATE_WINDOW_SECONDS = env.int('PRESENCE_RATE_WINDOW_SECONDS', default=60)
+validate_realtime(globals())
+CHANNEL_LAYERS = {}
+if REALTIME_ENABLED:
+    CHANNEL_LAYERS['default'] = {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [REALTIME_REDIS_URL],
+            'prefix': f'{REALTIME_PREFIX}:channels',
+            'capacity': 100,
+            'expiry': 60,
+            'group_expiry': max(120, PRESENCE_LEASE_SECONDS * 2),
+        },
+    }
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -174,6 +221,7 @@ INSTALLED_APPS = [
     'apps.users.apps.UsersConfig',
     'apps.website',
     'apps.blogs',
+    'apps.presence',
 ]
 
 MIDDLEWARE = [
@@ -247,7 +295,16 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.sqlite3':
 if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
     # Persistent, health-checked connections; the managed Postgres is a
     # network hop away and per-request reconnects are expensive.
-    DATABASES['default']['CONN_MAX_AGE'] = env.int('DB_CONN_MAX_AGE', default=60)
+    DATABASES['default']['CONN_MAX_AGE'] = (
+        0 if ASGI_ENABLED else env.int('DB_CONN_MAX_AGE', default=60)
+    )
+    if env.bool('DB_POOL_ENABLED', default=False):
+        DATABASES['default']['CONN_MAX_AGE'] = 0
+        DATABASES['default'].setdefault('OPTIONS', {})['pool'] = {
+            'min_size': env.int('DB_POOL_MIN_SIZE', default=0),
+            'max_size': env.int('DB_POOL_MAX_SIZE', default=10),
+            'timeout': env.float('DB_POOL_TIMEOUT', default=10),
+        }
     DATABASES['default']['CONN_HEALTH_CHECKS'] = True
 
 
@@ -329,7 +386,7 @@ if DEBUG:
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = env.str('TIME_ZONE', default='UTC')
 
 USE_I18N = True
 

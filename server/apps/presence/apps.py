@@ -1,0 +1,10 @@
+"""Django configuration for presence."""
+
+from django.apps import AppConfig
+
+
+class PresenceConfig(AppConfig):
+    """Register presence without opening any realtime connections."""
+
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.presence'
