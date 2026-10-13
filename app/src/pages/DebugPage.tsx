@@ -1,8 +1,8 @@
 import { isDesktop, isFirefox, isIOS, isSafari } from '@/lib/utils/browser'
-import { mimeTypes } from '@/lib/utils/media'
+import { getSupportedVideoMimeTypes, getSupportedAudioMimeTypes } from '@/lib/utils/media'
 
 const DebugPage = () => {
-	const supportedMimeTypes = mimeTypes.filter((type) => MediaRecorder.isTypeSupported(type))
+	const supportedMimeTypes = [...getSupportedVideoMimeTypes(), ...getSupportedAudioMimeTypes()]
 
 	return (
 		<div className="container mx-auto p-8">
