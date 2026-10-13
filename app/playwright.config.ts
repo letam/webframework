@@ -17,7 +17,13 @@ export default defineConfig({
 	projects: [
 		{
 			name: 'chromium',
-			use: { ...devices['Desktop Chrome'], channel: 'chromium' },
+			use: {
+				...devices['Desktop Chrome'],
+				channel: 'chromium',
+				...(process.env.PLAYWRIGHT_CHROME_EXECUTABLE
+					? { launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROME_EXECUTABLE } }
+					: {}),
+			},
 		},
 	],
 	webServer: {
