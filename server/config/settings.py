@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 
 from csp.constants import SELF
+from django.core.exceptions import ImproperlyConfigured
 from django.utils.log import DEFAULT_LOGGING
 from environs import Env
 
@@ -185,6 +186,22 @@ PRESENCE_MESSAGE_RATE = env.int('PRESENCE_MESSAGE_RATE', default=12)
 PRESENCE_IP_MESSAGE_RATE = env.int('PRESENCE_IP_MESSAGE_RATE', default=600)
 PRESENCE_CONNECT_RATE = env.int('PRESENCE_CONNECT_RATE', default=120)
 PRESENCE_RATE_WINDOW_SECONDS = env.int('PRESENCE_RATE_WINDOW_SECONDS', default=60)
+PRACTICE_ENABLED = env.bool('PRACTICE_ENABLED', default=False)
+PRACTICE_ORIGINS = env.list('PRACTICE_ORIGINS', default=[])
+PRACTICE_HEARTBEAT_SECONDS = env.int('PRACTICE_HEARTBEAT_SECONDS', default=20)
+PRACTICE_LEASE_SECONDS = env.int('PRACTICE_LEASE_SECONDS', default=60)
+PRACTICE_MAX_ROOM_CONNECTIONS = env.int('PRACTICE_MAX_ROOM_CONNECTIONS', default=100)
+PRACTICE_MAX_USER_CONNECTIONS = env.int('PRACTICE_MAX_USER_CONNECTIONS', default=5)
+PRACTICE_MAX_MEMBERS = env.int('PRACTICE_MAX_MEMBERS', default=100)
+PRACTICE_MAX_CONNECTIONS = env.int('PRACTICE_MAX_CONNECTIONS', default=10000)
+PRACTICE_MAX_CONNECTIONS_PER_IP = env.int('PRACTICE_MAX_CONNECTIONS_PER_IP', default=50)
+PRACTICE_MESSAGE_LIMIT = env.int('PRACTICE_MESSAGE_LIMIT', default=2048)
+PRACTICE_MESSAGE_RATE = env.int('PRACTICE_MESSAGE_RATE', default=30)
+PRACTICE_IP_MESSAGE_RATE = env.int('PRACTICE_IP_MESSAGE_RATE', default=600)
+PRACTICE_HTTP_RATE = env.int('PRACTICE_HTTP_RATE', default=60)
+PRACTICE_CONNECT_RATE = env.int('PRACTICE_CONNECT_RATE', default=30)
+PRACTICE_IP_CONNECT_RATE = env.int('PRACTICE_IP_CONNECT_RATE', default=120)
+PRACTICE_RATE_WINDOW_SECONDS = env.int('PRACTICE_RATE_WINDOW_SECONDS', default=60)
 validate_realtime(globals())
 CHANNEL_LAYERS = {}
 if REALTIME_ENABLED:
@@ -195,7 +212,7 @@ if REALTIME_ENABLED:
             'prefix': f'{REALTIME_PREFIX}:channels',
             'capacity': 100,
             'expiry': 60,
-            'group_expiry': max(120, PRESENCE_LEASE_SECONDS * 2),
+            'group_expiry': max(120, PRESENCE_LEASE_SECONDS * 2, PRACTICE_LEASE_SECONDS * 2),
         },
     }
 
@@ -222,6 +239,7 @@ INSTALLED_APPS = [
     'apps.website',
     'apps.blogs',
     'apps.presence',
+    'apps.practice',
 ]
 
 MIDDLEWARE = [
@@ -306,6 +324,9 @@ if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
             'timeout': env.float('DB_POOL_TIMEOUT', default=10),
         }
     DATABASES['default']['CONN_HEALTH_CHECKS'] = True
+
+if PRACTICE_ENABLED and DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql':
+    raise ImproperlyConfigured('PRACTICE_ENABLED requires PostgreSQL.')
 
 
 # Caches

@@ -43,6 +43,7 @@ router.register(r'posts', PostViewSet)
 urlpatterns = [
     path('readyz/', readiness, name='readiness'),
     path('presence/', include('apps.presence.urls')),
+    path('api/practice/', include('apps.practice.urls')),
     path('admin/', admin.site.urls),
     #
     path('auth/csrf/', auth_views.csrf),
