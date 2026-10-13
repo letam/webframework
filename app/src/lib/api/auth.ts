@@ -1,5 +1,5 @@
 import { SERVER_HOST } from '../constants'
-import { getFetchOptions } from '../utils/fetch'
+import { clearCsrfTokenCache, getFetchOptions } from '../utils/fetch'
 
 interface SignupData extends Record<string, unknown> {
 	username: string
@@ -19,7 +19,10 @@ export const signup = async (
 			throw new Error(JSON.stringify(errors))
 		}
 
-		return await response.json()
+		const result = await response.json()
+		// Signup can rotate the CSRF cookie with the new session.
+		clearCsrfTokenCache()
+		return result
 	} catch (error) {
 		console.error('Error signing up:', error)
 		throw error

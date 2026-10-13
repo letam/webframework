@@ -407,3 +407,61 @@ rosters, immediate membership invalidation, lease loss before mutation, hello/le
 expiry, shared limits and bounded cleanup. A targeted duplicate-Origin handshake
 regression passed separately. The real two-process crash/retry and Redis stop/restart
 probes are included in the final integration gate.
+
+## Practice interface and local enablement
+
+The React app lazily loads `/practice` for room creation and `/practice/rooms/:id`
+for joining and practicing. `VITE_PRACTICE_ENABLED=true` shows its navigation entry;
+it defaults off for existing instances. Use the existing login/signup dialogs before
+an explicit invitation exchange. The page clears the invitation fragment immediately
+and keeps it only in memory until join; refreshing before joining requires reopening
+the invitation. A host can copy, rotate or revoke the link, remove participants, and
+close the room. Refreshing a host page forgets the plaintext secret; rotate to obtain
+a new copy. No timer command enters the existing offline post outbox.
+
+One managed socket belongs to the mounted room/account. Navigation, logout and React
+development remounts clean up its timers/socket and discard other rooms' pending commands.
+Only a matched clock sample confirms the connection and enables controls. Countdown
+rendering uses the server deadline, a low-round-trip clock sample and `performance.now()`;
+device wall-clock changes do not decrement or reset it. Visibility return, pageshow,
+online and reconnect request a fresh sample, and controls wait for that reply. Broadcasts
+cannot overwrite the clock estimate as zero-latency samples. The timer has `aria-live=off`,
+and native buttons remain keyboard accessible; the page adds no motion effect.
+
+Disconnected or stale timers are visibly unconfirmed. A command whose acknowledgement
+is lost reconnects after a bounded wait and resends the identical UUID/payload to recover
+its stored outcome. A failed pre-accept socket handshake is checked through an authorized
+HTTP snapshot, bounded to ten seconds, so revoked/closed rooms stop retrying and an
+unavailable HTTP service cannot hold reconnect forever. Accepted changes display a neutral
+confirmation; rejected commands use human-readable alerts.
+
+For the existing local Compose services, enable rooms in `server/.env`:
+
+```dotenv
+REALTIME_ENABLED=True
+PRACTICE_ENABLED=True
+DATABASE_URL=postgresql://webframework:webframework-local@127.0.0.1:5433/webframework
+REALTIME_REDIS_URL=redis://127.0.0.1:6380/0
+REALTIME_PREFIX=local-webframework
+PRACTICE_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
+
+Keep the existing random `SECRET_KEY`. For authenticated local development, use the
+same-origin Vite proxy in `app/.env.development.local`. Development proxies preserve
+existing `/auth/`, `/api/`, `/ws/`, `/p/` share pages and local `/media/` URLs:
+
+```dotenv
+VITE_SERVER_HOST=
+VITE_WS_PROXY_TARGET=http://127.0.0.1:8000
+VITE_PRACTICE_ENABLED=true
+```
+
+Run `just migrate`, `just asgi`, and the normal frontend development command, then open
+`/practice`. Include port 5174 explicitly in `PRACTICE_ORIGINS` when running local
+Playwright. Production serves app/API/sockets together and uses exact HTTPS origins.
+
+Frontend verification on 2026-10-13: all 366 unit tests, TypeScript 7 typecheck, Biome,
+ESLint and the production build passed. Existing Biome/ESLint/bundle warnings remain.
+Practice coverage includes clock skew, delayed samples, independent timer/membership/
+presence ordering, StrictMode cleanup, wake resync, lost acknowledgements and bounded
+denied-handshake recovery. The real browser flow is part of the integration gate below.

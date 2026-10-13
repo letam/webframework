@@ -18,6 +18,8 @@ const SettingsPage = React.lazy(() => import('./components/settings/SettingsPage
 const DraftsPage = React.lazy(() => import('./pages/DraftsPage'))
 const DebugPage = React.lazy(() => import('./pages/DebugPage'))
 const NotFound = React.lazy(() => import('./pages/NotFound'))
+const PracticePage = React.lazy(() => import('./pages/PracticePage'))
+const PracticeRoomPage = React.lazy(() => import('./pages/PracticeRoomPage'))
 
 const RouteFallback = () => (
 	<div className="flex min-h-screen items-center justify-center bg-background">
@@ -43,6 +45,8 @@ const App = () => (
 										<Route path="/drafts" element={<DraftsPage />} />
 										<Route path="/settings" element={<SettingsPage />} />
 										<Route path="/debug" element={<DebugPage />} />
+										<Route path="/practice" element={<PracticePage />} />
+										<Route path="/practice/rooms/:id" element={<PracticeRoomPage />} />
 										<Route path="*" element={<NotFound />} />
 									</Routes>
 								</Suspense>

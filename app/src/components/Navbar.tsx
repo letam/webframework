@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useQuery } from '@tanstack/react-query'
-import { FileText, Home, Menu, LogOut, Settings } from 'lucide-react'
+import { FileText, Home, Menu, LogOut, Settings, Timer } from 'lucide-react'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { EchoMark } from '@/components/EchoMark'
 import { useAuth } from '@/hooks/useAuth'
@@ -20,6 +20,8 @@ import { identityGradient } from '@/lib/utils/identity'
 import { SyncStatusIndicator } from '@/components/SyncStatusIndicator'
 import { getAuthorStats } from '@/lib/api/posts'
 import { getProfileStatsQueryKey } from '@/hooks/usePosts'
+
+const practiceNavigationEnabled = import.meta.env.VITE_PRACTICE_ENABLED === 'true'
 
 const navLinkClass =
 	'rounded-md text-foreground/60 transition-colors hover:text-foreground/80 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
@@ -112,6 +114,14 @@ const Navbar = () => {
 											{draftCountLabel}
 										</span>
 									)}
+								</div>
+							</Link>
+						)}
+						{practiceNavigationEnabled && (
+							<Link to="/practice" className={navLinkClass}>
+								<div className="flex items-center gap-1">
+									<Timer className="h-4 w-4" />
+									<span>Practice</span>
 								</div>
 							</Link>
 						)}
