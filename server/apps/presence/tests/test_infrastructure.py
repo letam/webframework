@@ -1,5 +1,6 @@
 """Configuration and ASGI HTTP regression tests for the optional capability."""
 
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -11,6 +12,7 @@ from config.realtime import validate_realtime
 from django.conf import settings
 from django.core.asgi import get_asgi_application
 from django.core.exceptions import ImproperlyConfigured
+from django.db import connection
 from django.test import SimpleTestCase, TransactionTestCase, override_settings
 
 
@@ -68,6 +70,12 @@ class ConfigurationTests(SimpleTestCase):
         """Presence cannot accidentally enable its routes without shared state."""
         with self.assertRaises(ImproperlyConfigured):
             validate_realtime({'REALTIME_ENABLED': False, 'PRESENCE_ENABLED': True})
+
+    def test_real_infrastructure_gate_does_not_silently_skip(self):
+        """The CI integration job must use both declared real services."""
+        if os.environ.get('REQUIRE_REALTIME_TESTS') == '1':
+            self.assertEqual(connection.vendor, 'postgresql')
+            self.assertTrue(os.environ.get('TEST_REDIS_URL'))
 
     @override_settings(REALTIME_ENABLED=False, PRESENCE_ENABLED=False)
     async def test_disabled_websockets_are_rejected(self):
