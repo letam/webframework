@@ -65,7 +65,9 @@ PRESENCE_TIME_ZONE=America/Toronto
 ```
 
 Then `just migrate`, `just asgi` and the existing frontend development command. Vite
-proxies `/ws/` to `http://127.0.0.1:8000`; `VITE_WS_PROXY_TARGET` can override that target.
+proxies `/ws/` to `http://127.0.0.1:8000`; `VITE_WS_PROXY_TARGET` can override that target
+in the active mode's env files, such as `app/.env.development.local`. An explicit shell
+value takes precedence. The same target serves `/auth/`, `/api/`, `/p/` and `/media/`.
 It preserves the browser Origin. The websocket allowlist is explicit per scope; missing,
 duplicate, wildcard and unapproved origins are rejected. Production origins must use
 HTTPS. CORS does not authorize sockets. Scope names and namespaces are configurable;
