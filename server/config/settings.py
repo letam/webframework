@@ -204,6 +204,19 @@ PRACTICE_CONNECT_RATE = env.int('PRACTICE_CONNECT_RATE', default=30)
 PRACTICE_IP_CONNECT_RATE = env.int('PRACTICE_IP_CONNECT_RATE', default=120)
 PRACTICE_RATE_WINDOW_SECONDS = env.int('PRACTICE_RATE_WINDOW_SECONDS', default=60)
 validate_realtime(globals())
+# Daphne has one transport cap across routes. Consumers enforce their own bounds,
+# so use the largest enabled feature cap without coupling a disabled feature.
+REALTIME_MESSAGE_LIMIT = max(
+    [
+        limit
+        for enabled, limit in (
+            (PRESENCE_ENABLED, PRESENCE_MESSAGE_LIMIT),
+            (PRACTICE_ENABLED, PRACTICE_MESSAGE_LIMIT),
+        )
+        if enabled
+    ],
+    default=2048,
+)
 CHANNEL_LAYERS = {}
 if REALTIME_ENABLED:
     CHANNEL_LAYERS['default'] = {
