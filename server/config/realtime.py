@@ -55,6 +55,7 @@ def validate_realtime(config):
         positive = (
             'PRACTICE_HEARTBEAT_SECONDS',
             'PRACTICE_LEASE_SECONDS',
+            'PRACTICE_HELLO_SECONDS',
             'PRACTICE_MAX_ROOM_CONNECTIONS',
             'PRACTICE_MAX_USER_CONNECTIONS',
             'PRACTICE_MAX_MEMBERS',
@@ -74,6 +75,21 @@ def validate_realtime(config):
             raise ImproperlyConfigured('Practice heartbeat must be shorter than lease.')
         if config['PRACTICE_MAX_USER_CONNECTIONS'] > config['PRACTICE_MAX_ROOM_CONNECTIONS']:
             raise ImproperlyConfigured('Practice user connection cap exceeds room cap.')
+    if config.get('PRACTICE_ENABLED') or config['PRESENCE_ENABLED']:
+        if config['PRESENCE_PROXY_IP_HEADER'] not in (
+            'x-real-ip',
+            'fly-client-ip',
+            'cf-connecting-ip',
+        ):
+            raise ImproperlyConfigured('Realtime proxy IP header must carry one verified address.')
+        try:
+            for network in config['PRESENCE_TRUSTED_PROXY_NETWORKS']:
+                if ip_network(network).prefixlen == 0:
+                    raise ValueError('Do not trust every possible peer')
+        except (ValueError, TypeError) as error:
+            raise ImproperlyConfigured(
+                'Realtime trusted proxies require explicit peer CIDRs.'
+            ) from error
     if not config['PRESENCE_ENABLED']:
         return
     if len(config['PRESENCE_HASH_KEY']) < 32:
@@ -119,20 +135,6 @@ def validate_realtime(config):
         ZoneInfo(config['PRESENCE_TIME_ZONE'])
     except (ZoneInfoNotFoundError, ValueError, TypeError) as error:
         raise ImproperlyConfigured('PRESENCE_TIME_ZONE must be an IANA timezone.') from error
-    if config['PRESENCE_PROXY_IP_HEADER'] not in (
-        'x-real-ip',
-        'fly-client-ip',
-        'cf-connecting-ip',
-    ):
-        raise ImproperlyConfigured('Presence proxy IP header must carry one verified address.')
-    try:
-        for network in config['PRESENCE_TRUSTED_PROXY_NETWORKS']:
-            if ip_network(network).prefixlen == 0:
-                raise ValueError('Do not trust every possible peer')
-    except (ValueError, TypeError) as error:
-        raise ImproperlyConfigured(
-            'Presence trusted proxies require explicit peer CIDRs.'
-        ) from error
     integer_options = (
         'PRESENCE_RETENTION_DAYS',
         'PRESENCE_LEASE_SECONDS',

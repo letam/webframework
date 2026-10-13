@@ -1,6 +1,7 @@
 """HTTP permission, CSRF and feature-flag tests."""
 
 import json
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -33,9 +34,11 @@ class PracticeAPITests(TestCase):
             **{**self.csrf, **kwargs},
         )
 
+    @patch('apps.practice.views.observe_sync')
     @patch('apps.practice.views.check_rate')
-    def test_create_join_revoke_and_disabled_routes(self, _rate):
+    def test_create_join_revoke_and_disabled_routes(self, _rate, roster):
         """Creation requires CSRF; membership gates reads and disabled routes close."""
+        roster.return_value = SimpleNamespace(user_ids=frozenset(), sequence=0)
         self.assertEqual(
             self.client.post(
                 '/api/practice/rooms/', '{}', content_type='application/json'
@@ -101,3 +104,10 @@ class PracticeAPITests(TestCase):
             **self.csrf,
         )
         self.assertEqual((response.status_code, response.json()['code']), (400, 'invalid_request'))
+        nested = self.client.post(
+            '/api/practice/rooms/',
+            data='[' * 1000 + '0' + ']' * 1000,
+            content_type='application/json',
+            **self.csrf,
+        )
+        self.assertEqual((nested.status_code, nested.json()['code']), (400, 'invalid_request'))

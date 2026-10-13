@@ -111,3 +111,17 @@ class PracticeDomainTests(TestCase):
         self.assertTrue(closed.accepted)
         with self.assertRaises(PracticeError):
             join_room(self.room_id, self.other.id, self.secret)
+
+    def test_membership_revision_tracks_durable_roster_changes(self):
+        """A redis sequence reset cannot conceal joins, leaves or revocations."""
+        self.assertEqual(self.snapshot['membership_revision'], 1)
+        joined = join_room(self.room_id, self.guest.id, self.secret)
+        self.assertEqual(joined['membership_revision'], 2)
+        again = join_room(self.room_id, self.guest.id, self.secret)
+        self.assertEqual(again['membership_revision'], 2)
+        manage_membership(self.room_id, self.guest.id, 'leave')
+        self.assertEqual(get_snapshot(self.room_id, self.host.id)['membership_revision'], 3)
+        rejoined = join_room(self.room_id, self.guest.id, self.secret)
+        self.assertEqual(rejoined['membership_revision'], 4)
+        revoked = manage_membership(self.room_id, self.host.id, 'revoke', self.guest.id)
+        self.assertEqual(revoked['membership_revision'], 5)

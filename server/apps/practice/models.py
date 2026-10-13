@@ -19,8 +19,10 @@ class PracticeRoom(models.Model):
     remaining_ms = models.PositiveIntegerField(default=600000)
     deadline = models.DateTimeField(null=True, blank=True)
     revision = models.PositiveBigIntegerField(default=0)
+    membership_revision = models.PositiveBigIntegerField(default=0)
     closed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         """Name the room without disclosing its invitation."""

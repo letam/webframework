@@ -1,7 +1,7 @@
 # Presence and practice implementation
 
 Implemented capabilities: optional Channels/Daphne infrastructure, anonymous
-presence with private daily visitor statistics, and durable practice room APIs.
+presence with private daily visitor statistics, and authenticated practice rooms.
 The reading-page client and its privacy copy are a separate repository integration.
 This document is the kit's source for the implemented protocols.
 
@@ -294,7 +294,8 @@ revocation prevents that account from rejoining the room with any invitation in 
 | `POST .../<uuid>/members/<user_id>/revoke/` | Host-only `{}` revokes a participant; returns a snapshot. |
 
 `PracticeRoom` holds the host, configured duration, run ID, timer status, remaining
-milliseconds, deadline, revision and closure timestamp. `RoomMembership` has a unique
+milliseconds, deadline, timer and membership revisions, and creation/update/closure
+timestamps. `RoomMembership` has a unique
 room/account pair and distinguishes voluntary leave from host revocation. `RoomCommand`
 retains each request UUID, payload hash, actor and accepted/rejected outcome for the room's
 lifetime. Command UUIDs are unique across the room, and retries must match both actor and
@@ -319,4 +320,90 @@ Durable API verification on 2026-10-13: all 17 domain/API/boundary tests passed 
 Postgres 18.3, including two competing commands accepting exactly one revision,
 CSRF/permission/invitation checks, malformed inputs and sanitized storage failures.
 Ordinary SQLite regression coverage remains available with practice disabled.
-Redis-dependent transport verification is documented below as that capability is integrated.
+
+## Practice socket protocol v1
+
+`WS /ws/practice/rooms/<uuid>/` uses the same-origin Django session cookie and
+persisted membership. Practice origins are validated separately from public presence
+origins. Every command and renewal reloads the session from storage, rechecks the
+account's active/authentication hash and rechecks membership. Logout in another tab,
+session expiry, password changes, member revocation and closure invalidate a live
+connection. HTTP membership changes publish after commit; renewal checks repair a
+dropped invalidation. No invitation secret is sent over a socket.
+
+After opening, send a clock-correlated hello within the handshake deadline:
+
+```json
+{"v":1,"type":"hello","sync_id":"550e8400-e29b-41d4-a716-446655440000"}
+```
+
+`heartbeat` and `snapshot` requests have exactly the same fields, changing only
+`type`; each request gets a fresh UUID4 `sync_id`. Responses echo it in a full
+`room.snapshot`, so the client can match its monotonic send/receive times. Unsolicited
+broadcast snapshots omit `sync_id` and must not become zero-round-trip clock samples.
+The timer's `server_time` and deadline use the same Django server timebase; Redis TIME
+is used only for ephemeral leases. Server hosts must synchronize their system clocks.
+
+A snapshot contains `room_id`, `title`, `host_id`, `current_user_id`, `is_host`,
+`closed_at`, `duration_ms`, integer `run_id`, `status`, `remaining_ms`, `deadline`,
+`revision`, `membership_revision`, `server_time`, `members`, `presence_sequence`, `heartbeat_seconds` and
+`lease_seconds`, with `v:1` and `type:"room.snapshot"`. The member list exposes only
+account ID, username, host flag and connected flag to authorized room members.
+Snapshots are personalized per receiving account; a host's authority is never copied
+into another participant's response.
+
+```json
+{"v":1,"type":"timer.command","request_id":"550e8400-e29b-41d4-a716-446655440000","expected_revision":3,"action":"pause"}
+```
+
+Actions are `start`, `pause`, `resume`, `reset` and `close`. Only reset can include
+`duration_minutes`, an integer from 1 to 120. `command.result` returns the request ID,
+`accepted`, stable `code`, `replayed`, `accepted_revision` and a fresh nested `snapshot`.
+Accepted commands are committed before acknowledgement and notification. A lost
+acknowledgement can be retried with the same complete payload/UUID; an old revision
+does not invalidate that replay. A reused UUID with a changed payload is rejected.
+Valid rejected host commands carry a current authorized snapshot so the UI can recover.
+
+`room.presence` contains `v`, `type`, `sequence`, `membership_revision`, `members` and
+`server_time`. Its sequence is independent of the durable timer revision and scoped to Redis state.
+Deduplicate a member's tabs by account ID; removing one socket preserves another.
+Authenticated room connections renew in background tabs, unlike public reading-page
+visibility leases. Sleeping or lost connections expire; their timer continues.
+Presence sequences reset on reconnect if Redis state was lost. The durable membership
+revision advances on new join, rejoin, leave and host revocation, separately from timer
+mutations and connection cardinality. Clients reconcile authorized member IDs by that
+revision and connected flags by presence sequence; an old snapshot cannot restore a
+revoked member or suppress a newer membership change with an older timer revision.
+
+Shared Redis admission tracks total, peer-IP and room/user socket caps independently
+of membership leases. Missing/expired admission or room leases force a reconnect;
+renewals cannot silently repopulate lost Redis state. Heartbeats refresh Channels
+subscriptions, and observation makes expiry visible without a new join. Redis failures
+send `service_unavailable` and close the affected connection. Cleanup has a bounded
+budget; leases remain the backstop when cleanup cannot reach Redis.
+
+Room HTTP requests use `PRACTICE_HTTP_RATE` per authenticated account (default 60 per
+minute). Socket messages default to 30 per account and 600 per IP/minute; connect
+attempts default to 30 per account and 120 per IP/minute. Defaults cap 10,000 instance
+connections, 100 connections per room, 5 tabs per member/room, 50 connections per IP,
+and 100 active memberships per room. These limits are shared across workers. The room
+consumer reuses `PRESENCE_TRUSTED_PROXY_NETWORKS` and `PRESENCE_PROXY_IP_HEADER` for the
+transport peer boundary, even when public presence is disabled; configure only the
+actual trusted reverse-proxy peers. The authenticated account and temporary IP hash
+budgets do not expose peer addresses to room participants.
+
+Clients ignore old timer revisions and independently reconcile presence sequences.
+A revision gap triggers an explicit snapshot. Every ordinary 20-second heartbeat
+also reads current durable state, repairing a dropped final mutation even if no later
+command occurs. There are no per-second server broadcasts or SQL heartbeat records.
+Close codes 4403/4404 end unauthorized/disabled access; retryable service/limit errors
+use 4413, and handshake timeout/lease expiry uses 4408. Malformed messages return
+`invalid_request` and count toward the shared rate budget. Display a lost connection immediately,
+disable controls and reconcile after reconnect with jittered backoff capped at 30 seconds.
+
+Transport verification on 2026-10-13: all 30 practice tests passed with real Postgres
+and Redis, including session expiry/logout/password/account revalidation, live HTTP
+rosters, immediate membership invalidation, lease loss before mutation, hello/lease
+expiry, shared limits and bounded cleanup. A targeted duplicate-Origin handshake
+regression passed separately. The real two-process crash/retry and Redis stop/restart
+probes are included in the final integration gate.
