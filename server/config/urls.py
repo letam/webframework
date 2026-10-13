@@ -42,6 +42,7 @@ router.register(r'posts', PostViewSet)
 # Order matters! More specific patterns should come before catch-all patterns
 urlpatterns = [
     path('readyz/', readiness, name='readiness'),
+    path('presence/', include('apps.presence.urls')),
     path('admin/', admin.site.urls),
     #
     path('auth/csrf/', auth_views.csrf),

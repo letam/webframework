@@ -126,6 +126,11 @@ class ASGIHTTPTests(TransactionTestCase):
         response = await self.request('/auth/logout/', method='POST')
         self.assertEqual(response['status'], 403)
 
+    async def test_private_stats_stays_disabled(self):
+        """The new optional endpoint does not expose data on HTTP-only instances."""
+        response = await self.request('/presence/stats/')
+        self.assertEqual(response['status'], 404)
+
     async def test_static_and_media_are_served_through_asgi(self):
         """WhiteNoise and Django's development media routes work in the ASGI stack."""
         with tempfile.TemporaryDirectory() as directory:
