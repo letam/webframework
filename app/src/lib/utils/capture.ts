@@ -1,3 +1,5 @@
+import { fixRecordingDuration } from '@/lib/utils/webmDuration'
+
 export type CaptureDevice = 'microphone' | 'camera'
 export type CaptureAction = 'attach' | 'post'
 export type RecordingStatus = 'idle' | 'loading' | 'recording' | 'paused' | 'finishing' | 'error'
@@ -144,16 +146,8 @@ export const stopStreamTracks = (stream: MediaStream | null | undefined): void =
 export const isWebmLike = (mimeType: string): boolean =>
 	/^(audio|video)\/(webm|x-matroska)(;|$)/i.test(mimeType.trim())
 
-export const finalizeRecording = async (blob: Blob): Promise<Blob> => {
-	if (!isWebmLike(blob.type)) return blob
-	// webm-duration-fix is CommonJS (`exports.default = fn`). Rollup unwraps that to the
-	// function, but Vite's dev-server interop hands back the whole exports object as
-	// `default`, so accept either shape rather than break recording under `bun dev`.
-	const mod = await import('webm-duration-fix')
-	const exported = mod.default as typeof mod.default | { default: typeof mod.default }
-	const fixWebmDuration = typeof exported === 'function' ? exported : exported.default
-	return fixWebmDuration(blob)
-}
+// Keep duration repair best-effort; a valid take survives parser/import failures.
+export const finalizeRecording = (blob: Blob): Promise<Blob> => fixRecordingDuration(blob)
 
 export const formatRecordingTime = (seconds: number): string => {
 	const mins = Math.floor(seconds / 60)

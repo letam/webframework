@@ -43,7 +43,7 @@ these three break is invisible.
 
 1. **Recording robustness pass** — the whole open recording row under "Open UX bugs & small
    fixes", built as one piece. It is the core input path of an audio/video product and the
-   least-hardened thing in the app; see that row for what is actually missing.
+   least-hardened thing in the app; see that row for what is actually missing. ✅ 2026-10-12 — built; device checklist outstanding.
 2. **`file_size` + orphaned-media cleanup + the Fly cron, as a single pass** — these are one
    problem wearing three hats (knowing what is really in R2), and the storage-usage display
    falls out of it nearly free at the end. See the Ops backlog "Scheduled jobs" row and
@@ -272,6 +272,8 @@ ActivityPub only if the node idea gets serious.
 - Recording: graceful mic/camera permission denial; behavior on incoming call;
   "Post" during recording should stop the recording and submit; iPhone audio preview;
   Safari media quirks.
+
+  ✅ Built 2026-10-12 (branch `feat/recording-robustness`) — spec in `docs/plans/2026-10-12-recording-robustness.md`. Still open: that plan's device-only checklist (iPhone/Safari behaviour that cannot be verified at a desk).
 
   > **⚠️ Sizing note 2026-08-12 — handled, but undifferentiated.** Denial does not crash: both
   > recorders catch it and toast. But each has exactly one message for every failure —

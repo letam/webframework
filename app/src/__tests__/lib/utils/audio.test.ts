@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { convertWavToWebM } from '@/lib/utils/audio'
+import { convertWavToWebM, getAudioExtension } from '@/lib/utils/audio'
+
+const encoder = vi.hoisted(() => ({ type: 'audio/webm;codecs=opus' as string | undefined }))
+vi.mock('@/lib/utils/media', () => ({
+	get supportedAudioMimeType() {
+		return encoder.type
+	},
+}))
 
 // The real parser rejects a zero-byte blob; fixRecordingDuration swallows that,
 // so only an explicit empty check stops convertWavToWebM resolving with nothing.
@@ -36,6 +43,7 @@ describe('convertWavToWebM', () => {
 	const originalMediaRecorder = globalThis.MediaRecorder
 
 	beforeEach(() => {
+		encoder.type = 'audio/webm;codecs=opus'
 		vi.stubGlobal('AudioContext', FakeAudioContext)
 		// vitest.setup.ts defines MediaRecorder as writable but non-configurable,
 		// so vi.stubGlobal (which redefines the property) can't replace it.
@@ -66,4 +74,21 @@ describe('convertWavToWebM', () => {
 
 		await expect(convertWavToWebM(wav())).rejects.toThrow('MediaRecorder produced no data')
 	})
+})
+
+it.each([
+	['audio/webm;codecs=opus', 'webm'],
+	['audio/mp4;codecs=mp4a.40.2', 'm4a'],
+	['audio/ogg', 'ogg'],
+	['audio/wav', 'wav'],
+	['audio/mpeg', 'mp3'],
+	['audio/flac', 'webm'],
+])('maps %s to %s', (type, extension) => expect(getAudioExtension(type)).toBe(extension))
+it('returns WAV unchanged without constructing an AudioContext when no encoder exists', async () => {
+	encoder.type = undefined
+	const audioContext = vi.fn()
+	vi.stubGlobal('AudioContext', audioContext)
+	const wav = new Blob(['wav'], { type: 'audio/wav' })
+	expect(await convertWavToWebM(wav)).toBe(wav)
+	expect(audioContext).not.toHaveBeenCalled()
 })

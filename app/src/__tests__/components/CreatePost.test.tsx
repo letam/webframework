@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/sonner'
 import { saveComposerDraft } from '@/lib/utils/composerDraft'
 import { requestComposerLoad } from '@/lib/composerBridge'
 import { MAX_QUEUED_MEDIA_BYTES } from '@/lib/outbox'
+import type { CaptureAction } from '@/lib/utils/capture'
 import type { OutboxEntry } from '@/lib/utils/outboxDb'
 
 const mockUseAuth = vi.hoisted(() => vi.fn())
@@ -56,9 +57,9 @@ vi.mock('@/components/ui/sonner', () => ({
 	toast: mockToast,
 }))
 
-vi.mock('@/lib/utils/audio', () => ({
+vi.mock('@/lib/utils/audio', async (importOriginal) => ({
+	...(await importOriginal<typeof import('@/lib/utils/audio')>()),
 	convertWavToWebM: mockConvertWavToWebM,
-	getAudioExtension: () => 'wav',
 }))
 
 vi.mock('@/components/post/create/AudioRecorder', () => ({
@@ -67,15 +68,24 @@ vi.mock('@/components/post/create/AudioRecorder', () => ({
 		onAudioCaptured,
 	}: {
 		open: boolean
-		onAudioCaptured: (blob: Blob) => void
+		onAudioCaptured: (blob: Blob, action?: CaptureAction) => void
+		onUploadInstead?: () => void
 	}) =>
 		open ? (
-			<button
-				type="button"
-				onClick={() => onAudioCaptured(new Blob(['recording'], { type: 'audio/wav' }))}
-			>
-				Use recording
-			</button>
+			<>
+				<button
+					type="button"
+					onClick={() => onAudioCaptured(new Blob(['recording'], { type: 'audio/wav' }))}
+				>
+					Use recording
+				</button>
+				<button
+					type="button"
+					onClick={() => onAudioCaptured(new Blob(['recording'], { type: 'audio/wav' }), 'post')}
+				>
+					Post recording
+				</button>
+			</>
 		) : null,
 }))
 
@@ -1149,5 +1159,72 @@ describe('CreatePost', () => {
 			})
 			expect(scrollBy).not.toHaveBeenCalled()
 		})
+	})
+	it('posts straight from the recorder', async () => {
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await waitFor(() =>
+			expect(onPostCreated).toHaveBeenCalledExactlyOnceWith(
+				expect.objectContaining({ media_type: 'audio' })
+			)
+		)
+		expect(toast.error).not.toHaveBeenCalled()
+		expect(screen.queryByRole('button', { name: 'Post recording' })).not.toBeInTheDocument()
+	})
+	it('posting from the recorder with text includes the text', async () => {
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		await user.type(screen.getByPlaceholderText("What's on your mind?"), 'Caption')
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await waitFor(() =>
+			expect(onPostCreated).toHaveBeenCalledExactlyOnceWith(
+				expect.objectContaining({ text: 'Caption', media_type: 'audio' })
+			)
+		)
+	})
+	it('a failed recorder post keeps the take', async () => {
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockRejectedValue(new Error('upload failed'))
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to create post'))
+		expect(screen.getByText('Voice recording')).toBeVisible()
+	})
+	it("normalize path names the file from the encoder's type", async () => {
+		localStorage.setItem('app-settings', JSON.stringify({ normalizeAudio: true }))
+		mockConvertWavToWebM.mockResolvedValueOnce(
+			new Blob(['encoded'], { type: 'audio/mp4;codecs=mp4a.40.2' })
+		)
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await waitFor(() => expect(onPostCreated).toHaveBeenCalledOnce())
+		expect(onPostCreated.mock.calls[0][0].media).toEqual(
+			expect.objectContaining({
+				name: expect.stringMatching(/^recording_\d+\.m4a$/),
+				type: 'audio/mp4;codecs=mp4a.40.2',
+			})
+		)
+	})
+	it('normalize path uploads WAV when the encoder is absent', async () => {
+		localStorage.setItem('app-settings', JSON.stringify({ normalizeAudio: true }))
+		mockConvertWavToWebM.mockImplementationOnce(async (blob) => blob)
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await waitFor(() => expect(onPostCreated).toHaveBeenCalledOnce())
+		expect(onPostCreated.mock.calls[0][0].media).toEqual(
+			expect.objectContaining({ name: expect.stringMatching(/\.wav$/), type: 'audio/wav' })
+		)
 	})
 })
