@@ -1,7 +1,8 @@
 # Presence and practice implementation
 
 The optional Channels/Daphne and Redis foundation is implemented. Durable visitor
-statistics and live presence follow in separate commits; shared practice rooms and
+statistics, the private reporting API and retention are now implemented. Live presence
+follows separately; shared practice rooms and
 synchronized timers are the next phase. Socket routes currently reject all handshakes.
 Presence settings reserve the explicit boundaries used by those later features.
 
@@ -73,3 +74,35 @@ Run `uv run python server/manage.py test apps.presence.tests.test_infrastructure
 to check configuration, disabled sockets, dependency readiness and existing HTTP
 authentication, CSRF, static and media routes through ASGI. No Redis is needed for
 these regression checks.
+
+## Durable reporting and retention
+
+`Visitor` holds a unique `(scope, HMAC key)` and first/last seen dates. `DailyVisit` has a
+unique `(scope, visitor, day)` and fixed new/returning classification. A local day is
+computed using `PRESENCE_TIME_ZONE` while timestamps use UTC. A page open across midnight
+records its new local day on the next visible heartbeat without reconnecting. Concurrent
+first sightings serialize on the visitor row, and SQL uniqueness remains authoritative if
+Redis acknowledgements disappear. `DailyPresenceSummary` holds coalesced peak and daily
+aggregates; heartbeats are never SQL liveness records. Peak counts include functional-only
+presence; visitor totals exclude those pages.
+
+`GET /presence/stats/?days=N` requires the dedicated credential in an
+`Authorization: Bearer ...` header. It has no session/admin fallback, query-string token
+or public browser credential. An unset token disables access. `N` defaults to 30 and is
+bounded to 1–400. The response contains timezone, range, retention window, and per-scope
+zero-filled daily counts plus aggregate visit/peak totals. Returning totals are daily
+visits, not distinct people over the range. No pseudonymous per-visitor rows are exported.
+Responses are not cached.
+
+Default retention includes today and the preceding 399 local days, and deletes visitors
+inactive beyond that window. Run `just prune-presence` daily with the instance scheduler;
+this command works independently of the reporting endpoint and even when presence is
+disabled. The command is `manage.py prune_presence_statistics [--retention-days N]`.
+The allowed retention window is 1–400 days. After deletion, key rotation or storage loss,
+a browser can count as new again. There is no lifetime-unique claim.
+
+
+The transactional statistics service is ready for the next commit’s socket writer.
+Run `uv run python server/manage.py test apps.presence.tests.test_statistics` for
+privacy, reporting, deduplication and retention checks. Its four race tests additionally
+require a Postgres test database.

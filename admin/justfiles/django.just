@@ -57,3 +57,7 @@ realtime-up:
 
 realtime-down:
     docker compose -f compose.realtime.yml down
+
+# Schedule daily via the instance's existing scheduler (no request-triggered retention).
+prune-presence:
+    uv run python server/manage.py prune_presence_statistics

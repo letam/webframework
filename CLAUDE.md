@@ -407,4 +407,5 @@ Multi-stage Dockerfile:
 Channels, Redis and Daphne are available behind `REALTIME_ENABLED`; HTTP-only
 instances still boot without Redis. See `docs/plans/2026-10-13-presence-and-practice.md`
 for local setup, readiness and ASGI regression checks. Use `just asgi` for Daphne
-and `just realtime-up` for loopback Postgres/Redis. Presence routes follow separately.
+and `just realtime-up` for loopback Postgres/Redis. The private presence reporting API and `just prune-presence` retention command are
+available; live socket routes follow separately.
