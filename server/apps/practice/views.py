@@ -1,13 +1,17 @@
 """CSRF-protected session API for private practice rooms."""
 
 import json
+import logging
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 from django.conf import settings
-from django.db import DatabaseError
+from django.db import DatabaseError, transaction
 from django.http import JsonResponse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 
+from .leases import observe_sync, room_group_name
 from .limits import PracticeRateLimitError, PracticeUnavailableError, check_rate
 from .service import (
     MESSAGES,
@@ -18,6 +22,33 @@ from .service import (
     manage_invitation,
     manage_membership,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _notify(room_id):
+    """Publish after commit; a lost event is healed by socket heartbeats."""
+
+    def publish():
+        try:
+            layer = get_channel_layer()
+            if layer is not None:
+                async_to_sync(layer.group_send)(room_group_name(room_id), {'type': 'room.changed'})
+        except Exception:
+            logger.warning('Practice room notification unavailable', exc_info=True)
+
+    transaction.on_commit(publish)
+
+
+def _roster_snapshot(snapshot):
+    """Decorate an authorized durable snapshot with live Redis user leases."""
+    roster = observe_sync(snapshot['room_id'])
+    snapshot['presence_sequence'] = roster.sequence
+    snapshot['members'] = [
+        {**member, 'connected': member['user_id'] in roster.user_ids}
+        for member in snapshot['members']
+    ]
+    return snapshot
 
 
 def _error(code, status):
@@ -41,7 +72,7 @@ def _body(request):
             return result
 
         value = json.loads(request.body, object_pairs_hook=unique_pairs) if request.body else {}
-    except (UnicodeDecodeError, ValueError) as exc:
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise PracticeError('invalid_request') from exc
     if not isinstance(value, dict):
         raise PracticeError('invalid_request')
@@ -108,7 +139,9 @@ def rooms(request):
 def room(request, room_id):
     """Return a current snapshot to a persisted member."""
     return _handle(
-        request, lambda user_id: JsonResponse(get_snapshot(room_id, user_id)), method='GET'
+        request,
+        lambda user_id: JsonResponse(_roster_snapshot(get_snapshot(room_id, user_id))),
+        method='GET',
     )
 
 
@@ -122,7 +155,9 @@ def join(request, room_id):
         data = _body(request)
         if set(data) != {'invitation_secret'}:
             raise PracticeError('invalid_request')
-        return JsonResponse(join_room(room_id, user_id, data['invitation_secret']))
+        snapshot = join_room(room_id, user_id, data['invitation_secret'])
+        _notify(room_id)
+        return JsonResponse(snapshot)
 
     return _handle(request, operation)
 
@@ -137,6 +172,7 @@ def leave(request, room_id):
         if _body(request):
             raise PracticeError('invalid_request')
         manage_membership(room_id, user_id, 'leave')
+        _notify(room_id)
         return JsonResponse({'left': True})
 
     return _handle(request, operation)
@@ -181,6 +217,8 @@ def revoke_member(request, room_id, member_id):
         """Validate the JSON body before applying the authorized mutation."""
         if _body(request):
             raise PracticeError('invalid_request')
-        return JsonResponse(manage_membership(room_id, user_id, 'revoke', member_id))
+        snapshot = manage_membership(room_id, user_id, 'revoke', member_id)
+        _notify(room_id)
+        return JsonResponse(snapshot)
 
     return _handle(request, operation)

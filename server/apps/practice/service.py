@@ -26,6 +26,10 @@ MESSAGES = {
     'invalid_transition': 'That action is unavailable in the current state.',
     'request_id_reused': 'This request ID was already used.',
     'capacity_reached': 'This room is full.',
+    'rate_limited': 'Practice requests are too frequent. Reconnect later.',
+    'service_unavailable': 'Practice is temporarily unavailable. Reconnect later.',
+    'lease_expired': 'The connection expired. Reconnect to resume.',
+    'hello_timeout': 'The room handshake timed out. Reconnect to resume.',
 }
 
 
@@ -91,7 +95,7 @@ def _normalize(room, now):
         room.remaining_ms = 0
         room.deadline = None
         room.revision += 1
-        room.save(update_fields=['status', 'remaining_ms', 'deadline', 'revision'])
+        room.save(update_fields=['status', 'remaining_ms', 'deadline', 'revision', 'updated_at'])
         return True
     return False
 
@@ -133,6 +137,7 @@ def _snapshot(room, user_id, now):
         'remaining_ms': remaining,
         'deadline': iso(room.deadline) if room.deadline else None,
         'revision': room.revision,
+        'membership_revision': room.membership_revision,
         'server_time': iso(now),
         'members': members,
         'presence_sequence': 0,
@@ -148,7 +153,11 @@ def create_room(user_id, title, duration_minutes=10):
         raise PracticeError('invalid_request')
     duration = validate_duration(duration_minutes)
     room = PracticeRoom(
-        title=title.strip(), host_id=user_id, duration_ms=duration, remaining_ms=duration
+        title=title.strip(),
+        host_id=user_id,
+        duration_ms=duration,
+        remaining_ms=duration,
+        membership_revision=1,
     )
     secret = _new_invitation(room)
     room.save()
@@ -190,14 +199,18 @@ def join_room(room_id, user_id, secret):
         active = RoomMembership.objects.filter(room=room, revoked_at__isnull=True).count()
         if active >= settings.PRACTICE_MAX_MEMBERS:
             raise PracticeError('capacity_reached', 409)
-    membership, _ = RoomMembership.objects.get_or_create(room=room, user_id=user_id)
+    membership, created = RoomMembership.objects.get_or_create(room=room, user_id=user_id)
     if membership.revocation_reason == 'host':
         # A host revocation must not be defeated by an old or newly shared invitation.
         raise PracticeError('forbidden', 403)
-    if membership.revoked_at is not None:
+    rejoining = membership.revoked_at is not None
+    if rejoining:
         membership.revoked_at = None
         membership.revocation_reason = ''
         membership.save(update_fields=['revoked_at', 'revocation_reason'])
+    if created or rejoining:
+        room.membership_revision += 1
+        room.save(update_fields=['membership_revision', 'updated_at'])
     return _snapshot(room, user_id, now)
 
 
@@ -224,6 +237,8 @@ def manage_membership(room_id, user_id, action, target_id=None):
     ).update(revoked_at=now, revocation_reason='leave' if action == 'leave' else 'host')
     if not updated:
         raise PracticeError('not_found', 404)
+    room.membership_revision += 1
+    room.save(update_fields=['membership_revision', 'updated_at'])
     return _snapshot(room, user_id, now) if action != 'leave' else None
 
 
