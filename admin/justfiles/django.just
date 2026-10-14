@@ -46,3 +46,34 @@ collectstatic:
 # Show all available just commands
 list:
     just --list
+
+# Serve HTTP and WebSockets with Daphne (set realtime variables in server/.env).
+asgi:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    realtime_message_limit="$(PYTHONPATH=server uv run python -c 'from config.settings import REALTIME_MESSAGE_LIMIT; print(REALTIME_MESSAGE_LIMIT)')"
+    PYTHONPATH=server ASGI_ENABLED=True uv run daphne -b 127.0.0.1 -p 8000 --websocket-max-message-size "$realtime_message_limit" --websocket-max-frame-size "$realtime_message_limit" config.asgi:application
+
+# Local durable/ephemeral dependencies; ports are confined to loopback.
+realtime-up:
+    docker compose -f compose.realtime.yml up -d --wait
+
+realtime-down:
+    docker compose -f compose.realtime.yml down
+
+# Integration checks require both real Redis and Postgres.
+test-presence:
+    REQUIRE_REALTIME_TESTS=1 uv run python server/manage.py test apps.presence
+
+# Durable domain, Redis sockets and the two-Daphne crash/retry probe.
+test-practice:
+    REQUIRE_REALTIME_TESTS=1 uv run python server/manage.py test apps.practice
+    uv run python admin/dev/check-practice-processes.py
+
+# Record a local pilot measurement; this does not claim production capacity.
+pilot-practice:
+    uv run python admin/dev/check-practice-processes.py --pilot
+
+# Schedule daily via the instance's existing scheduler (no request-triggered retention).
+prune-presence:
+    uv run python server/manage.py prune_presence_statistics

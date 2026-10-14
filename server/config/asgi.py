@@ -1,15 +1,57 @@
-"""ASGI config for server project.
-
-It exposes the ASGI callable as a module-level variable named ``application``.
-
-For more information on this file, see
-https://docs.djangoproject.com/en/5.1/howto/deployment/asgi/
-"""
+"""Serve existing Django HTTP routes and explicitly enabled WebSocket routes."""
 
 import os
 
+from channels.auth import AuthMiddlewareStack
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.security.websocket import OriginValidator
+from django.conf import settings
 from django.core.asgi import get_asgi_application
+from django.urls import path
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+# Initialize Django before importing consumers that use application models.
+django_application = get_asgi_application()
 
-application = get_asgi_application()
+
+async def reject_websocket(scope, receive, send):
+    """Keep disabled realtime instances closed to WebSocket connections."""
+    await receive()
+    await send({'type': 'websocket.close', 'code': 4404})
+
+
+def build_application():
+    """Construct routes using the current instance capability settings."""
+    websocket = reject_websocket
+    if settings.REALTIME_ENABLED:
+        routes = []
+        if settings.PRESENCE_ENABLED:
+            from apps.presence.routing import websocket_urlpatterns
+
+            origins = sorted(
+                {
+                    origin
+                    for scope in settings.PRESENCE_SCOPES.values()
+                    for origin in scope['origins']
+                }
+            )
+            # Each feature has its own exact origin boundary.
+            for route in websocket_urlpatterns:
+                routes.append(path(route.pattern._route, OriginValidator(route.callback, origins)))
+        if settings.PRACTICE_ENABLED:
+            from apps.practice.routing import websocket_urlpatterns
+
+            for route in websocket_urlpatterns:
+                routes.append(
+                    path(
+                        route.pattern._route,
+                        OriginValidator(
+                            AuthMiddlewareStack(route.callback), settings.PRACTICE_ORIGINS
+                        ),
+                    )
+                )
+        websocket = URLRouter(routes) if routes else reject_websocket
+    return ProtocolTypeRouter({'http': django_application, 'websocket': websocket})
+
+
+application = build_application()

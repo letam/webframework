@@ -85,6 +85,11 @@ RUN bun install --frozen-lockfile
 # Copy the rest of your application files
 COPY app .
 
+# Vite replaces frontend flags during compilation; runtime Django environment
+# variables cannot change the navigation in the shipped assets.
+ARG VITE_PRACTICE_ENABLED=false
+ENV VITE_PRACTICE_ENABLED=${VITE_PRACTICE_ENABLED}
+
 # Build frontend files
 RUN bun run build
 
