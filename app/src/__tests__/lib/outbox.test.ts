@@ -215,7 +215,7 @@ describe('outbox sync mode initialization', () => {
 	it('never persists stored history while resolving', () => {
 		localStorage.setItem('app-settings', JSON.stringify({ postSyncDefault: 'remember' }))
 		localStorage.setItem('post-sync-mode', 'local')
-		const storageWrite = vi.spyOn(Storage.prototype, 'setItem')
+		const storageWrite = vi.spyOn(localStorage, 'setItem')
 
 		expect(resolveInitialSyncMode()).toBe('local')
 		expect(storageWrite).not.toHaveBeenCalled()
@@ -238,7 +238,7 @@ describe('outbox sync mode initialization', () => {
 
 	it('falls back to auto when stored history cannot be read', () => {
 		const storedSettings = JSON.stringify({ postSyncDefault: 'remember' })
-		vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => {
+		vi.spyOn(localStorage, 'getItem').mockImplementation((key) => {
 			if (key === 'post-sync-mode') throw new Error('blocked')
 			return key === 'app-settings' ? storedSettings : null
 		})
@@ -273,6 +273,7 @@ describe('outbox sync engine', () => {
 		localStorage.removeItem('post-sync-mode')
 		setOnline(true)
 		vi.useRealTimers()
+		vi.restoreAllMocks()
 	})
 
 	it('persists mode changes and publishes a reactive snapshot', () => {
@@ -294,7 +295,7 @@ describe('outbox sync engine', () => {
 
 	it('keeps an in-memory local choice authoritative when persistence fails', async () => {
 		localStorage.setItem('post-sync-mode', 'auto')
-		const storageWrite = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+		const storageWrite = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
 			throw new Error('quota exceeded')
 		})
 
@@ -316,7 +317,7 @@ describe('outbox sync engine', () => {
 
 	it('resets tests to auto without reading storage', () => {
 		setSyncMode('local')
-		const storageRead = vi.spyOn(Storage.prototype, 'getItem')
+		const storageRead = vi.spyOn(localStorage, 'getItem')
 
 		__resetOutboxForTests()
 
