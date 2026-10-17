@@ -49,42 +49,32 @@ export function getSupportedAudioMimeTypes() {
 export const supportedAudioMimeType = getSupportedAudioMimeTypes()[0]
 export const mimeTypes = [...videoMimeTypes, ...audioMimeTypes]
 
+// Django's DurationField serializes as "[D ]HH:MM:SS[.ffffff]" — the day count is
+// space-separated, so a 25-hour recording arrives as "1 01:00:03", not "25:00:03".
+// Negative durations ("-1 23:59:59") deliberately don't match: media can't have one.
+const DJANGO_DURATION = /^(?:(\d+) )?(\d+):(\d{1,2}):(\d{1,2}(?:\.\d+)?)$/
+const MINUTES_SECONDS = /^(\d+):(\d{1,2})$/
+
 /**
  * Parses a duration string from a media record into seconds
- * @param durationString The duration string (e.g., "0:01:30.500000" or "1:30")
+ * @param durationString The duration string (e.g., "00:01:30.500000", "1 01:00:03" or "1:30")
  * @returns The duration in seconds, or 0 if parsing fails
  */
 export const parseDurationString = (durationString?: string): number => {
 	if (!durationString) return 0
 
-	try {
-		// Handle Django DurationField format: "0:01:30.500000"
-		if (durationString.includes(':')) {
-			const parts = durationString.split(':')
-			if (parts.length === 3) {
-				// Format: "0:01:30.500000"
-				const hours = Number.parseInt(parts[0], 10)
-				const minutes = Number.parseInt(parts[1], 10)
-				const secondsWithMs = Number.parseFloat(parts[2])
-				return hours * 3600 + minutes * 60 + secondsWithMs
-			}
-			if (parts.length === 2) {
-				// Format: "1:30"
-				const minutes = Number.parseInt(parts[0], 10)
-				const seconds = Number.parseInt(parts[1], 10)
-				return minutes * 60 + seconds
-			}
-		}
-
-		// Try parsing as a simple number (seconds)
-		const seconds = Number.parseFloat(durationString)
-		if (!Number.isNaN(seconds)) {
-			return seconds
-		}
-
-		return 0
-	} catch (error) {
-		console.error('Error parsing duration string:', durationString, error)
-		return 0
+	const django = DJANGO_DURATION.exec(durationString)
+	if (django) {
+		const [, days = '0', hours, minutes, seconds] = django
+		return Number(days) * 86_400 + Number(hours) * 3600 + Number(minutes) * 60 + Number(seconds)
 	}
+
+	const minutesSeconds = MINUTES_SECONDS.exec(durationString)
+	if (minutesSeconds) {
+		return Number(minutesSeconds[1]) * 60 + Number(minutesSeconds[2])
+	}
+
+	// A bare number of seconds. Number() rejects trailing junk that parseFloat accepts.
+	const seconds = Number(durationString)
+	return Number.isFinite(seconds) && seconds >= 0 ? seconds : 0
 }
