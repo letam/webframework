@@ -1,6 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import fixWebmDuration from 'webm-duration-fix'
+import { useState } from 'react'
+import type { CaptureAction } from '@/lib/utils/capture'
 import VideoRecorder from '@/components/post/create/VideoRecorder'
 import { toast } from '@/components/ui/sonner'
 import {
@@ -17,7 +19,7 @@ vi.mock('@/components/ui/sonner', () => ({
 let fakes: ReturnType<typeof installCaptureFakes>
 let stream: ReturnType<typeof makeFakeStream>
 let getUserMedia: ReturnType<typeof vi.fn<typeof navigator.mediaDevices.getUserMedia>>
-let onVideoCaptured: ReturnType<typeof vi.fn<() => void>>
+let onVideoCaptured: ReturnType<typeof vi.fn<(blob: Blob, action: CaptureAction) => void>>
 let onUploadInstead: ReturnType<typeof vi.fn<() => void>>
 const mount = (autoStart = true) =>
 	render(
@@ -33,6 +35,20 @@ const recording = async () => {
 	return view
 }
 const click = (name: string) => fireEvent.click(screen.getByRole('button', { name }))
+
+// Like the composer, closes (unmounts) the recorder in the same update as the handoff.
+const ClosesOnHandoff = ({ autoStart = true }: { autoStart?: boolean }) => {
+	const [open, setOpen] = useState(true)
+	return open ? (
+		<VideoRecorder
+			autoStart={autoStart}
+			onVideoCaptured={(blob, action) => {
+				onVideoCaptured(blob, action)
+				setOpen(false)
+			}}
+		/>
+	) : null
+}
 
 beforeEach(() => {
 	vi.clearAllMocks()
@@ -51,6 +67,30 @@ afterEach(() => {
 })
 
 describe('VideoRecorder', () => {
+	it('leaves no object URL behind when its parent closes it on handoff', async () => {
+		render(<ClosesOnHandoff />)
+		await screen.findByText('Recording video...')
+		click('Stop')
+		await waitFor(() =>
+			expect(onVideoCaptured).toHaveBeenCalledExactlyOnceWith(expect.any(Blob), 'attach')
+		)
+		expect(screen.queryByText('Finishing recording...')).not.toBeInTheDocument()
+		expect(URL.revokeObjectURL).toHaveBeenCalledTimes(
+			vi.mocked(URL.createObjectURL).mock.calls.length
+		)
+	})
+	it('leaves no object URL behind for a picked file', async () => {
+		const { container } = render(<ClosesOnHandoff autoStart={false} />)
+		const file = new File(['clip'], 'clip.mov', { type: 'video/quicktime' })
+		fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+			target: { files: [file] },
+		})
+		await waitFor(() => expect(onVideoCaptured).toHaveBeenCalledExactlyOnceWith(file, 'attach'))
+		expect(URL.revokeObjectURL).toHaveBeenCalledTimes(
+			vi.mocked(URL.createObjectURL).mock.calls.length
+		)
+		expect(getUserMedia).not.toHaveBeenCalled()
+	})
 	it('explains denial inline without toasts', async () => {
 		getUserMedia.mockRejectedValue(new DOMException('', 'NotAllowedError'))
 		mount()

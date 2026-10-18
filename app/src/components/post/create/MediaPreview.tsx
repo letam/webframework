@@ -190,6 +190,7 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({
 				size="icon"
 				className="absolute top-2 right-2 h-6 w-6"
 				onClick={onClearMedia}
+				aria-label="Remove attachment"
 			>
 				<X className="h-4 w-4" />
 			</Button>

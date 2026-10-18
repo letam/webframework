@@ -74,7 +74,6 @@ const VideoRecorder = ({
 	autoStart = false,
 }: VideoRecorderProps) => {
 	const [status, setStatus] = useState<RecordingStatus>('idle')
-	const [videoURL, setVideoURL] = useState<string | null>(null)
 	const [errorKind, setErrorKind] = useState<CaptureErrorKind | null>(null)
 	const [deviceMuted, setDeviceMuted] = useState(false)
 	const clock = useRecordingClock()
@@ -109,20 +108,11 @@ const VideoRecorder = ({
 		interruptionRef.current = null
 		setDeviceMuted(false)
 		setErrorKind(null)
-		setVideoURL(null)
 		setStatus('idle')
 	}
-	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
-		if (!file) return
-		try {
-			const videoUrl = URL.createObjectURL(file)
-			setVideoURL(videoUrl)
-			onVideoCaptured(file, 'attach')
-		} catch (error) {
-			console.error('Error processing video file:', error)
-			toast.error('Error processing video file')
-		}
+		if (file) onVideoCaptured(file, 'attach')
 	}
 	const startRecording = async () => {
 		if (disabled) return
@@ -226,7 +216,8 @@ const VideoRecorder = ({
 						}
 						const take = await finalizeRecording(raw)
 						if (mediaRecorderRef.current !== recorder) return
-						setVideoURL(URL.createObjectURL(take))
+						// No preview URL here: the parent closes the dialog in this same update, so this
+						// component unmounts before an effect could revoke one. MediaPreview shows the take.
 						if (interruption) toast.info(interruptionToast(interruption, 'camera'))
 						onVideoCaptured(take, action)
 						setStatus('idle')
@@ -269,11 +260,11 @@ const VideoRecorder = ({
 	const resetRef = useRef(reset)
 	resetRef.current = reset
 	useEffect(() => {
-		if (autoStart && status === 'idle' && !videoURL && !hasAutoStartedRef.current) {
+		if (autoStart && status === 'idle' && !hasAutoStartedRef.current) {
 			hasAutoStartedRef.current = true
 			void startRecordingRef.current()
 		}
-	}, [autoStart, status, videoURL])
+	}, [autoStart, status])
 	useEffect(
 		() => () => {
 			// Re-arm auto-start so a remount of the same instance (StrictMode) starts again.
@@ -282,10 +273,6 @@ const VideoRecorder = ({
 		},
 		[]
 	)
-	useEffect(() => {
-		if (!videoURL) return
-		return () => URL.revokeObjectURL(videoURL)
-	}, [videoURL])
 
 	const previewVisible = status === 'recording' || status === 'finishing'
 	return (
@@ -296,15 +283,14 @@ const VideoRecorder = ({
 				>
 					<video
 						ref={videoRef}
-						className={`w-full h-full ${previewVisible || videoURL ? 'object-cover' : 'hidden'}`}
+						className={`w-full h-full ${previewVisible ? 'object-cover' : 'hidden'}`}
 						autoPlay={status === 'recording'}
-						muted={previewVisible}
+						muted
 						loop={false}
 						playsInline
-						src={videoURL || undefined}
 						style={{ transform: 'scaleX(-1)' }}
 					/>
-					{status === 'idle' && !videoURL && (
+					{status === 'idle' && (
 						<div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
 							<Video className="h-12 w-12 opacity-50" />
 							<Button type="button" onClick={startRecording} disabled={disabled}>
