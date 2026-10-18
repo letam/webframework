@@ -334,6 +334,7 @@ describe('CreatePost', () => {
 
 		act(() => loadHandle?.rollback())
 
+		expect(mockToast).not.toHaveBeenCalled()
 		expect(screen.getByPlaceholderText("What's on your mind?")).toHaveValue('')
 		expect(screen.queryByText('queued.png')).not.toBeInTheDocument()
 	})
@@ -446,6 +447,24 @@ describe('CreatePost', () => {
 		)
 		expect(textarea).toHaveFocus()
 		expect(screen.getByRole('button', { name: 'Bold' })).toBeInTheDocument()
+	})
+
+	it('creates only one post for two synchronous submit triggers', async () => {
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		const input = screen.getByPlaceholderText("What's on your mind?")
+		const form = input.closest('form')
+		if (!form) throw new Error('composer form not found')
+		fireEvent.change(input, { target: { value: 'Post once' } })
+
+		await act(async () => {
+			fireEvent.keyDown(input, { key: 'Enter', metaKey: true })
+			fireEvent.submit(form)
+		})
+
+		expect(onPostCreated).toHaveBeenCalledExactlyOnceWith(
+			expect.objectContaining({ text: 'Post once' })
+		)
 	})
 
 	it('submits the selected visibility', async () => {
@@ -1195,6 +1214,92 @@ describe('CreatePost', () => {
 		await user.click(screen.getByRole('button', { name: 'Post recording' }))
 		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to create post'))
 		expect(screen.getByText('Voice recording')).toBeVisible()
+	})
+	it('a recorder Post waits for an outbox load to commit, then posts once', async () => {
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		let loadHandle: ReturnType<typeof requestComposerLoad> = null
+		act(() => {
+			loadHandle = requestComposerLoad(makeEntry())
+		})
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		expect(screen.getByText('Voice recording')).toBeVisible()
+		fireEvent.keyDown(screen.getByPlaceholderText("What's on your mind?"), {
+			key: 'Enter',
+			metaKey: true,
+		})
+		await act(async () => {})
+		expect(onPostCreated).not.toHaveBeenCalled()
+		act(() => loadHandle?.commit())
+		await waitFor(() =>
+			expect(onPostCreated).toHaveBeenCalledExactlyOnceWith(
+				expect.objectContaining({
+					text: 'Restored from the outbox',
+					visibility: 'private',
+					media_type: 'audio',
+				})
+			)
+		)
+		await act(async () => {})
+		expect(onPostCreated).toHaveBeenCalledOnce()
+		expect(toast.error).not.toHaveBeenCalled()
+	})
+	it('a recorder Post is dropped with a note when the outbox load rolls back', async () => {
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		let loadHandle: ReturnType<typeof requestComposerLoad> = null
+		act(() => {
+			loadHandle = requestComposerLoad(makeEntry())
+		})
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		let rolledBack = true
+		act(() => {
+			rolledBack = loadHandle?.rollback() ?? false
+		})
+		expect(rolledBack).toBe(false)
+		expect(mockToast).toHaveBeenCalledWith("Your recording is attached but wasn't posted.")
+		expect(screen.getByText('Voice recording')).toBeVisible()
+		expect(screen.getByPlaceholderText("What's on your mind?")).toHaveValue(
+			'Restored from the outbox'
+		)
+		await act(async () => {})
+		expect(onPostCreated).not.toHaveBeenCalled()
+		expect(screen.getByRole('button', { name: 'Post' })).toBeEnabled()
+	})
+	it('removing the take while locked cancels the pending recorder Post', async () => {
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		let loadHandle: ReturnType<typeof requestComposerLoad> = null
+		act(() => {
+			loadHandle = requestComposerLoad(makeEntry())
+		})
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await user.click(screen.getByRole('button', { name: 'Remove attachment' }))
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Use recording' }))
+		act(() => loadHandle?.commit())
+		await act(async () => {})
+		expect(onPostCreated).not.toHaveBeenCalled()
+		expect(screen.getByText('Voice recording')).toBeVisible()
+	})
+	it('removing the take while locked cancels the rollback note', async () => {
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn().mockResolvedValue(undefined)} />)
+		let loadHandle: ReturnType<typeof requestComposerLoad> = null
+		act(() => {
+			loadHandle = requestComposerLoad(makeEntry())
+		})
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await user.click(screen.getByRole('button', { name: 'Remove attachment' }))
+		act(() => loadHandle?.rollback())
+		expect(mockToast).not.toHaveBeenCalled()
 	})
 	it("normalize path names the file from the encoder's type", async () => {
 		localStorage.setItem('app-settings', JSON.stringify({ normalizeAudio: true }))
