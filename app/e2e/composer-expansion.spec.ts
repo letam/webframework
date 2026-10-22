@@ -103,24 +103,38 @@ for (const input of ['mouse', 'touch'] as const) {
 			await expect(page.getByRole('button', { name: 'Bold' })).not.toBeVisible()
 		})
 
-		// Scrolling the feed with a finger moves no focus, and the keyboard stays up.
-		test('scrolling the page does not collapse it', async ({ page, browserName }) => {
-			test.skip(input !== 'touch', 'touch scrolling only')
+		// Scrolling the feed with a finger moves no focus, and the keyboard stays up. What
+		// matters is a touch outside that drags and lifts without a click; whether the
+		// page actually scrolls varies by platform, so don't assert it.
+		test('dragging a finger outside it does not collapse it', async ({ page, browserName }) => {
+			test.skip(input !== 'touch', 'touch only')
 			test.skip(browserName !== 'chromium', 'needs the Chrome DevTools Protocol')
-			await page.addInitScript(() => {
-				document.addEventListener('DOMContentLoaded', () => {
-					document.body.style.minHeight = '4000px'
-				})
-			})
 			await expand(page)
-			const cdp = await page.context().newCDPSession(page)
-			await cdp.send('Input.synthesizeScrollGesture', {
-				x: 195,
-				y: 700,
-				yDistance: -300,
-				gestureSourceType: 'touch',
+			await page.evaluate(() => {
+				const seen: string[] = []
+				;(window as unknown as { touchEvents: string[] }).touchEvents = seen
+				for (const type of ['pointerdown', 'click']) {
+					window.addEventListener(type, () => seen.push(type), true)
+				}
 			})
-			await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+			const outside = await page.getByText(/Be the first to say something/).boundingBox()
+			if (!outside) throw new Error('empty state has no layout box')
+			const x = outside.x + outside.width / 2
+			const y = outside.y + outside.height / 2
+			const cdp = await page.context().newCDPSession(page)
+			const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', dy = 0) =>
+				cdp.send('Input.dispatchTouchEvent', {
+					type,
+					touchPoints: type === 'touchEnd' ? [] : [{ x, y: y - dy }],
+				})
+			await touch('touchStart')
+			for (const dy of [20, 60, 120, 200]) await touch('touchMove', dy)
+			await touch('touchEnd')
+			await expect
+				.poll(() =>
+					page.evaluate(() => (window as unknown as { touchEvents: string[] }).touchEvents)
+				)
+				.toEqual(['pointerdown'])
 			await expect(page.locator('[data-composer-input]')).toBeFocused()
 			await expect(page.getByRole('button', { name: 'Bold' })).toBeVisible()
 		})
