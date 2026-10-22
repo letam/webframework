@@ -114,7 +114,16 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [submitStatus, setSubmitStatus] = useState<SubmitStatus | ''>('')
 	const [composerLocked, setComposerLocked] = useState(false)
 	const composerLockedRef = useRef(false)
-	const [isFocused, setIsFocused] = useState(false)
+	// Whether the user is working in the composer: set when the input takes focus,
+	// cleared by a press or focus move outside it (see the effect below). Not the
+	// textarea's own focus, because pressing a toolbar button blurs the textarea, and
+	// collapsing then slides the buttons out from under the pointer before the click.
+	const [isActive, setIsActive] = useState(false)
+	// Presses and focus moves that landed in the composer's React tree, which also
+	// covers its portaled menus and dialogs (the DOM tree does not). Tracked per event,
+	// not as a flag, because events nest: opening a menu on pointerdown focuses it
+	// before that pointerdown reaches the document.
+	const insideEventsRef = useRef(new WeakSet<Event>())
 	const [isAudioModalOpen, setIsAudioModalOpen] = useState(false)
 	const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -131,7 +140,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const hasNoMedia = !audioBlob && !audioFile && !videoBlob && !videoFile && !imageFile
 	const canPost = !!postText.trim() || !hasNoMedia
 	// The composer rests as a single quiet line and grows once it has attention or content
-	const expanded = isFocused || canPost || !!submitStatus
+	const expanded = isActive || canPost || !!submitStatus
 	const VisibilityIcon =
 		VISIBILITY_OPTIONS.find((option) => option.value === visibility)?.icon ?? Globe
 	const SyncModeIcon = syncMode === 'auto' ? Cloud : CloudOff
@@ -222,6 +231,25 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	)
 
 	useEffect(() => registerComposerLoader(loadOutboxEntry), [loadOutboxEntry])
+
+	// React dispatches the root's capture handlers from its root container, before
+	// these document listeners see the same event. Pointer events cover mouse, touch
+	// and pen; focusin covers keyboard focus leaving.
+	useEffect(() => {
+		const collapseIfOutside = (event: Event) => {
+			if (!insideEventsRef.current.has(event)) setIsActive(false)
+		}
+		document.addEventListener('pointerdown', collapseIfOutside)
+		document.addEventListener('focusin', collapseIfOutside)
+		return () => {
+			document.removeEventListener('pointerdown', collapseIfOutside)
+			document.removeEventListener('focusin', collapseIfOutside)
+		}
+	}, [])
+
+	const markEventInside = (event: React.SyntheticEvent) => {
+		insideEventsRef.current.add(event.nativeEvent)
+	}
 
 	const restoreDraft = useCallback((stored: ComposerDraft) => {
 		setPostText(stored.text)
@@ -497,6 +525,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			return
 		}
 
+		// The textarea is disabled while posting, so it loses focus; settle back to the
+		// resting composer afterwards instead of staying expanded and empty.
+		setIsActive(false)
+
 		if (getEffectiveSyncMode() === 'local' || !navigator.onLine) {
 			setSubmitStatus('preparing')
 			try {
@@ -607,7 +639,11 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	}
 
 	return (
-		<div className="bg-card rounded-lg shadow-xs border max-w-lg mx-auto px-4 py-3">
+		<div
+			className="bg-card rounded-lg shadow-xs border max-w-lg mx-auto px-4 py-3"
+			onPointerDownCapture={markEventInside}
+			onFocusCapture={markEventInside}
+		>
 			<form onSubmit={handleSubmit} className="flex flex-col w-full">
 				<div className="-mx-2">
 					<Textarea
@@ -617,8 +653,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						value={postText}
 						onChange={handlePostTextChange}
 						onKeyDown={handleKeyDown}
-						onFocus={() => setIsFocused(true)}
-						onBlur={() => setIsFocused(false)}
+						onFocus={() => setIsActive(true)}
 						className={`w-full resize-none border-none focus-visible:ring-0 py-1 px-2 text-base max-w-lg scroll-mt-20 transition-[min-height] duration-200 ease-out ${
 							expanded ? 'min-h-24' : 'min-h-10'
 						}`}
