@@ -115,15 +115,20 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [composerLocked, setComposerLocked] = useState(false)
 	const composerLockedRef = useRef(false)
 	// Whether the user is working in the composer: set when the input takes focus,
-	// cleared by a press or focus move outside it (see the effect below). Not the
-	// textarea's own focus, because pressing a toolbar button blurs the textarea, and
-	// collapsing then slides the buttons out from under the pointer before the click.
+	// cleared by a press or focus move outside it, or by focus leaving to nowhere (see
+	// the effect below). Not the textarea's own focus, because pressing a toolbar
+	// button blurs the textarea, and collapsing then slides the buttons out from under
+	// the pointer before the click.
 	const [isActive, setIsActive] = useState(false)
 	// Presses and focus moves that landed in the composer's React tree, which also
 	// covers its portaled menus and dialogs (the DOM tree does not). Tracked per event,
 	// not as a flag, because events nest: opening a menu on pointerdown focuses it
 	// before that pointerdown reaches the document.
 	const insideEventsRef = useRef(new WeakSet<Event>())
+	// True from a press inside the composer until its click (or cancel). Safari doesn't
+	// focus buttons on click, so pressing one blurs the textarea with focus going
+	// nowhere; that blur must not count as leaving.
+	const pressingInsideRef = useRef(false)
 	const [isAudioModalOpen, setIsAudioModalOpen] = useState(false)
 	const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -234,21 +239,41 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 
 	// React dispatches the root's capture handlers from its root container, before
 	// these document listeners see the same event. Pointer events cover mouse, touch
-	// and pen; focusin covers keyboard focus leaving.
+	// and pen; focusin covers keyboard focus moving elsewhere. Focus going nowhere
+	// (Escape, the iOS keyboard's Done button) is the textarea's onBlur below.
 	useEffect(() => {
 		const collapseIfOutside = (event: Event) => {
-			if (!insideEventsRef.current.has(event)) setIsActive(false)
+			if (insideEventsRef.current.has(event)) return
+			if (event.type === 'pointerdown') pressingInsideRef.current = false
+			setIsActive(false)
+		}
+		const endPress = () => {
+			pressingInsideRef.current = false
 		}
 		document.addEventListener('pointerdown', collapseIfOutside)
 		document.addEventListener('focusin', collapseIfOutside)
+		document.addEventListener('click', endPress)
+		document.addEventListener('pointercancel', endPress)
 		return () => {
 			document.removeEventListener('pointerdown', collapseIfOutside)
 			document.removeEventListener('focusin', collapseIfOutside)
+			document.removeEventListener('click', endPress)
+			document.removeEventListener('pointercancel', endPress)
 		}
 	}, [])
 
 	const markEventInside = (event: React.SyntheticEvent) => {
 		insideEventsRef.current.add(event.nativeEvent)
+	}
+
+	const markPressInside = (event: React.PointerEvent) => {
+		markEventInside(event)
+		pressingInsideRef.current = true
+	}
+
+	const handleTextareaBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+		// Focus moving to another element is settled by the focusin listener above.
+		if (!e.relatedTarget && !pressingInsideRef.current) setIsActive(false)
 	}
 
 	const restoreDraft = useCallback((stored: ComposerDraft) => {
@@ -641,7 +666,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	return (
 		<div
 			className="bg-card rounded-lg shadow-xs border max-w-lg mx-auto px-4 py-3"
-			onPointerDownCapture={markEventInside}
+			onPointerDownCapture={markPressInside}
 			onFocusCapture={markEventInside}
 		>
 			<form onSubmit={handleSubmit} className="flex flex-col w-full">
@@ -654,6 +679,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						onChange={handlePostTextChange}
 						onKeyDown={handleKeyDown}
 						onFocus={() => setIsActive(true)}
+						onBlur={handleTextareaBlur}
 						className={`w-full resize-none border-none focus-visible:ring-0 py-1 px-2 text-base max-w-lg scroll-mt-20 transition-[min-height] duration-200 ease-out ${
 							expanded ? 'min-h-24' : 'min-h-10'
 						}`}

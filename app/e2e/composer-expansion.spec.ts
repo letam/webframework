@@ -60,6 +60,27 @@ for (const input of ['mouse', 'touch'] as const) {
 			await expect(page.getByRole('dialog')).toBeVisible()
 		})
 
+		// Safari (macOS and iOS) doesn't focus a button on click, so pressing one
+		// blurs the textarea with focus going nowhere, the same blur that Escape
+		// causes. Chromium focuses the button, so emulate Safari: drop focus on
+		// mousedown and keep it off the button.
+		test('the record button opens the recorder when buttons take no focus', async ({ page }) => {
+			await page.addInitScript(() => {
+				window.addEventListener(
+					'mousedown',
+					(event) => {
+						if (!(event.target as Element).closest('button')) return
+						event.preventDefault()
+						;(document.activeElement as HTMLElement | null)?.blur()
+					},
+					true
+				)
+			})
+			await expand(page)
+			await press(page, 'Record Audio')
+			await expect(page.getByRole('dialog')).toBeVisible()
+		})
+
 		test('the visibility button opens its menu and stays expanded', async ({ page }) => {
 			await expand(page)
 			await press(page, 'Visibility')
@@ -80,6 +101,22 @@ for (const input of ['mouse', 'touch'] as const) {
 			// Empty page well below the composer and the feed's empty state.
 			if (input === 'touch') await page.touchscreen.tap(195, 780)
 			else await page.mouse.click(640, 760)
+			await expect(page.getByRole('button', { name: 'Bold' })).not.toBeVisible()
+		})
+
+		test('Escape collapses it', async ({ page }) => {
+			test.skip(input === 'touch', 'keyboard only')
+			await expand(page)
+			await page.keyboard.press('Escape')
+			await expect(page.locator('[data-composer-input]')).not.toBeFocused()
+			await expect(page.getByRole('button', { name: 'Bold' })).not.toBeVisible()
+		})
+
+		// What the iOS keyboard's Done button does: focus goes nowhere, with no press
+		// or focus move outside to see.
+		test('a blur with nowhere for focus to go collapses it', async ({ page }) => {
+			await expand(page)
+			await page.locator('[data-composer-input]').evaluate((el: HTMLElement) => el.blur())
 			await expect(page.getByRole('button', { name: 'Bold' })).not.toBeVisible()
 		})
 
