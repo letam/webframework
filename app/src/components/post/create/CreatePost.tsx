@@ -669,7 +669,11 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					</div>
 				)}
 
-				<div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
+				{/* Focusing the composer adds formatting, visibility and Draft controls, which
+				    don't fit one row at phone width. Wrapping drops the send controls onto a
+				    second row (ml-auto keeps them right-aligned) instead of pushing Post off
+				    the card's edge. */}
+				<div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t pt-2">
 					<TooltipProvider delayDuration={300}>
 						<div className="flex items-center gap-0.5">
 							{expanded && (
@@ -782,7 +786,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						</div>
 					</TooltipProvider>
 
-					<div className="flex items-center gap-3">
+					<div className="ml-auto flex items-center gap-3">
 						{submitStatus && (
 							<span className="flex items-center gap-1.5 text-xs text-muted-foreground">
 								<Loader2 className="h-3.5 w-3.5 animate-spin" />
