@@ -707,7 +707,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				{/* Focusing the composer adds formatting, visibility and Draft controls, which
 				    don't fit one row at phone width. Wrapping drops the send controls onto a
 				    second row (ml-auto keeps them right-aligned) instead of pushing Post off
-				    the card's edge. */}
+				    the card's edge. The send group wraps too: while posting, its status label
+				    plus the send controls are wider than a 320px card on their own. */}
 				<div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t pt-2">
 					<TooltipProvider delayDuration={300}>
 						<div className="flex items-center gap-0.5">
@@ -821,7 +822,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						</div>
 					</TooltipProvider>
 
-					<div className="ml-auto flex items-center gap-3">
+					<div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
 						{submitStatus && (
 							<span className="flex items-center gap-1.5 text-xs text-muted-foreground">
 								<Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -832,51 +833,9 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 										: 'Posting...'}
 							</span>
 						)}
-						<TooltipProvider delayDuration={300}>
-							<Tooltip>
-								<DropdownMenu>
-									<DropdownMenuTrigger asChild>
-										<TooltipTrigger asChild>
-											<Button
-												type="button"
-												variant="ghost"
-												size="icon"
-												className="h-8 w-8 rounded-full text-muted-foreground"
-												disabled={!!submitStatus}
-												aria-label="Auto-sync"
-											>
-												<SyncModeIcon className="h-4 w-4" />
-											</Button>
-										</TooltipTrigger>
-									</DropdownMenuTrigger>
-									<DropdownMenuContent align="end" className="w-72">
-										<DropdownMenuRadioGroup
-											value={syncMode}
-											onValueChange={(value) => setSyncMode(value as SyncMode)}
-										>
-											<DropdownMenuRadioItem value="auto" className="items-start gap-2">
-												<span className="grid gap-0.5">
-													<span>Sync automatically</span>
-													<span className="text-xs text-muted-foreground">
-														Posts go online as soon as possible.
-													</span>
-												</span>
-											</DropdownMenuRadioItem>
-											<DropdownMenuRadioItem value="local" className="items-start gap-2">
-												<span className="grid gap-0.5">
-													<span>Stay on this device</span>
-													<span className="text-xs text-muted-foreground">
-														Posts wait here until you send them.
-													</span>
-												</span>
-											</DropdownMenuRadioItem>
-										</DropdownMenuRadioGroup>
-									</DropdownMenuContent>
-								</DropdownMenu>
-								<TooltipContent>Auto-sync</TooltipContent>
-							</Tooltip>
-						</TooltipProvider>
-						{isAuthenticated && expanded && (
+						{/* One unit, so when the group wraps the status label takes its own row
+						    and the send controls stay together under it. */}
+						<div className="flex items-center gap-3">
 							<TooltipProvider delayDuration={300}>
 								<Tooltip>
 									<DropdownMenu>
@@ -888,91 +847,137 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 													size="icon"
 													className="h-8 w-8 rounded-full text-muted-foreground"
 													disabled={!!submitStatus}
-													aria-label="Visibility"
+													aria-label="Auto-sync"
 												>
-													<VisibilityIcon className="h-4 w-4" />
+													<SyncModeIcon className="h-4 w-4" />
 												</Button>
 											</TooltipTrigger>
 										</DropdownMenuTrigger>
 										<DropdownMenuContent align="end" className="w-72">
 											<DropdownMenuRadioGroup
-												value={visibility}
-												onValueChange={(value) => setVisibility(value as PostVisibility)}
+												value={syncMode}
+												onValueChange={(value) => setSyncMode(value as SyncMode)}
 											>
-												{VISIBILITY_OPTIONS.map((option) => {
-													const Icon = option.icon
-													return (
-														<DropdownMenuRadioItem
-															key={option.value}
-															value={option.value}
-															className="items-start gap-2"
-														>
-															<Icon className="mt-0.5 h-4 w-4" />
-															<span className="grid gap-0.5">
-																<span>{option.label}</span>
-																<span className="text-xs text-muted-foreground">
-																	{option.description}
-																</span>
-															</span>
-														</DropdownMenuRadioItem>
-													)
-												})}
+												<DropdownMenuRadioItem value="auto" className="items-start gap-2">
+													<span className="grid gap-0.5">
+														<span>Sync automatically</span>
+														<span className="text-xs text-muted-foreground">
+															Posts go online as soon as possible.
+														</span>
+													</span>
+												</DropdownMenuRadioItem>
+												<DropdownMenuRadioItem value="local" className="items-start gap-2">
+													<span className="grid gap-0.5">
+														<span>Stay on this device</span>
+														<span className="text-xs text-muted-foreground">
+															Posts wait here until you send them.
+														</span>
+													</span>
+												</DropdownMenuRadioItem>
 											</DropdownMenuRadioGroup>
 										</DropdownMenuContent>
 									</DropdownMenu>
-									<TooltipContent>Visibility</TooltipContent>
+									<TooltipContent>Auto-sync</TooltipContent>
 								</Tooltip>
 							</TooltipProvider>
-						)}
-						{!isAuthenticated && isAuthResolved && expanded && (
-							<TooltipProvider delayDuration={300}>
-								<Tooltip>
-									<TooltipTrigger asChild>
-										{/* A disabled button swallows pointer events, so the tooltip needs a
+							{isAuthenticated && expanded && (
+								<TooltipProvider delayDuration={300}>
+									<Tooltip>
+										<DropdownMenu>
+											<DropdownMenuTrigger asChild>
+												<TooltipTrigger asChild>
+													<Button
+														type="button"
+														variant="ghost"
+														size="icon"
+														className="h-8 w-8 rounded-full text-muted-foreground"
+														disabled={!!submitStatus}
+														aria-label="Visibility"
+													>
+														<VisibilityIcon className="h-4 w-4" />
+													</Button>
+												</TooltipTrigger>
+											</DropdownMenuTrigger>
+											<DropdownMenuContent align="end" className="w-72">
+												<DropdownMenuRadioGroup
+													value={visibility}
+													onValueChange={(value) => setVisibility(value as PostVisibility)}
+												>
+													{VISIBILITY_OPTIONS.map((option) => {
+														const Icon = option.icon
+														return (
+															<DropdownMenuRadioItem
+																key={option.value}
+																value={option.value}
+																className="items-start gap-2"
+															>
+																<Icon className="mt-0.5 h-4 w-4" />
+																<span className="grid gap-0.5">
+																	<span>{option.label}</span>
+																	<span className="text-xs text-muted-foreground">
+																		{option.description}
+																	</span>
+																</span>
+															</DropdownMenuRadioItem>
+														)
+													})}
+												</DropdownMenuRadioGroup>
+											</DropdownMenuContent>
+										</DropdownMenu>
+										<TooltipContent>Visibility</TooltipContent>
+									</Tooltip>
+								</TooltipProvider>
+							)}
+							{!isAuthenticated && isAuthResolved && expanded && (
+								<TooltipProvider delayDuration={300}>
+									<Tooltip>
+										<TooltipTrigger asChild>
+											{/* A disabled button swallows pointer events, so the tooltip needs a
 										    wrapper of its own to stay reachable. */}
-										<span className="inline-flex">
+											<span className="inline-flex">
+												<Button
+													type="button"
+													variant="ghost"
+													size="icon"
+													className="h-8 w-8 rounded-full text-muted-foreground"
+													disabled
+													aria-label="Visibility"
+												>
+													<Globe className="h-4 w-4" />
+												</Button>
+											</span>
+										</TooltipTrigger>
+										<TooltipContent>Posts made while signed out are always public</TooltipContent>
+									</Tooltip>
+								</TooltipProvider>
+							)}
+							{isAuthenticated && expanded && canPost && (
+								<TooltipProvider delayDuration={300}>
+									<Tooltip>
+										<TooltipTrigger asChild>
 											<Button
 												type="button"
 												variant="ghost"
-												size="icon"
-												className="h-8 w-8 rounded-full text-muted-foreground"
-												disabled
-												aria-label="Visibility"
+												size="sm"
+												disabled={!!submitStatus || composerLocked}
+												onClick={() => void submitPost(true)}
 											>
-												<Globe className="h-4 w-4" />
+												Draft
 											</Button>
-										</span>
-									</TooltipTrigger>
-									<TooltipContent>Posts made while signed out are always public</TooltipContent>
-								</Tooltip>
-							</TooltipProvider>
-						)}
-						{isAuthenticated && expanded && canPost && (
-							<TooltipProvider delayDuration={300}>
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											disabled={!!submitStatus || composerLocked}
-											onClick={() => void submitPost(true)}
-										>
-											Draft
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent>Save as draft</TooltipContent>
-								</Tooltip>
-							</TooltipProvider>
-						)}
-						<Button
-							type="submit"
-							size="sm"
-							disabled={!canPost || !!submitStatus || composerLocked}
-							className="rounded-full px-5 font-medium"
-						>
-							Post
-						</Button>
+										</TooltipTrigger>
+										<TooltipContent>Save as draft</TooltipContent>
+									</Tooltip>
+								</TooltipProvider>
+							)}
+							<Button
+								type="submit"
+								size="sm"
+								disabled={!canPost || !!submitStatus || composerLocked}
+								className="rounded-full px-5 font-medium"
+							>
+								Post
+							</Button>
+						</div>
 					</div>
 				</div>
 
