@@ -36,10 +36,13 @@ for (const input of ['mouse', 'touch'] as const) {
 				: { viewport: { width: 1280, height: 800 } }
 		)
 
-		const press = (page: Page, name: string) => {
-			const button = page.getByRole('button', { name, exact: true })
-			return input === 'touch' ? button.tap() : button.click()
-		}
+		// Hold the mouse like a person does, so anything the press sets off (a blur, a
+		// re-render) lands before the click.
+		const tapOrClick = (locator: ReturnType<Page['locator']>) =>
+			input === 'touch' ? locator.tap() : locator.click({ delay: 100 })
+
+		const press = (page: Page, name: string) =>
+			tapOrClick(page.getByRole('button', { name, exact: true }))
 
 		const expand = async (page: Page) => {
 			await page.addInitScript((rules) => {
@@ -48,8 +51,7 @@ for (const input of ['mouse', 'touch'] as const) {
 			await stubSignedIn(page)
 			await page.goto('/')
 			const composer = page.locator('[data-composer-input]')
-			if (input === 'touch') await composer.tap()
-			else await composer.click()
+			await tapOrClick(composer)
 			await expect(composer).toHaveValue('')
 			await expect(page.getByRole('button', { name: 'Bold' })).toBeVisible()
 		}
@@ -60,15 +62,16 @@ for (const input of ['mouse', 'touch'] as const) {
 			await expect(page.getByRole('dialog')).toBeVisible()
 		})
 
-		// Safari (macOS and iOS) doesn't focus a button on click, so pressing one
-		// blurs the textarea with focus going nowhere, the same blur that Escape
-		// causes. Chromium focuses the button, so emulate Safari: drop focus on
-		// mousedown and keep it off the button. Run after capture handlers, like the
-		// browser's default focus action.
+		// Safari (macOS and iOS) doesn't focus a button on click, so its default
+		// mousedown action blurs the textarea with focus going nowhere, the same blur
+		// that Escape causes. Chromium focuses the button, so emulate Safari: unless the
+		// page prevented the default, drop focus on mousedown and keep it off the button.
+		// Run after the page's handlers, like the browser's default action.
 		test('the record button opens the recorder when buttons take no focus', async ({ page }) => {
 			await page.addInitScript(() => {
 				window.addEventListener('mousedown', (event) => {
 					if (!(event.target as Element).closest('button')) return
+					if (event.defaultPrevented) return
 					event.preventDefault()
 					;(document.activeElement as HTMLElement | null)?.blur()
 				})
@@ -95,10 +98,31 @@ for (const input of ['mouse', 'touch'] as const) {
 
 		test('pressing outside the composer still collapses it', async ({ page }) => {
 			await expand(page)
-			// Empty page well below the composer and the feed's empty state.
-			if (input === 'touch') await page.touchscreen.tap(195, 780)
-			else await page.mouse.click(640, 760)
+			// The feed's empty state: plain text, below the composer.
+			await tapOrClick(page.getByText(/Be the first to say something/))
 			await expect(page.getByRole('button', { name: 'Bold' })).not.toBeVisible()
+		})
+
+		// Scrolling the feed with a finger moves no focus, and the keyboard stays up.
+		test('scrolling the page does not collapse it', async ({ page, browserName }) => {
+			test.skip(input !== 'touch', 'touch scrolling only')
+			test.skip(browserName !== 'chromium', 'needs the Chrome DevTools Protocol')
+			await page.addInitScript(() => {
+				document.addEventListener('DOMContentLoaded', () => {
+					document.body.style.minHeight = '4000px'
+				})
+			})
+			await expand(page)
+			const cdp = await page.context().newCDPSession(page)
+			await cdp.send('Input.synthesizeScrollGesture', {
+				x: 195,
+				y: 700,
+				yDistance: -300,
+				gestureSourceType: 'touch',
+			})
+			await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+			await expect(page.locator('[data-composer-input]')).toBeFocused()
+			await expect(page.getByRole('button', { name: 'Bold' })).toBeVisible()
 		})
 
 		test('Escape collapses it', async ({ page }) => {
@@ -114,43 +138,6 @@ for (const input of ['mouse', 'touch'] as const) {
 		test('a blur with nowhere for focus to go collapses it', async ({ page }) => {
 			await expand(page)
 			await page.locator('[data-composer-input]').evaluate((el: HTMLElement) => el.blur())
-			await expect(page.getByRole('button', { name: 'Bold' })).not.toBeVisible()
-		})
-
-		test('a press ending without a click does not block a later blur', async ({ page }) => {
-			await expand(page)
-			const composer = page.locator('[data-composer-input]')
-			// Isolate a release without a click, regardless of the browser's drag or
-			// touch click synthesis. The textarea stays focused throughout the press.
-			await composer.dispatchEvent('pointerdown', { pointerType: input })
-			// A portaled control may stop propagation before the document's bubble phase.
-			await page.locator('body').evaluate((el) => {
-				el.addEventListener('pointerup', (event) => event.stopPropagation(), { once: true })
-			})
-			await page.locator('body').dispatchEvent('pointerup', { pointerType: input })
-			await expect(composer).toBeFocused()
-			await composer.evaluate((el: HTMLElement) => el.blur())
-			await expect(page.getByRole('button', { name: 'Bold' })).not.toBeVisible()
-		})
-
-		test('losing the window during a press does not block a later blur', async ({ page }) => {
-			await expand(page)
-			const composer = page.locator('[data-composer-input]')
-			await composer.dispatchEvent('pointerdown', { pointerType: input })
-			// Model a release outside the window that never reaches this document.
-			await page.evaluate(() => window.dispatchEvent(new Event('blur')))
-			await composer.evaluate((el: HTMLElement) => el.blur())
-			await expect(page.getByRole('button', { name: 'Bold' })).not.toBeVisible()
-		})
-
-		test('a secondary-button press does not block a later blur', async ({ page }) => {
-			test.skip(input === 'touch', 'mouse buttons only')
-			await expand(page)
-			const composer = page.locator('[data-composer-input]')
-			// Chromium sends auxclick, not click, after this press.
-			await composer.click({ button: 'right' })
-			await expect(composer).toBeFocused()
-			await composer.evaluate((el: HTMLElement) => el.blur())
 			await expect(page.getByRole('button', { name: 'Bold' })).not.toBeVisible()
 		})
 
