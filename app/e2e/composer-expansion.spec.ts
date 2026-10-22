@@ -63,18 +63,15 @@ for (const input of ['mouse', 'touch'] as const) {
 		// Safari (macOS and iOS) doesn't focus a button on click, so pressing one
 		// blurs the textarea with focus going nowhere, the same blur that Escape
 		// causes. Chromium focuses the button, so emulate Safari: drop focus on
-		// mousedown and keep it off the button.
+		// mousedown and keep it off the button. Run after capture handlers, like the
+		// browser's default focus action.
 		test('the record button opens the recorder when buttons take no focus', async ({ page }) => {
 			await page.addInitScript(() => {
-				window.addEventListener(
-					'mousedown',
-					(event) => {
-						if (!(event.target as Element).closest('button')) return
-						event.preventDefault()
-						;(document.activeElement as HTMLElement | null)?.blur()
-					},
-					true
-				)
+				window.addEventListener('mousedown', (event) => {
+					if (!(event.target as Element).closest('button')) return
+					event.preventDefault()
+					;(document.activeElement as HTMLElement | null)?.blur()
+				})
 			})
 			await expand(page)
 			await press(page, 'Record Audio')
@@ -117,6 +114,43 @@ for (const input of ['mouse', 'touch'] as const) {
 		test('a blur with nowhere for focus to go collapses it', async ({ page }) => {
 			await expand(page)
 			await page.locator('[data-composer-input]').evaluate((el: HTMLElement) => el.blur())
+			await expect(page.getByRole('button', { name: 'Bold' })).not.toBeVisible()
+		})
+
+		test('a press ending without a click does not block a later blur', async ({ page }) => {
+			await expand(page)
+			const composer = page.locator('[data-composer-input]')
+			// Isolate a release without a click, regardless of the browser's drag or
+			// touch click synthesis. The textarea stays focused throughout the press.
+			await composer.dispatchEvent('pointerdown', { pointerType: input })
+			// A portaled control may stop propagation before the document's bubble phase.
+			await page.locator('body').evaluate((el) => {
+				el.addEventListener('pointerup', (event) => event.stopPropagation(), { once: true })
+			})
+			await page.locator('body').dispatchEvent('pointerup', { pointerType: input })
+			await expect(composer).toBeFocused()
+			await composer.evaluate((el: HTMLElement) => el.blur())
+			await expect(page.getByRole('button', { name: 'Bold' })).not.toBeVisible()
+		})
+
+		test('losing the window during a press does not block a later blur', async ({ page }) => {
+			await expand(page)
+			const composer = page.locator('[data-composer-input]')
+			await composer.dispatchEvent('pointerdown', { pointerType: input })
+			// Model a release outside the window that never reaches this document.
+			await page.evaluate(() => window.dispatchEvent(new Event('blur')))
+			await composer.evaluate((el: HTMLElement) => el.blur())
+			await expect(page.getByRole('button', { name: 'Bold' })).not.toBeVisible()
+		})
+
+		test('a secondary-button press does not block a later blur', async ({ page }) => {
+			test.skip(input === 'touch', 'mouse buttons only')
+			await expand(page)
+			const composer = page.locator('[data-composer-input]')
+			// Chromium sends auxclick, not click, after this press.
+			await composer.click({ button: 'right' })
+			await expect(composer).toBeFocused()
+			await composer.evaluate((el: HTMLElement) => el.blur())
 			await expect(page.getByRole('button', { name: 'Bold' })).not.toBeVisible()
 		})
 

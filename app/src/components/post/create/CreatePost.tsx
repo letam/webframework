@@ -125,7 +125,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	// not as a flag, because events nest: opening a menu on pointerdown focuses it
 	// before that pointerdown reaches the document.
 	const insideEventsRef = useRef(new WeakSet<Event>())
-	// True from a press inside the composer until its click (or cancel). Safari doesn't
+	// True through a press inside the composer and its default actions. Safari doesn't
 	// focus buttons on click, so pressing one blurs the textarea with focus going
 	// nowhere; that blur must not count as leaving.
 	const pressingInsideRef = useRef(false)
@@ -252,13 +252,24 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		}
 		document.addEventListener('pointerdown', collapseIfOutside)
 		document.addEventListener('focusin', collapseIfOutside)
-		document.addEventListener('click', endPress)
-		document.addEventListener('pointercancel', endPress)
+		// A release need not produce a click. Capture also covers events whose
+		// propagation is stopped in a portal. Losing the window or opening a native
+		// context menu can swallow the release entirely.
+		document.addEventListener('pointerup', endPress, true)
+		document.addEventListener('mouseup', endPress, true)
+		document.addEventListener('click', endPress, true)
+		document.addEventListener('pointercancel', endPress, true)
+		document.addEventListener('contextmenu', endPress, true)
+		window.addEventListener('blur', endPress)
 		return () => {
 			document.removeEventListener('pointerdown', collapseIfOutside)
 			document.removeEventListener('focusin', collapseIfOutside)
-			document.removeEventListener('click', endPress)
-			document.removeEventListener('pointercancel', endPress)
+			document.removeEventListener('pointerup', endPress, true)
+			document.removeEventListener('mouseup', endPress, true)
+			document.removeEventListener('click', endPress, true)
+			document.removeEventListener('pointercancel', endPress, true)
+			document.removeEventListener('contextmenu', endPress, true)
+			window.removeEventListener('blur', endPress)
 		}
 	}, [])
 
@@ -266,7 +277,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		insideEventsRef.current.add(event.nativeEvent)
 	}
 
-	const markPressInside = (event: React.PointerEvent) => {
+	const markPressInside = (event: React.MouseEvent) => {
 		markEventInside(event)
 		pressingInsideRef.current = true
 	}
@@ -667,6 +678,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		<div
 			className="bg-card rounded-lg shadow-xs border max-w-lg mx-auto px-4 py-3"
 			onPointerDownCapture={markPressInside}
+			// Touch can synthesize mousedown (and its blur) after pointerup.
+			onMouseDownCapture={markPressInside}
 			onFocusCapture={markEventInside}
 		>
 			<form onSubmit={handleSubmit} className="flex flex-col w-full">
