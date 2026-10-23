@@ -150,6 +150,16 @@ describe('VideoRecorderModal', () => {
 		await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 	})
 
+	it('stays open on an outside press while a stopped take is still finalizing', async () => {
+		// FakeMediaRecorder.stop never fires onstop, so the take stays mid-finalization.
+		render(<VideoHarness />)
+		fireEvent.click(await screen.findByRole('button', { name: /stop recording/i }))
+
+		await pressOutside()
+
+		expect(screen.getByRole('dialog')).toBeInTheDocument()
+	})
+
 	it('closes when the iOS native camera is dismissed without recording', async () => {
 		// iOS records through the native camera behind a hidden file input; dismissing
 		// it fires `cancel`, which used to leave an empty video placeholder on screen.

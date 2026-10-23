@@ -75,7 +75,7 @@ interface VideoRecorderProps {
 	onVideoCaptured: (videoBlob: Blob) => void
 	disabled?: boolean
 	autoStart?: boolean
-	/** Reports whether a take is in progress. */
+	/** Reports whether a take is in progress, from start until its blob is finalized. */
 	onRecordingChange?: (recording: boolean) => void
 	/** Called when the user dismisses the native camera (iOS) without recording. */
 	onCancel?: () => void
@@ -89,6 +89,9 @@ const VideoRecorder = ({
 	autoStart = false,
 }: VideoRecorderProps) => {
 	const [isRecording, setIsRecording] = useState(false)
+	// Stop is clicked -> the recorder's final chunk and onstop processing still run.
+	// The take isn't safe to discard until that finishes.
+	const [isFinalizing, setIsFinalizing] = useState(false)
 	const [videoURL, setVideoURL] = useState<string | null>(null)
 	const [recordingTime, setRecordingTime] = useState<number>(0)
 	const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -101,9 +104,10 @@ const VideoRecorder = ({
 	// Auto-start at most once per mount so a failed getUserMedia can't retry in a loop.
 	const hasAutoStartedRef = useRef(false)
 
+	const isBusy = isRecording || isFinalizing
 	useEffect(() => {
-		onRecordingChange?.(isRecording)
-	}, [isRecording, onRecordingChange])
+		onRecordingChange?.(isBusy)
+	}, [isBusy, onRecordingChange])
 
 	// On iOS the recorder hands off to the native camera via the hidden file input.
 	// Dismissing that camera fires `cancel` (not `change`), which left the dialog
@@ -143,6 +147,7 @@ const VideoRecorder = ({
 
 	const reset = () => {
 		setIsRecording(false)
+		setIsFinalizing(false)
 		setRecordingTime(0)
 		setErrorMessage(null)
 		// Dropping the URL from state is what revokes it; see the effect above.
@@ -276,6 +281,7 @@ const VideoRecorder = ({
 						console.error('Error processing video recording:', error)
 						toast.error('Error processing video recording')
 					} finally {
+						setIsFinalizing(false)
 						// Remove preview on success or failure so a dead live stream isn't left attached.
 						if (videoRef.current) {
 							videoRef.current.srcObject = null
@@ -297,6 +303,7 @@ const VideoRecorder = ({
 
 	const stopRecording = () => {
 		if (mediaRecorderRef.current && isRecording) {
+			setIsFinalizing(true)
 			mediaRecorderRef.current.stop()
 			// Stop all tracks
 			if (streamRef.current) {
