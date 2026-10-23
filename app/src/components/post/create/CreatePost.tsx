@@ -330,6 +330,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	// The keyboard opening resizes the visual viewport. Safari then scrolls the textarea
 	// into view, which can undo our scroll, so check again on the scrolls that follow for a
 	// moment; not for longer, or once the reader starts scrolling, so we never fight them.
+	// The same pass runs when the composer becomes active, for a keyboard that is already
+	// up (focus coming back from the feed's filter input): no resize follows then. When the
+	// keyboard is still opening that first pass finds no keyboard and does nothing, and the
+	// resize restarts it; each pass scrolls only by the remaining overlap, so none add up.
 	// The textarea's growth on focus can finish later still: see handleTextareaTransitionEnd.
 	useEffect(() => {
 		const viewport = window.visualViewport
@@ -341,7 +345,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			window.removeEventListener('touchstart', stopFollowing)
 			window.removeEventListener('wheel', stopFollowing)
 		}
-		const handleResize = () => {
+		const follow = () => {
 			stopFollowing()
 			revealToolbar()
 			viewport.addEventListener('scroll', revealToolbar)
@@ -349,9 +353,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			window.addEventListener('wheel', stopFollowing, { passive: true })
 			settleTimer = setTimeout(stopFollowing, KEYBOARD_SETTLE_MS)
 		}
-		viewport.addEventListener('resize', handleResize)
+		viewport.addEventListener('resize', follow)
+		follow()
 		return () => {
-			viewport.removeEventListener('resize', handleResize)
+			viewport.removeEventListener('resize', follow)
 			stopFollowing()
 		}
 	}, [isActive, revealToolbar])

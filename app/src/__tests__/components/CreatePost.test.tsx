@@ -1098,6 +1098,46 @@ describe('CreatePost', () => {
 			expect(scrollBy).not.toHaveBeenCalled()
 		})
 
+		// Text keeps the composer expanded while focus visits the feed's filter input, and
+		// the keyboard stays up throughout, so coming back brings no resize and no growth.
+		it('reveals Post when focus comes back with the keyboard already up', () => {
+			vi.useFakeTimers()
+			vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+			const textarea = renderAndFocus()
+			fireEvent.change(textarea, { target: { value: 'Still writing' } })
+			toolbarBottom = 235
+			resizeViewport(287)
+			expect(scrollBy).not.toHaveBeenCalled()
+
+			const filter = document.createElement('input')
+			document.body.append(filter)
+			act(() => filter.focus())
+			act(() => {
+				vi.runOnlyPendingTimers()
+			})
+			expect(screen.getByRole('button', { name: 'Bold' })).toBeInTheDocument()
+
+			// The reader scrolled the feed meanwhile, leaving Post at the keyboard's edge.
+			toolbarBottom = 280
+			act(() => textarea.focus())
+			expect(scrollBy).toHaveBeenCalledTimes(1)
+			expect(scrollBy).toHaveBeenCalledWith(0, 17)
+
+			// And it follows Safari's reveal scroll for the settle window, as on a resize.
+			scrollBy.mockClear()
+			act(() => {
+				viewport.dispatchEvent(new Event('scroll'))
+			})
+			expect(scrollBy).toHaveBeenCalledWith(0, 17)
+			filter.remove()
+		})
+
+		it('does nothing when the composer becomes active without a keyboard', () => {
+			toolbarBottom = 600
+			renderAndFocus()
+			expect(scrollBy).not.toHaveBeenCalled()
+		})
+
 		it('stops following scrolls as soon as the reader touches the page', () => {
 			renderAndFocus()
 			toolbarBottom = 235
