@@ -25,7 +25,7 @@ export const AudioRecorderModal: React.FC<AudioRecorderModalProps> = ({
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
-				className="sm:max-w-[425px] h-[300px] flex flex-col"
+				className="sm:max-w-[425px] h-[324px] flex flex-col"
 				// A stray tap outside mid-take would discard the recording. Escape and the
 				// close button still work: those are deliberate. (onInteractOutside covers
 				// both pointer-down-outside and focus-outside.)
@@ -516,7 +516,7 @@ const AudioRecorder = ({
 				/>
 			</div>
 
-			<div className="flex justify-center gap-4 mt-auto">
+			<div className="flex justify-center gap-4 mt-auto pt-6">
 				{status === 'error' && (
 					<Button
 						type="button"
