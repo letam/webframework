@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fixRecordingDuration, resolveFixWebmDuration } from '@/lib/utils/webmDuration'
+import {
+	assembleRecording,
+	fixRecordingDuration,
+	resolveFixWebmDuration,
+} from '@/lib/utils/webmDuration'
 
 const fixWebmDuration = vi.hoisted(() => vi.fn<(blob: Blob) => Promise<Blob>>())
 
@@ -70,5 +74,26 @@ describe('fixRecordingDuration', () => {
 
 		await expect(fixRecordingDuration(recorded)).resolves.toBe(recorded)
 		expect(consoleError).toHaveBeenCalledWith(expect.any(String), cause)
+	})
+})
+
+describe('assembleRecording', () => {
+	it('joins chunks and takes the type from the first chunk', () => {
+		const blob = assembleRecording([
+			new Blob(['ab'], { type: 'audio/webm' }),
+			new Blob(['c'], { type: 'audio/webm' }),
+		])
+		expect(blob.size).toBe(3)
+		expect(blob.type).toBe('audio/webm')
+	})
+
+	it('uses an explicit type when given', () => {
+		expect(assembleRecording([new Blob(['a'])], 'audio/webm;codecs=opus').type).toBe(
+			'audio/webm;codecs=opus'
+		)
+	})
+
+	it('throws on a recording that captured nothing', () => {
+		expect(() => assembleRecording([])).toThrow('MediaRecorder produced no data')
 	})
 })

@@ -6,7 +6,7 @@ import { supportedVideoMimeType } from '@/lib/utils/media'
 import { isIOS } from '@/lib/utils/browser'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getSettings } from '@/lib/utils/settings'
-import { fixRecordingDuration } from '@/lib/utils/webmDuration'
+import { assembleRecording, fixRecordingDuration } from '@/lib/utils/webmDuration'
 
 interface VideoRecorderModalProps {
 	onVideoCaptured: (videoBlob: Blob) => void
@@ -228,13 +228,7 @@ const VideoRecorder = ({ onVideoCaptured, disabled, autoStart = false }: VideoRe
 				stopTimer()
 				;(async () => {
 					try {
-						const recorded = new Blob(videoChunksRef.current, {
-							type: videoChunksRef.current[0]?.type,
-						})
-						if (recorded.size === 0) {
-							throw new Error('MediaRecorder produced no video data')
-						}
-						const videoBlob = await fixRecordingDuration(recorded)
+						const videoBlob = await fixRecordingDuration(assembleRecording(videoChunksRef.current))
 						const videoUrl = URL.createObjectURL(videoBlob)
 						setVideoURL(videoUrl)
 						onVideoCaptured(videoBlob)

@@ -1,4 +1,4 @@
-import { fixRecordingDuration } from '@/lib/utils/webmDuration'
+import { assembleRecording, fixRecordingDuration } from '@/lib/utils/webmDuration'
 
 /**
  * Converts a WAV audio blob to WebM format with Opus codec
@@ -34,7 +34,7 @@ export const convertWavToWebM = async (wavBlob: Blob): Promise<Blob> => {
 			mediaRecorder.onstop = async () => {
 				try {
 					const webmBlob = await fixRecordingDuration(
-						new Blob(chunks, { type: 'audio/webm;codecs=opus' })
+						assembleRecording(chunks, 'audio/webm;codecs=opus')
 					)
 					resolve(webmBlob)
 				} catch (error) {

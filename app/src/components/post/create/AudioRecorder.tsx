@@ -7,7 +7,7 @@ import { isIOS, isSafari } from '@/lib/utils/browser'
 import { supportedAudioMimeType } from '@/lib/utils/media'
 import { getSettings } from '@/lib/utils/settings'
 import { convertToWav } from '@/lib/utils/audio'
-import { fixRecordingDuration } from '@/lib/utils/webmDuration'
+import { assembleRecording, fixRecordingDuration } from '@/lib/utils/webmDuration'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface AudioRecorderModalProps {
@@ -372,12 +372,7 @@ const AudioRecorder = ({
 				stopTimer()
 				;(async () => {
 					try {
-						let audioBlob = new Blob(audioChunksRef.current, {
-							type: audioChunksRef.current[0]?.type,
-						})
-						if (audioBlob.size === 0) {
-							throw new Error('MediaRecorder produced no audio data')
-						}
+						let audioBlob = assembleRecording(audioChunksRef.current)
 
 						// Only normalize if the setting is enabled
 						if (getSettings().normalizeAudio) {

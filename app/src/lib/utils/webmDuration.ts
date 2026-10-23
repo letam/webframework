@@ -24,6 +24,19 @@ export const resolveFixWebmDuration = (mod: unknown): FixWebmDuration => {
 export const loadFixWebmDuration = async (): Promise<FixWebmDuration> =>
 	resolveFixWebmDuration(await import('webm-duration-fix'))
 
+/**
+ * Joins a MediaRecorder's chunks into one blob, throwing if the take captured
+ * nothing. A zero-byte recording must fail here: the duration fix below is
+ * best-effort and passes it through, which would queue or upload empty media.
+ */
+export const assembleRecording = (chunks: Blob[], type = chunks[0]?.type): Blob => {
+	const blob = new Blob(chunks, { type })
+	if (blob.size === 0) {
+		throw new Error('MediaRecorder produced no data')
+	}
+	return blob
+}
+
 const isWebm = (type: string): boolean => /^(audio|video)\/webm\b/i.test(type)
 
 /**
