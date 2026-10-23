@@ -176,6 +176,29 @@ describe('CreatePost', () => {
 		expect(mockSetSyncMode).toHaveBeenCalledWith('local')
 	})
 
+	// The menu takes focus when it opens. Only the textarea's focus may expand the
+	// composer, or a quick change of sync mode would leave it open.
+	it('opens the sync menu from the collapsed composer without expanding it', async () => {
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+
+		await user.click(screen.getByRole('button', { name: 'Auto-sync' }))
+		expect(screen.getByRole('menu')).toHaveFocus()
+		expect(screen.queryByRole('button', { name: 'Bold' })).not.toBeInTheDocument()
+
+		await user.click(screen.getByText('Stay on this device'))
+		expect(mockSetSyncMode).toHaveBeenCalledWith('local')
+		expect(screen.queryByRole('button', { name: 'Bold' })).not.toBeInTheDocument()
+	})
+
+	it('expands when the textarea takes focus', async () => {
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+
+		await user.click(screen.getByPlaceholderText("What's on your mind?"))
+		expect(screen.getByRole('button', { name: 'Bold' })).toBeInTheDocument()
+	})
+
 	it('loads an outbox entry into an empty composer with final media bytes', async () => {
 		const onPostCreated = vi.fn().mockResolvedValue(undefined)
 		render(<CreatePost onPostCreated={onPostCreated} />)
@@ -305,13 +328,41 @@ describe('CreatePost', () => {
 
 		await user.type(screen.getByPlaceholderText("What's on your mind?"), 'Anonymous words')
 
-		// The control is present but inert, so the public outcome is visible up front.
-		expect(screen.getByRole('button', { name: 'Visibility' })).toBeDisabled()
+		// The control is present, so the public outcome is visible up front.
+		expect(screen.getByRole('button', { name: 'Visibility' })).toBeInTheDocument()
 
 		await user.click(screen.getByRole('button', { name: 'Post' }))
 
 		await waitFor(() => expect(onPostCreated).toHaveBeenCalled())
 		expect(onPostCreated.mock.calls[0][0].visibility).toBeUndefined()
+	})
+
+	// A tooltip alone never showed on touch, and pressing the disabled button (really its
+	// wrapper) dropped focus: the keyboard closed and the composer collapsed.
+	it('explains the signed-out visibility on press, keeping focus in the textarea', async () => {
+		mockUseAuth.mockReturnValue({
+			isAuthenticated: false,
+			isAuthResolved: true,
+			userId: null,
+			refreshAuthStatus: vi.fn(async () => true),
+			getAuthSnapshot: vi.fn(() => ({
+				isAuthenticated: false,
+				isAuthResolved: true,
+				userId: null,
+			})),
+		})
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+		const textarea = screen.getByPlaceholderText("What's on your mind?")
+
+		await user.click(textarea)
+		await user.click(screen.getByRole('button', { name: 'Visibility' }))
+
+		expect(await screen.findByRole('dialog')).toHaveTextContent(
+			'Posts made while signed out are always public'
+		)
+		expect(textarea).toHaveFocus()
+		expect(screen.getByRole('button', { name: 'Bold' })).toBeInTheDocument()
 	})
 
 	it('submits the selected visibility', async () => {

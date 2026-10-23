@@ -11,6 +11,7 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
 	Mic,
 	Video,
@@ -110,6 +111,8 @@ const KEYBOARD_MIN_HEIGHT = 100
 // How long after the keyboard opens Safari may still be scrolling the textarea into view.
 const KEYBOARD_SETTLE_MS = 500
 
+const SIGNED_OUT_VISIBILITY_NOTE = 'Posts made while signed out are always public'
+
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const { isAuthenticated, isAuthResolved, userId, refreshAuthStatus, getAuthSnapshot } = useAuth()
 	const { syncMode } = useOutbox()
@@ -127,8 +130,9 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [submitStatus, setSubmitStatus] = useState<SubmitStatus | ''>('')
 	const [composerLocked, setComposerLocked] = useState(false)
 	const composerLockedRef = useRef(false)
-	// Whether focus is anywhere in the composer's React tree, which includes its
-	// portaled menus and dialogs. See handleRootFocus/handleRootBlur below.
+	// Set when the textarea takes focus, and kept while focus stays anywhere in the
+	// composer's React tree, which includes its portaled menus and dialogs. See
+	// handleRootFocus/handleRootBlur below.
 	const [isActive, setIsActive] = useState(false)
 	const rootRef = useRef<HTMLDivElement>(null)
 	const toolbarRef = useRef<HTMLDivElement>(null)
@@ -246,18 +250,22 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	// Keep the textarea focused through toolbar presses. Otherwise the blur collapses the
 	// toolbar and slides the buttons out from under the pointer before the click, and
 	// Safari, which never focuses a clicked button, would see focus leave the composer.
+	// The whole toolbar counts, not only its buttons, so a press on a gap or a wrapper
+	// doesn't drop the keyboard either.
 	const handleRootMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
 		const target = e.target as Element
 		// React events bubble out of portals; leave the recorder dialogs' buttons alone.
-		if (e.currentTarget.contains(target) && target.closest('button')) e.preventDefault()
+		if (!e.currentTarget.contains(target)) return
+		if (target.closest('button, [data-composer-toolbar]')) e.preventDefault()
 	}
+
+	// Only the textarea expands the composer. A toolbar menu opened from the collapsed
+	// composer takes focus too, and must not expand it.
+	const handleTextareaFocus = () => setIsActive(true)
 
 	// Focus and blur bubble through portals in React, so focus moving into a menu or
 	// dialog blurs and refocuses the root in one go, cancelling the collapse.
-	const handleRootFocus = () => {
-		clearTimeout(collapseTimerRef.current)
-		setIsActive(true)
-	}
+	const handleRootFocus = () => clearTimeout(collapseTimerRef.current)
 
 	const handleRootBlur = () => {
 		clearTimeout(collapseTimerRef.current)
@@ -733,6 +741,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						value={postText}
 						onChange={handlePostTextChange}
 						onKeyDown={handleKeyDown}
+						onFocus={handleTextareaFocus}
 						onTransitionEnd={handleTextareaTransitionEnd}
 						className={`w-full resize-none border-none focus-visible:ring-0 py-1 px-2 text-base max-w-lg scroll-mt-20 transition-[min-height] duration-200 ease-out ${
 							expanded ? 'min-h-24' : 'min-h-10'
@@ -1011,25 +1020,34 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 								</TooltipProvider>
 							)}
 							{!isAuthenticated && isAuthResolved && expanded && (
+								// Signed out, visibility can't change, so the control explains why
+								// instead. A popover rather than only a tooltip, which touch never
+								// shows; it leaves focus in the textarea, so the keyboard stays up.
 								<TooltipProvider delayDuration={300}>
 									<Tooltip>
-										<TooltipTrigger asChild>
-											{/* A disabled button swallows pointer events, so the tooltip needs a
-										    wrapper of its own to stay reachable. */}
-											<span className="inline-flex">
-												<Button
-													type="button"
-													variant="ghost"
-													size="icon"
-													className="h-8 w-8 rounded-full text-muted-foreground"
-													disabled
-													aria-label="Visibility"
-												>
-													<Globe className="h-4 w-4" />
-												</Button>
-											</span>
-										</TooltipTrigger>
-										<TooltipContent>Posts made while signed out are always public</TooltipContent>
+										<Popover>
+											<PopoverTrigger asChild>
+												<TooltipTrigger asChild>
+													<Button
+														type="button"
+														variant="ghost"
+														size="icon"
+														className="h-8 w-8 rounded-full text-muted-foreground opacity-50"
+														aria-label="Visibility"
+													>
+														<Globe className="h-4 w-4" />
+													</Button>
+												</TooltipTrigger>
+											</PopoverTrigger>
+											<PopoverContent
+												align="end"
+												className="w-64 px-3 py-2 text-sm"
+												onOpenAutoFocus={(e) => e.preventDefault()}
+											>
+												{SIGNED_OUT_VISIBILITY_NOTE}
+											</PopoverContent>
+										</Popover>
+										<TooltipContent>{SIGNED_OUT_VISIBILITY_NOTE}</TooltipContent>
 									</Tooltip>
 								</TooltipProvider>
 							)}

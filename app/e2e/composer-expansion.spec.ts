@@ -12,13 +12,15 @@ const GROUND_RULES = ['no-hate', 'be-respectful', 'safe-environment', 'be-awesom
 const isBackendCall = (url: URL) =>
 	url.pathname.startsWith('/api/') || url.pathname.startsWith('/auth/')
 
-// Signed in, so the visibility control (which only exists while expanded) shows.
-const stubSignedIn = async (page: Page) => {
+// Signed in by default, so the visibility menu (which only exists while expanded) shows.
+const stubAuth = async (page: Page, signedIn = true) => {
 	await page.route(isBackendCall, (route) => {
 		const { pathname } = new URL(route.request().url())
 		if (pathname === '/auth/status/') {
 			return route.fulfill({
-				json: { is_authenticated: true, user_id: 42, username: 'tester', avatar: null },
+				json: signedIn
+					? { is_authenticated: true, user_id: 42, username: 'tester', avatar: null }
+					: { is_authenticated: false },
 			})
 		}
 		if (pathname === '/api/posts/') {
@@ -44,12 +46,16 @@ for (const input of ['mouse', 'touch'] as const) {
 		const press = (page: Page, name: string) =>
 			tapOrClick(page.getByRole('button', { name, exact: true }))
 
-		const expand = async (page: Page) => {
+		const open = async (page: Page, signedIn = true) => {
 			await page.addInitScript((rules) => {
 				localStorage.setItem('ground-rules-accepted', JSON.stringify(rules))
 			}, GROUND_RULES)
-			await stubSignedIn(page)
+			await stubAuth(page, signedIn)
 			await page.goto('/')
+		}
+
+		const expand = async (page: Page, signedIn = true) => {
+			await open(page, signedIn)
 			const composer = page.locator('[data-composer-input]')
 			await tapOrClick(composer)
 			await expect(composer).toHaveValue('')
@@ -88,6 +94,35 @@ for (const input of ['mouse', 'touch'] as const) {
 			await page.getByRole('menuitemradio', { name: /Public/ }).click()
 			await expect(page.getByRole('menu')).not.toBeVisible()
 			await expect(page.getByRole('button', { name: 'Bold' })).toBeVisible()
+		})
+
+		// Signed out, the control can't change anything, so it explains why. It used to be
+		// a disabled button with only a tooltip: touch never shows the tooltip, and a press
+		// landed on its wrapper, which dropped focus and collapsed the composer.
+		test('signed out, the visibility button explains itself and keeps focus', async ({ page }) => {
+			await expand(page, false)
+			await press(page, 'Visibility')
+			await expect(page.getByRole('dialog')).toContainText(
+				'Posts made while signed out are always public'
+			)
+			await expect(page.locator('[data-composer-input]')).toBeFocused()
+			await expect(page.getByRole('button', { name: 'Bold' })).toBeVisible()
+		})
+
+		// The sync menu takes focus as it opens, and only the textarea's focus may expand
+		// the composer.
+		test('the sync button opens its menu from the collapsed composer without expanding it', async ({
+			page,
+		}) => {
+			await open(page)
+			await press(page, 'Auto-sync')
+			await expect(page.getByRole('menuitemradio', { name: /Sync automatically/ })).toBeVisible()
+			// Not a retrying assertion: it would pass on a composer that expands and
+			// collapses again a moment later.
+			expect(await page.getByRole('button', { name: 'Bold' }).count()).toBe(0)
+			await page.getByRole('menuitemradio', { name: /Stay on this device/ }).click()
+			await expect(page.getByRole('menu')).not.toBeVisible()
+			expect(await page.getByRole('button', { name: 'Bold' }).count()).toBe(0)
 		})
 
 		test('the sync button opens its menu', async ({ page }) => {
