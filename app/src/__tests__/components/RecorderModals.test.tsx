@@ -3,6 +3,12 @@ import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AudioRecorderModal } from '@/components/post/create/AudioRecorder'
 import { VideoRecorderModal } from '@/components/post/create/VideoRecorder'
+import { isIOS } from '@/lib/utils/browser'
+
+vi.mock('@/lib/utils/browser', async (importOriginal) => ({
+	...(await importOriginal<typeof import('@/lib/utils/browser')>()),
+	isIOS: vi.fn(() => false),
+}))
 
 class FakeMediaRecorder {
 	state: 'inactive' | 'recording' | 'paused' = 'inactive'
@@ -29,6 +35,7 @@ const originalMediaRecorder = globalThis.MediaRecorder
 const originalMediaDevices = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices')
 
 beforeEach(() => {
+	vi.mocked(isIOS).mockReturnValue(false)
 	// vitest.setup.ts defines MediaRecorder as writable but non-configurable, so it is
 	// assigned rather than stubbed with vi.stubGlobal.
 	globalThis.MediaRecorder = FakeMediaRecorder as unknown as typeof MediaRecorder
@@ -139,6 +146,21 @@ describe('VideoRecorderModal', () => {
 		await screen.findByRole('button', { name: /try again/i })
 
 		await pressOutside()
+
+		await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+	})
+
+	it('closes when the iOS native camera is dismissed without recording', async () => {
+		// iOS records through the native camera behind a hidden file input; dismissing
+		// it fires `cancel`, which used to leave an empty video placeholder on screen.
+		vi.mocked(isIOS).mockReturnValue(true)
+		const click = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+		render(<VideoHarness />)
+		await waitFor(() => expect(click).toHaveBeenCalled())
+
+		const input = document.querySelector('input[type="file"][accept="video/*"]')
+		if (!input) throw new Error('camera input not found')
+		fireEvent(input, new Event('cancel'))
 
 		await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 	})

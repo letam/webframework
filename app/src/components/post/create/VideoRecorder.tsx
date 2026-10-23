@@ -40,6 +40,7 @@ export const VideoRecorderModal: React.FC<VideoRecorderModalProps> = ({
 					<VideoRecorder
 						onVideoCaptured={onVideoCaptured}
 						onRecordingChange={setIsRecording}
+						onCancel={() => onOpenChange(false)}
 						autoStart={true}
 					/>
 				</div>
@@ -76,11 +77,14 @@ interface VideoRecorderProps {
 	autoStart?: boolean
 	/** Reports whether a take is in progress. */
 	onRecordingChange?: (recording: boolean) => void
+	/** Called when the user dismisses the native camera (iOS) without recording. */
+	onCancel?: () => void
 }
 
 const VideoRecorder = ({
 	onVideoCaptured,
 	onRecordingChange,
+	onCancel,
 	disabled,
 	autoStart = false,
 }: VideoRecorderProps) => {
@@ -100,6 +104,17 @@ const VideoRecorder = ({
 	useEffect(() => {
 		onRecordingChange?.(isRecording)
 	}, [isRecording, onRecordingChange])
+
+	// On iOS the recorder hands off to the native camera via the hidden file input.
+	// Dismissing that camera fires `cancel` (not `change`), which left the dialog
+	// open on an empty video placeholder with no controls. Treat it as cancelling
+	// the recording. React doesn't wire `onCancel` on inputs, so listen directly.
+	useEffect(() => {
+		const input = fileInputRef.current
+		if (!input || !onCancel) return
+		input.addEventListener('cancel', onCancel)
+		return () => input.removeEventListener('cancel', onCancel)
+	}, [onCancel])
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: auto-start should only respond to the external trigger and current recording state
 	useEffect(() => {
