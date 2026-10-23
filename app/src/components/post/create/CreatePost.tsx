@@ -251,12 +251,16 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	// toolbar and slides the buttons out from under the pointer before the click, and
 	// Safari, which never focuses a clicked button, would see focus leave the composer.
 	// The whole toolbar counts, not only its buttons, so a press on a gap or a wrapper
-	// doesn't drop the keyboard either.
+	// doesn't drop the keyboard either. Outside the toolbar only buttons that remove
+	// themselves opt in (data-composer-keep-focus), so writing carries on after them;
+	// the attachment's player controls take focus normally, for their arrow keys.
 	const handleRootMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
 		const target = e.target as Element
 		// React events bubble out of portals; leave the recorder dialogs' buttons alone.
 		if (!e.currentTarget.contains(target)) return
-		if (target.closest('button, [data-composer-toolbar]')) e.preventDefault()
+		if (target.closest('[data-composer-toolbar], [data-composer-keep-focus]')) {
+			e.preventDefault()
+		}
 	}
 
 	// Only the textarea expands the composer. A toolbar menu opened from the collapsed
@@ -798,6 +802,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 								variant="ghost"
 								size="sm"
 								className="h-6 px-2 text-xs"
+								data-composer-keep-focus
 								onClick={discardRestoredDraft}
 							>
 								Discard
@@ -807,6 +812,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 								variant="ghost"
 								size="sm"
 								className="h-6 px-2 text-xs"
+								data-composer-keep-focus
 								onClick={acknowledgeRestore}
 							>
 								Keep

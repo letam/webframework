@@ -238,6 +238,32 @@ describe('CreatePost', () => {
 		await waitFor(() => expect(trigger).toHaveFocus())
 	})
 
+	// Only the toolbar keeps the textarea focused through a press. The attachment's
+	// player is outside it and takes focus like any button, so its arrow keys work.
+	it('lets the attached audio player take focus without collapsing the composer', async () => {
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+
+		await user.click(screen.getByPlaceholderText("What's on your mind?"))
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Use recording' }))
+		const play = await waitFor(() => {
+			const button = document.querySelector('svg.lucide-play')?.closest('button')
+			expect(button).toBeTruthy()
+			return button as HTMLButtonElement
+		})
+
+		expect(fireEvent.mouseDown(play)).toBe(true)
+		await user.pointer([{ keys: '[MouseLeft>]', target: play }])
+		expect(play).toHaveFocus()
+		await user.pointer([{ keys: '[/MouseLeft]', target: document.body }])
+		expect(screen.getByRole('button', { name: 'Bold' })).toBeInTheDocument()
+
+		// Removing the attachment still hands the press back to the textarea.
+		const remove = screen.getByRole('button', { name: 'Remove attachment' })
+		expect(fireEvent.mouseDown(remove)).toBe(false)
+	})
+
 	it('expands when the textarea takes focus', async () => {
 		const user = userEvent.setup()
 		render(<CreatePost onPostCreated={vi.fn()} />)
