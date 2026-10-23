@@ -267,6 +267,26 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	// dialog blurs and refocuses the root in one go, cancelling the collapse.
 	const handleRootFocus = () => clearTimeout(collapseTimerRef.current)
 
+	// How the last menu or popover interaction happened. Its events bubble through the
+	// portal to the root; a press outside it, which dismisses it, is reported separately.
+	const lastInputRef = useRef<'pointer' | 'keyboard'>('pointer')
+	const notePointerInput = () => {
+		lastInputRef.current = 'pointer'
+	}
+	const noteKeyboardInput = () => {
+		lastInputRef.current = 'keyboard'
+	}
+
+	// A toolbar menu closing returns focus to its trigger, which shows the trigger's
+	// tooltip: right for a keyboard, but after a tap or click it just lingers over the
+	// toolbar. So after a pointer, hand focus back to the textarea instead, or let it go
+	// if the composer was collapsed.
+	const handleMenuCloseAutoFocus = (e: Event) => {
+		if (lastInputRef.current !== 'pointer') return
+		e.preventDefault()
+		if (isActive) textareaRef.current?.focus({ preventScroll: true })
+	}
+
 	const handleRootBlur = () => {
 		clearTimeout(collapseTimerRef.current)
 		// A timeout, not a microtask: microtasks run between focusout and focusin.
@@ -729,6 +749,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			className="bg-card rounded-lg shadow-xs border max-w-lg mx-auto px-4 py-3"
 			ref={rootRef}
 			onMouseDown={handleRootMouseDown}
+			onPointerDownCapture={notePointerInput}
+			onKeyDownCapture={noteKeyboardInput}
 			onFocus={handleRootFocus}
 			onBlur={handleRootBlur}
 		>
@@ -944,7 +966,12 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 												</Button>
 											</TooltipTrigger>
 										</DropdownMenuTrigger>
-										<DropdownMenuContent align="end" className="w-72">
+										<DropdownMenuContent
+											align="end"
+											className="w-72"
+											onPointerDownOutside={notePointerInput}
+											onCloseAutoFocus={handleMenuCloseAutoFocus}
+										>
 											<DropdownMenuRadioGroup
 												value={syncMode}
 												onValueChange={(value) => setSyncMode(value as SyncMode)}
@@ -989,7 +1016,12 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 													</Button>
 												</TooltipTrigger>
 											</DropdownMenuTrigger>
-											<DropdownMenuContent align="end" className="w-72">
+											<DropdownMenuContent
+												align="end"
+												className="w-72"
+												onPointerDownOutside={notePointerInput}
+												onCloseAutoFocus={handleMenuCloseAutoFocus}
+											>
 												<DropdownMenuRadioGroup
 													value={visibility}
 													onValueChange={(value) => setVisibility(value as PostVisibility)}
@@ -1043,6 +1075,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 												align="end"
 												className="w-64 px-3 py-2 text-sm"
 												onOpenAutoFocus={(e) => e.preventDefault()}
+												onPointerDownOutside={notePointerInput}
+												onCloseAutoFocus={handleMenuCloseAutoFocus}
 											>
 												{SIGNED_OUT_VISIBILITY_NOTE}
 											</PopoverContent>

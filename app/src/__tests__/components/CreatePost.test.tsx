@@ -191,6 +191,53 @@ describe('CreatePost', () => {
 		expect(screen.queryByRole('button', { name: 'Bold' })).not.toBeInTheDocument()
 	})
 
+	// Radix returns focus to a menu's trigger as it closes, and focus opens the
+	// trigger's tooltip. After a tap that tooltip would linger over the toolbar, so a
+	// pointer close hands focus back to the textarea, or drops it if collapsed.
+	const tap = async (user: ReturnType<typeof userEvent.setup>, target: Element) => {
+		await user.pointer([{ keys: '[TouchA]', target }])
+	}
+
+	it('shows no tooltip after picking a sync mode by touch', async () => {
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+
+		await tap(user, screen.getByRole('button', { name: 'Auto-sync' }))
+		await tap(user, screen.getByText('Stay on this device'))
+
+		expect(mockSetSyncMode).toHaveBeenCalledWith('local')
+		await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+		expect(screen.getByRole('button', { name: 'Auto-sync' })).not.toHaveFocus()
+		expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+	})
+
+	it('returns to the textarea, without a tooltip, after picking a visibility by touch', async () => {
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+
+		const textarea = screen.getByPlaceholderText("What's on your mind?")
+		await user.click(textarea)
+		await tap(user, screen.getByRole('button', { name: 'Visibility' }))
+		await tap(user, screen.getByText('Link only'))
+
+		await waitFor(() => expect(textarea).toHaveFocus())
+		expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+		expect(screen.getByRole('button', { name: 'Bold' })).toBeInTheDocument()
+	})
+
+	it('still returns focus to the menu trigger after a keyboard choice', async () => {
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn()} />)
+
+		const trigger = screen.getByRole('button', { name: 'Auto-sync' })
+		trigger.focus()
+		await user.keyboard('{Enter}')
+		await waitFor(() => expect(screen.getByRole('menu')).toBeInTheDocument())
+		await user.keyboard('{Escape}')
+
+		await waitFor(() => expect(trigger).toHaveFocus())
+	})
+
 	it('expands when the textarea takes focus', async () => {
 		const user = userEvent.setup()
 		render(<CreatePost onPostCreated={vi.fn()} />)
