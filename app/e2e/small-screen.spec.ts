@@ -86,3 +86,48 @@ for (const viewport of phones) {
 		})
 	})
 }
+
+const groundRulesViewports = [
+	{ width: 375, height: 667 },
+	{ width: 320, height: 568 },
+]
+
+for (const viewport of groundRulesViewports) {
+	test.describe(`Ground rules at ${viewport.width}x${viewport.height}`, () => {
+		test.use({ viewport, hasTouch: true, isMobile: true })
+
+		test('the Accept button is on screen and clickable', async ({ page }) => {
+			await page.goto('/')
+			const dialog = page.getByRole('dialog')
+			await expect(dialog).toBeVisible()
+			// Let the zoom-in finish first: mid-animation the dialog is scaled to 95%,
+			// which is just enough for an overflowing one to look like it fits.
+			await dialog.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)))
+
+			// The whole dialog, header included, must fit: a centered fixed dialog
+			// taller than the screen spills off the top and bottom, and neither the
+			// page nor the dialog scrolls to reach those parts.
+			const box = await dialog.boundingBox()
+			expect(box).not.toBeNull()
+			expect(box?.y ?? -1).toBeGreaterThanOrEqual(0)
+			expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(viewport.height)
+
+			for (const rule of [
+				/No Hate or Harm/i,
+				/Be Respectful/i,
+				/Safe Environment/i,
+				/Be Awesome/i,
+			]) {
+				await page.getByLabel(rule).check()
+			}
+
+			const accept = page.getByRole('button', { name: /I Accept All Rules/i })
+			// toBeInViewport, not toBeVisible: an overflowing dialog still renders the
+			// button, just below the fold where a phone user cannot scroll to it.
+			await expect(accept).toBeInViewport({ ratio: 1 })
+			await accept.click()
+
+			await expect(dialog).not.toBeVisible()
+		})
+	})
+}
