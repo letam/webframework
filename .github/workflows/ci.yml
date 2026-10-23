@@ -88,7 +88,7 @@ jobs:
     # push and PR still runs the browser suite.
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -148,6 +148,7 @@ jobs:
           restore-keys: |
             playwright-${{ runner.os }}-
       - run: bunx playwright install --with-deps chromium
+        timeout-minutes: 12
         working-directory: app
       - name: Configure frontend dev env
         run: |
@@ -156,6 +157,7 @@ jobs:
           VITE_UPLOAD_FILES_TO_S3=false
           EOF
       - run: bun run test:e2e
+        timeout-minutes: 15
         working-directory: app
       # On failure, keep the HTML report plus traces/screenshots so a red run is
       # debuggable without re-running locally. `if: failure()` scopes the upload
