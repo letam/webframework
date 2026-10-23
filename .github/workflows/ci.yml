@@ -15,9 +15,12 @@ jobs:
   backend-lint:
     name: Backend lint
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with:
+          prune-cache: false
       # The repo config sets [tool.ruff] fix=true; CI must never mutate files.
       - run: uvx ruff@0.15.20 check --no-fix server/
       - run: uvx ruff@0.15.20 format --check server/
@@ -25,11 +28,24 @@ jobs:
   backend:
     name: Backend tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       # Media tests exercise ffprobe/ffmpeg integration
-      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: |
+          for attempt in 1 2; do
+            if timeout --kill-after=10s 240s sudo bash -c '
+              apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o APT::Update::Error-Mode=any update &&
+              apt-get install -y --no-install-recommends ffmpeg
+            '; then
+              exit 0
+            fi
+          done
+          exit 1
+        timeout-minutes: 9
       - uses: astral-sh/setup-uv@v5
+        with:
+          prune-cache: false
       - run: uv sync
       # settings.py auto-creates a dev server/.env on first run. The 'apps'
       # label is required: bare 'test' from the repo root discovers 0 tests.
@@ -37,6 +53,7 @@ jobs:
   frontend:
     name: Frontend checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: app
@@ -71,9 +88,12 @@ jobs:
     # push and PR still runs the browser suite.
     if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+        with:
+          prune-cache: false
       - run: uv sync
       - run: uv run python server/manage.py migrate --noinput
       - run: uv run python server/manage.py init_users
