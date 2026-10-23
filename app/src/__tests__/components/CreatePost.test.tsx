@@ -812,4 +812,111 @@ describe('CreatePost', () => {
 		)
 		expect(screen.getByText('only-copy.png')).toBeInTheDocument()
 	})
+
+	// iOS Safari scrolls only the focused textarea into view when the keyboard opens. On an
+	// iPhone SE that left Post and Draft in the strip just above the keyboard where Safari
+	// swallows taps, so the first tap only closed the keyboard. jsdom has no keyboard or
+	// layout, so these tests stand in a visual viewport and the two rects the composer reads.
+	describe('keeping the toolbar clear of the keyboard', () => {
+		class FakeVisualViewport extends EventTarget {
+			height = 667
+			pageTop = 0
+		}
+		const originalViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport')
+		let viewport: FakeVisualViewport
+		let toolbarBottom: number
+		let scrollBy: ReturnType<typeof vi.spyOn>
+
+		const rect = (top: number, bottom: number) =>
+			({ top, bottom, left: 0, right: 0, width: 0, height: bottom - top }) as DOMRect
+
+		const renderAndFocus = () => {
+			render(<CreatePost onPostCreated={vi.fn()} />)
+			const textarea = screen.getByPlaceholderText("What's on your mind?")
+			// The real scroll-mt-20; jsdom does not load the Tailwind stylesheet.
+			textarea.style.scrollMarginTop = '80px'
+			const toolbar = screen.getByRole('button', { name: 'Post' }).closest('.border-t')
+			vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (
+				this: Element
+			) {
+				if (this === textarea) return rect(102, 198)
+				if (this === toolbar) return rect(198, toolbarBottom)
+				return rect(0, 0)
+			})
+			act(() => textarea.focus())
+			return textarea
+		}
+
+		const openKeyboard = (height: number) => {
+			viewport.height = height
+			act(() => {
+				viewport.dispatchEvent(new Event('resize'))
+			})
+		}
+
+		beforeEach(() => {
+			viewport = new FakeVisualViewport()
+			Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport })
+			scrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => {})
+			// Measured on the iPhone SE: the expanded toolbar ends at 291.
+			toolbarBottom = 291
+		})
+
+		afterEach(() => {
+			vi.restoreAllMocks()
+			vi.useRealTimers()
+			if (originalViewport) Object.defineProperty(window, 'visualViewport', originalViewport)
+			else Reflect.deleteProperty(window, 'visualViewport')
+		})
+
+		it('scrolls Post clear of the keyboard edge, but not the textarea under the header', () => {
+			renderAndFocus()
+			// 287 tall: Post ends 28px past the clear area (287 - 24), but the textarea is only
+			// 22px below its scroll margin, so it scrolls the 22 it can.
+			openKeyboard(287)
+			expect(scrollBy).toHaveBeenCalledTimes(1)
+			expect(scrollBy).toHaveBeenCalledWith(0, 22)
+		})
+
+		it('scrolls only as far as Post needs', () => {
+			renderAndFocus()
+			openKeyboard(300)
+			expect(scrollBy).toHaveBeenCalledWith(0, 15)
+		})
+
+		it('does not scroll when Post already clears the keyboard', () => {
+			renderAndFocus()
+			// The iPhone 17's keyboard leaves a 377px viewport.
+			openKeyboard(377)
+			expect(scrollBy).not.toHaveBeenCalled()
+		})
+
+		it('does not scroll for a collapsed composer', () => {
+			render(<CreatePost onPostCreated={vi.fn()} />)
+			openKeyboard(287)
+			expect(scrollBy).not.toHaveBeenCalled()
+		})
+
+		it('repeats the scroll if Safari undoes it, but only while the keyboard settles', () => {
+			vi.useFakeTimers()
+			renderAndFocus()
+			openKeyboard(377)
+			// Safari's own reveal scroll then pushes Post back down past the clear area.
+			toolbarBottom = 370
+			act(() => {
+				viewport.dispatchEvent(new Event('scroll'))
+			})
+			expect(scrollBy).toHaveBeenCalledWith(0, 17)
+
+			scrollBy.mockClear()
+			act(() => {
+				vi.advanceTimersByTime(500)
+			})
+			// Later scrolls are the reader's own, and the composer leaves them alone.
+			act(() => {
+				viewport.dispatchEvent(new Event('scroll'))
+			})
+			expect(scrollBy).not.toHaveBeenCalled()
+		})
+	})
 })

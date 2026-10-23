@@ -97,6 +97,13 @@ const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): stri
 				: 'webm' // Default to webm as it's most widely supported
 }
 
+// How far above the visual viewport's bottom edge the toolbar must end while the keyboard is
+// open. iOS Safari ignores taps in roughly the 16px above that edge (measured on an
+// iPhone SE simulator, iOS 26), so this leaves that strip plus a little room.
+const KEYBOARD_EDGE_CLEARANCE = 24
+// How long after the keyboard opens Safari may still be scrolling the textarea into view.
+const KEYBOARD_SETTLE_MS = 500
+
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const { isAuthenticated, isAuthResolved, userId, refreshAuthStatus, getAuthSnapshot } = useAuth()
 	const { syncMode } = useOutbox()
@@ -118,6 +125,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	// portaled menus and dialogs. See handleRootFocus/handleRootBlur below.
 	const [isActive, setIsActive] = useState(false)
 	const rootRef = useRef<HTMLDivElement>(null)
+	const toolbarRef = useRef<HTMLDivElement>(null)
 	const collapseTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 	const [isAudioModalOpen, setIsAudioModalOpen] = useState(false)
 	const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
@@ -254,6 +262,58 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			if (rootRef.current?.contains(document.activeElement)) return
 			setIsActive(false)
 		})
+	}
+
+	// When the keyboard opens, Safari scrolls only the focused textarea into view. On a short
+	// phone (an iPhone SE) that leaves the expanded toolbar's bottom row, Post and Draft,
+	// ending just above the keyboard, where Safari keeps a strip of touches for itself: the
+	// first tap there only closes the keyboard. Scroll the toolbar clear of that strip, but
+	// never so far that the textarea goes under the sticky header (its scroll-margin-top).
+	const revealToolbar = useCallback(() => {
+		const viewport = window.visualViewport
+		const toolbar = toolbarRef.current
+		const textarea = textareaRef.current
+		if (!viewport || !toolbar || !textarea) return
+		// The visual viewport's top in client coordinates: offsetTop in most browsers, but 0 in
+		// iOS Safari, which measures client rects from the visual viewport. Safari also updates
+		// pageTop a beat after scrollY, and the negative difference meanwhile would repeat a
+		// scroll we just made, hence the floor.
+		const visibleTop = Math.max(0, viewport.pageTop - window.scrollY)
+		const visibleBottom = visibleTop + viewport.height - KEYBOARD_EDGE_CLEARANCE
+		const overlap = toolbar.getBoundingClientRect().bottom - visibleBottom
+		const headroom =
+			textarea.getBoundingClientRect().top -
+			visibleTop -
+			(Number.parseFloat(getComputedStyle(textarea).scrollMarginTop) || 0)
+		const distance = Math.min(overlap, headroom)
+		if (distance > 0) window.scrollBy(0, distance)
+	}, [])
+
+	// The keyboard opening resizes the visual viewport. Safari then scrolls the textarea
+	// into view, which can undo our scroll, so check again on the scrolls that follow for a
+	// moment; not for longer, or we would fight the reader scrolling the feed. The
+	// textarea's growth on focus can finish later still: see handleTextareaTransitionEnd.
+	useEffect(() => {
+		const viewport = window.visualViewport
+		if (!isActive || !viewport) return
+		let settleTimer: ReturnType<typeof setTimeout> | undefined
+		const stopFollowing = () => viewport.removeEventListener('scroll', revealToolbar)
+		const handleResize = () => {
+			revealToolbar()
+			viewport.addEventListener('scroll', revealToolbar)
+			clearTimeout(settleTimer)
+			settleTimer = setTimeout(stopFollowing, KEYBOARD_SETTLE_MS)
+		}
+		viewport.addEventListener('resize', handleResize)
+		return () => {
+			viewport.removeEventListener('resize', handleResize)
+			stopFollowing()
+			clearTimeout(settleTimer)
+		}
+	}, [isActive, revealToolbar])
+
+	const handleTextareaTransitionEnd = (e: React.TransitionEvent<HTMLTextAreaElement>) => {
+		if (isActive && e.propertyName === 'min-height') revealToolbar()
 	}
 
 	const restoreDraft = useCallback((stored: ComposerDraft) => {
@@ -661,6 +721,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						value={postText}
 						onChange={handlePostTextChange}
 						onKeyDown={handleKeyDown}
+						onTransitionEnd={handleTextareaTransitionEnd}
 						className={`w-full resize-none border-none focus-visible:ring-0 py-1 px-2 text-base max-w-lg scroll-mt-20 transition-[min-height] duration-200 ease-out ${
 							expanded ? 'min-h-24' : 'min-h-10'
 						}`}
@@ -716,7 +777,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				    second row (ml-auto keeps them right-aligned) instead of pushing Post off
 				    the card's edge. The send group wraps too: while posting, its status label
 				    plus the send controls are wider than a 320px card on their own. */}
-				<div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t pt-2">
+				<div
+					ref={toolbarRef}
+					className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t pt-2"
+				>
 					<TooltipProvider delayDuration={300}>
 						<div className="flex items-center gap-0.5">
 							{expanded && (
