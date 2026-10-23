@@ -19,9 +19,17 @@ export const VideoRecorderModal: React.FC<VideoRecorderModalProps> = ({
 	open,
 	onOpenChange,
 }) => {
+	const [isRecording, setIsRecording] = useState(false)
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[425px] h-[420px] flex flex-col">
+			<DialogContent
+				className="sm:max-w-[425px] h-[420px] flex flex-col"
+				// Same guard as the audio recorder: a stray tap outside mid-take must not
+				// discard it, while Escape and the close button still close.
+				onInteractOutside={(e) => {
+					if (isRecording) e.preventDefault()
+				}}
+			>
 				<DialogHeader className="text-center py-2">
 					<DialogTitle className="flex items-center justify-center gap-2">
 						<Video className="h-5 w-5" />
@@ -29,7 +37,11 @@ export const VideoRecorderModal: React.FC<VideoRecorderModalProps> = ({
 					</DialogTitle>
 				</DialogHeader>
 				<div className="flex-1 flex flex-col">
-					<VideoRecorder onVideoCaptured={onVideoCaptured} autoStart={true} />
+					<VideoRecorder
+						onVideoCaptured={onVideoCaptured}
+						onRecordingChange={setIsRecording}
+						autoStart={true}
+					/>
 				</div>
 			</DialogContent>
 		</Dialog>
@@ -62,9 +74,16 @@ interface VideoRecorderProps {
 	onVideoCaptured: (videoBlob: Blob) => void
 	disabled?: boolean
 	autoStart?: boolean
+	/** Reports whether a take is in progress. */
+	onRecordingChange?: (recording: boolean) => void
 }
 
-const VideoRecorder = ({ onVideoCaptured, disabled, autoStart = false }: VideoRecorderProps) => {
+const VideoRecorder = ({
+	onVideoCaptured,
+	onRecordingChange,
+	disabled,
+	autoStart = false,
+}: VideoRecorderProps) => {
 	const [isRecording, setIsRecording] = useState(false)
 	const [videoURL, setVideoURL] = useState<string | null>(null)
 	const [recordingTime, setRecordingTime] = useState<number>(0)
@@ -77,6 +96,10 @@ const VideoRecorder = ({ onVideoCaptured, disabled, autoStart = false }: VideoRe
 	const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
 	// Auto-start at most once per mount so a failed getUserMedia can't retry in a loop.
 	const hasAutoStartedRef = useRef(false)
+
+	useEffect(() => {
+		onRecordingChange?.(isRecording)
+	}, [isRecording, onRecordingChange])
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: auto-start should only respond to the external trigger and current recording state
 	useEffect(() => {

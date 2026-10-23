@@ -21,9 +21,18 @@ export const AudioRecorderModal: React.FC<AudioRecorderModalProps> = ({
 	open,
 	onOpenChange,
 }) => {
+	const [isCapturing, setIsCapturing] = useState(false)
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[425px] h-[300px] flex flex-col">
+			<DialogContent
+				className="sm:max-w-[425px] h-[300px] flex flex-col"
+				// A stray tap outside mid-take would discard the recording. Escape and the
+				// close button still work: those are deliberate. (onInteractOutside covers
+				// both pointer-down-outside and focus-outside.)
+				onInteractOutside={(e) => {
+					if (isCapturing) e.preventDefault()
+				}}
+			>
 				<DialogHeader className="text-center py-2">
 					<DialogTitle className="flex items-center justify-center gap-2">
 						<Mic className="h-5 w-5" />
@@ -31,7 +40,11 @@ export const AudioRecorderModal: React.FC<AudioRecorderModalProps> = ({
 					</DialogTitle>
 				</DialogHeader>
 				<div className="flex-1 flex flex-col">
-					<AudioRecorder onAudioCaptured={onAudioCaptured} autoStart={true} />
+					<AudioRecorder
+						onAudioCaptured={onAudioCaptured}
+						onCapturingChange={setIsCapturing}
+						autoStart={true}
+					/>
 				</div>
 			</DialogContent>
 		</Dialog>
@@ -203,10 +216,13 @@ interface AudioRecorderProps {
 	submitStatus?: '' | 'preparing' | 'compressing' | 'submitting'
 	isProcessing?: boolean
 	autoStart?: boolean
+	/** Reports whether a take is in progress (recording, paused, or being processed). */
+	onCapturingChange?: (capturing: boolean) => void
 }
 
 const AudioRecorder = ({
 	onAudioCaptured,
+	onCapturingChange,
 	disabled,
 	submitStatus = '',
 	isProcessing = false,
@@ -272,6 +288,11 @@ const AudioRecorder = ({
 			audioContextRef.current = null
 		}
 	}
+
+	const isCapturing = status === 'recording' || status === 'paused' || status === 'normalizing'
+	useEffect(() => {
+		onCapturingChange?.(isCapturing)
+	}, [isCapturing, onCapturingChange])
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: auto-start should only respond to the external trigger and current status
 	useEffect(() => {
