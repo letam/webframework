@@ -92,7 +92,7 @@ const WaveformSeekBar: React.FC<WaveformSeekBarProps> = ({
 	return (
 		<div
 			className={cn(
-				'flex h-12 min-w-0 flex-1 items-center gap-px rounded-md px-1',
+				'flex h-12 min-w-0 flex-1 items-center gap-[0.5px] rounded-md px-1 sm:gap-px',
 				disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'
 			)}
 			onPointerDown={handlePointerDown}
