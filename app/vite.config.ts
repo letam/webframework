@@ -55,9 +55,18 @@ export default defineConfig(() => ({
 		env: {
 			VITE_SERVER_HOST: '',
 			VITE_UPLOAD_FILES_TO_S3: 'false',
+			// Date formatting and week bucketing run in local time, so the date tests
+			// assert different calendar days east of UTC+12. Pin the zone like the env.
+			TZ: 'UTC',
 		},
 		setupFiles: ['./vitest.setup.ts'],
 		globals: true,
 		exclude: [...configDefaults.exclude, 'e2e/**'],
+		coverage: {
+			// Without `include`, coverage only counts files some test imports, so a module
+			// nothing tests is missing from the denominator instead of showing as 0%.
+			include: ['src/**/*.{ts,tsx}'],
+			exclude: ['src/__tests__/**', 'src/**/*.d.ts'],
+		},
 	},
 }))
