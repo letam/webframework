@@ -1,336 +1,383 @@
 import { useState, useRef, useEffect } from 'react'
-import { Video, Square } from 'lucide-react'
-// webm-duration-fix (and its Node polyfills) is only needed once a recording
-// stops, so it is imported dynamically to keep it out of the initial bundle.
+import { Video, Square, Loader2, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import { supportedVideoMimeType } from '@/lib/utils/media'
 import { isIOS } from '@/lib/utils/browser'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getSettings } from '@/lib/utils/settings'
-
+import {
+	captureErrorMessage,
+	captureSupportError,
+	classifyCaptureError,
+	finalizeRecording,
+	formatRecordingTime,
+	interruptionToast,
+	isRetryableCaptureError,
+	stopStreamTracks,
+	watchStreamInterruptions,
+	type CaptureAction,
+	type CaptureErrorKind,
+	type RecordingStatus,
+} from '@/lib/utils/capture'
+import { useRecordingClock } from '@/hooks/useRecordingClock'
 interface VideoRecorderModalProps {
-	onVideoCaptured: (videoBlob: Blob) => void
+	onVideoCaptured: (blob: Blob, action: CaptureAction) => void
+	onUploadInstead: () => void
 	open: boolean
 	onOpenChange: (open: boolean) => void
 }
 
 export const VideoRecorderModal: React.FC<VideoRecorderModalProps> = ({
 	onVideoCaptured,
+	onUploadInstead,
 	open,
 	onOpenChange,
-}) => {
-	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[425px] h-[420px] flex flex-col">
-				<DialogHeader className="text-center py-2">
-					<DialogTitle className="flex items-center justify-center gap-2">
-						<Video className="h-5 w-5" />
-						Record Video
-					</DialogTitle>
-				</DialogHeader>
-				<div className="flex-1 flex flex-col">
-					<VideoRecorder onVideoCaptured={onVideoCaptured} autoStart={true} />
-				</div>
-			</DialogContent>
-		</Dialog>
-	)
-}
-
-const formatTime = (seconds: number): string => {
-	const mins = Math.floor(seconds / 60)
-	const secs = seconds % 60
-	return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-}
-
-// Map a getUserMedia rejection to a message that tells the user what to fix.
-const cameraErrorMessage = (error: unknown): string => {
-	if (error instanceof DOMException) {
-		if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
-			return 'Camera access was blocked. Allow it in your browser settings, then try again.'
-		}
-		if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-			return 'No camera was found. Connect one and try again.'
-		}
-		if (error.name === 'NotReadableError') {
-			return 'Your camera is in use by another app. Close it and try again.'
-		}
-	}
-	return 'Unable to access camera or microphone. Please check permissions and try again.'
-}
+}) => (
+	<Dialog open={open} onOpenChange={onOpenChange}>
+		<DialogContent
+			className="sm:max-w-[425px] min-h-[420px] flex flex-col"
+			onInteractOutside={(e) => e.preventDefault()}
+		>
+			<DialogHeader className="text-center py-2">
+				<DialogTitle className="flex items-center justify-center gap-2">
+					<Video className="h-5 w-5" />
+					Record Video
+				</DialogTitle>
+			</DialogHeader>
+			<div className="flex-1 flex flex-col">
+				{/* Radix keeps DialogContent mounted for its exit animation. Unmounting the
+				    recorder with `open` runs its reset at once, so a take that finishes
+				    processing after X/Esc cannot still be attached or posted. */}
+				{open && (
+					<VideoRecorder
+						onVideoCaptured={onVideoCaptured}
+						onUploadInstead={onUploadInstead}
+						autoStart={true}
+					/>
+				)}
+			</div>
+		</DialogContent>
+	</Dialog>
+)
 
 interface VideoRecorderProps {
-	onVideoCaptured: (videoBlob: Blob) => void
+	onVideoCaptured: (blob: Blob, action: CaptureAction) => void
+	onUploadInstead?: () => void
 	disabled?: boolean
 	autoStart?: boolean
 }
-
-const VideoRecorder = ({ onVideoCaptured, disabled, autoStart = false }: VideoRecorderProps) => {
-	const [isRecording, setIsRecording] = useState(false)
-	const [videoURL, setVideoURL] = useState<string | null>(null)
-	const [recordingTime, setRecordingTime] = useState<number>(0)
-	const [errorMessage, setErrorMessage] = useState<string | null>(null)
+const VideoRecorder = ({
+	onVideoCaptured,
+	onUploadInstead,
+	disabled,
+	autoStart = false,
+}: VideoRecorderProps) => {
+	const [status, setStatus] = useState<RecordingStatus>('idle')
+	const [errorKind, setErrorKind] = useState<CaptureErrorKind | null>(null)
+	const [deviceMuted, setDeviceMuted] = useState(false)
+	const clock = useRecordingClock()
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-	const videoChunksRef = useRef<Blob[]>([])
-	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const streamRef = useRef<MediaStream | null>(null)
+	const unwatchRef = useRef<(() => void) | null>(null)
+	const chunksRef = useRef<Blob[]>([])
+	const stopActionRef = useRef<CaptureAction>('attach')
+	const interruptionRef = useRef<'ended' | 'error' | null>(null)
+	const captureAttemptRef = useRef(0)
+	const videoRef = useRef<HTMLVideoElement | null>(null)
 	const fileInputRef = useRef<HTMLInputElement>(null)
-	const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
-	// Auto-start at most once per mount so a failed getUserMedia can't retry in a loop.
 	const hasAutoStartedRef = useRef(false)
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: auto-start should only respond to the external trigger and current recording state
-	useEffect(() => {
-		if (autoStart && !isRecording && !videoURL && !hasAutoStartedRef.current) {
-			hasAutoStartedRef.current = true
-			startRecording()
-		}
-	}, [autoStart, isRecording, videoURL])
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: cleanup should only run when this recorder unmounts
-	useEffect(() => {
-		return () => {
-			reset()
-		}
-	}, [])
-
-	// Revoking the object URL lives here, not in `reset`. The unmount cleanup above
-	// captures render 1's `reset`, whose `videoURL` is still null, so a revoke from
-	// there never ran and the recorded blob stayed pinned for the tab's lifetime.
-	// Everything else `reset` touches is a ref, which is always current. Keying on
-	// the URL also releases a take that a re-record or a second file pick replaced.
-	useEffect(() => {
-		if (!videoURL) return
-		return () => URL.revokeObjectURL(videoURL)
-	}, [videoURL])
-
 	const reset = () => {
-		setIsRecording(false)
-		setRecordingTime(0)
-		setErrorMessage(null)
-		// Dropping the URL from state is what revokes it; see the effect above.
-		setVideoURL(null)
-		videoChunksRef.current = []
+		captureAttemptRef.current++
+		unwatchRef.current?.()
+		unwatchRef.current = null
 		const recorder = mediaRecorderRef.current
 		if (recorder) {
-			// Detach handlers first so stopping below can't fire an onstop that calls
-			// back after we've torn down (e.g. on unmount).
 			recorder.ondataavailable = null
 			recorder.onstop = null
-			if (recorder.state !== 'inactive') {
-				recorder.stop()
-			}
+			recorder.onerror = null
+			if (recorder.state !== 'inactive') recorder.stop()
 			mediaRecorderRef.current = null
 		}
-		if (streamRef.current) {
-			// Release the camera + mic: without this, closing the modal mid-record
-			// leaves the browser's recording indicator on and the devices hot.
-			for (const track of streamRef.current.getTracks()) {
-				track.stop()
-			}
-			streamRef.current = null
-		}
-		if (videoRef.current) {
-			videoRef.current.srcObject = null
-		}
-		if (timerRef.current) {
-			clearInterval(timerRef.current)
-			timerRef.current = undefined
-		}
+		stopStreamTracks(streamRef.current)
+		streamRef.current = null
+		if (videoRef.current) videoRef.current.srcObject = null
+		chunksRef.current = []
+		clock.reset()
+		interruptionRef.current = null
+		setDeviceMuted(false)
+		setErrorKind(null)
+		setStatus('idle')
 	}
-
-	const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
-		if (!file) return
-
-		try {
-			const videoUrl = URL.createObjectURL(file)
-			setVideoURL(videoUrl)
-			onVideoCaptured(file)
-		} catch (error) {
-			console.error('Error processing video file:', error)
-			toast.error('Error processing video file')
-		}
+		if (file) onVideoCaptured(file, 'attach')
 	}
-
-	const startTimer = (opts: { reset: boolean } = { reset: false }) => {
-		if (timerRef.current) {
-			clearInterval(timerRef.current)
-		}
-		if (opts.reset) {
-			setRecordingTime(0)
-		}
-		timerRef.current = setInterval(() => {
-			setRecordingTime((prev) => prev + 1)
-		}, 1000)
-	}
-
-	const stopTimer = () => {
-		if (timerRef.current) {
-			clearInterval(timerRef.current)
-		}
-	}
-
 	const startRecording = async () => {
 		if (disabled) return
-
-		// On iOS, use native camera input
+		setErrorKind(null)
+		setDeviceMuted(false)
+		interruptionRef.current = null
+		stopActionRef.current = 'attach'
+		// On iOS, use native camera input; cancellation leaves the start button available.
 		if (isIOS()) {
 			fileInputRef.current?.click()
 			return
 		}
-
+		const unsupported = captureSupportError()
+		if (unsupported) {
+			setErrorKind(unsupported)
+			setStatus('error')
+			return
+		}
+		const attempt = ++captureAttemptRef.current
+		setStatus('loading')
 		try {
-			setErrorMessage(null)
 			const settings = getSettings()
 			const videoConstraints = {
 				facingMode: 'user',
 				...(settings.videoQuality === 'high'
-					? {
-							width: { ideal: 1280 },
-							height: { ideal: 720 },
-						}
-					: {
-							width: { ideal: 854 },
-							height: { ideal: 480 },
-						}),
+					? { width: { ideal: 1280 }, height: { ideal: 720 } }
+					: { width: { ideal: 854 }, height: { ideal: 480 } }),
 				aspectRatio: 16 / 9,
 			}
-
-			const stream = await navigator.mediaDevices.getUserMedia({
-				video: videoConstraints,
-				audio: true,
-			})
-			streamRef.current = stream
-
-			// Display preview
-			if (videoRef.current) {
-				videoRef.current.srcObject = stream
-				// Ensure the video starts playing
-				await videoRef.current.play().catch((error) => {
-					console.error('Error playing video preview:', error)
+			let stream: MediaStream
+			try {
+				stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: true })
+			} catch (error) {
+				if (captureAttemptRef.current !== attempt) return
+				if (classifyCaptureError(error) !== 'overconstrained') throw error
+				stream = await navigator.mediaDevices.getUserMedia({
+					video: { facingMode: 'user' },
+					audio: true,
 				})
 			}
-
-			const mediaRecorder = new MediaRecorder(stream, {
-				mimeType: supportedVideoMimeType,
-				videoBitsPerSecond: settings.videoQuality === 'high' ? 2500000 : 1000000, // 2.5 Mbps for high, 1 Mbps for low
+			if (captureAttemptRef.current !== attempt) {
+				stopStreamTracks(stream)
+				return
+			}
+			streamRef.current = stream
+			// Display preview.
+			if (videoRef.current) {
+				videoRef.current.srcObject = stream
+				await videoRef.current
+					.play()
+					.catch((error) => console.error('Error playing video preview:', error))
+			}
+			if (captureAttemptRef.current !== attempt) return
+			unwatchRef.current = watchStreamInterruptions(stream, (event) => {
+				if (event === 'muted') setDeviceMuted(true)
+				else if (event === 'unmuted') setDeviceMuted(false)
+				else {
+					if (interruptionRef.current === null) interruptionRef.current = 'ended'
+					try {
+						if (recorder.state !== 'inactive') recorder.stop()
+					} catch {
+						// The browser may already have stopped the recorder.
+					}
+				}
 			})
-			mediaRecorderRef.current = mediaRecorder
-			videoChunksRef.current = []
-
-			mediaRecorder.ondataavailable = (e) => {
-				if (e.data.size > 0) {
-					videoChunksRef.current.push(e.data)
+			const recorder = new MediaRecorder(stream, {
+				mimeType: supportedVideoMimeType,
+				videoBitsPerSecond: settings.videoQuality === 'high' ? 2500000 : 1000000,
+			})
+			mediaRecorderRef.current = recorder
+			chunksRef.current = []
+			recorder.ondataavailable = (e) => {
+				if (e.data.size > 0) chunksRef.current.push(e.data)
+			}
+			recorder.onerror = () => {
+				if (interruptionRef.current === null) interruptionRef.current = 'error'
+				try {
+					if (recorder.state !== 'inactive') recorder.stop()
+				} catch {
+					// The browser may already have stopped the recorder.
 				}
 			}
-
-			mediaRecorder.onstop = () => {
-				stopTimer()
-				;(async () => {
+			recorder.onstop = () => {
+				unwatchRef.current?.()
+				unwatchRef.current = null
+				stopStreamTracks(streamRef.current)
+				streamRef.current = null
+				clock.pause()
+				setStatus('finishing')
+				const interruption = interruptionRef.current
+				const action = interruption ? 'attach' : stopActionRef.current
+				void (async () => {
 					try {
-						const { default: fixWebmDuration } = await import('webm-duration-fix')
-						const videoBlob = await fixWebmDuration(
-							new Blob(videoChunksRef.current, { type: videoChunksRef.current[0]?.type })
-						)
-						const videoUrl = URL.createObjectURL(videoBlob)
-						setVideoURL(videoUrl)
-						onVideoCaptured(videoBlob)
-					} catch (error) {
-						// Without this, a failed duration-fix or dynamic import rejects unhandled
-						// and the recording vanishes with no feedback (mirrors AudioRecorder.onstop).
-						console.error('Error processing video recording:', error)
-						toast.error('Error processing video recording')
-					} finally {
-						// Remove preview on success or failure so a dead live stream isn't left attached.
-						if (videoRef.current) {
-							videoRef.current.srcObject = null
+						const raw = new Blob(chunksRef.current, {
+							type: chunksRef.current[0]?.type ?? recorder.mimeType,
+						})
+						if (raw.size === 0) {
+							setErrorKind(interruption === 'ended' ? 'disconnected-empty' : 'empty')
+							setStatus('error')
+							return
 						}
+						const take = await finalizeRecording(raw)
+						if (mediaRecorderRef.current !== recorder) return
+						// No preview URL here: the parent closes the dialog in this same update, so this
+						// component unmounts before an effect could revoke one. MediaPreview shows the take.
+						if (interruption) toast.info(interruptionToast(interruption, 'camera'))
+						onVideoCaptured(take, action)
+						setStatus('idle')
+					} catch (error) {
+						console.error('Error processing video recording:', error)
+						if (mediaRecorderRef.current !== recorder) return
+						setErrorKind('processing')
+						setStatus('error')
+					} finally {
+						if (mediaRecorderRef.current === recorder && videoRef.current)
+							videoRef.current.srcObject = null
 					}
 				})()
 			}
-
-			mediaRecorder.start()
-			startTimer({ reset: true })
-			setIsRecording(true)
+			recorder.start()
+			clock.start()
+			setStatus('recording')
 		} catch (error) {
-			const message = cameraErrorMessage(error)
+			if (captureAttemptRef.current !== attempt) return
 			console.error('Error accessing camera/microphone:', error)
-			toast.error(message)
-			setErrorMessage(message)
+			unwatchRef.current?.()
+			unwatchRef.current = null
+			stopStreamTracks(streamRef.current)
+			streamRef.current = null
+			if (videoRef.current) videoRef.current.srcObject = null
+			setErrorKind(classifyCaptureError(error))
+			setStatus('error')
 		}
 	}
-
-	const stopRecording = () => {
-		if (mediaRecorderRef.current && isRecording) {
+	const stopRecording = (action: CaptureAction) => {
+		if (mediaRecorderRef.current && status === 'recording') {
+			stopActionRef.current = action
+			clock.pause()
+			setStatus('finishing')
 			mediaRecorderRef.current.stop()
-			// Stop all tracks
-			if (streamRef.current) {
-				for (const track of streamRef.current.getTracks()) {
-					track.stop()
-				}
-			}
-			setIsRecording(false)
 		}
 	}
+	const startRecordingRef = useRef(startRecording)
+	startRecordingRef.current = startRecording
+	const resetRef = useRef(reset)
+	resetRef.current = reset
+	useEffect(() => {
+		if (autoStart && status === 'idle' && !hasAutoStartedRef.current) {
+			hasAutoStartedRef.current = true
+			void startRecordingRef.current()
+		}
+	}, [autoStart, status])
+	useEffect(
+		() => () => {
+			// Re-arm auto-start so a remount of the same instance (StrictMode) starts again.
+			hasAutoStartedRef.current = false
+			resetRef.current()
+		},
+		[]
+	)
 
+	const previewVisible = status === 'recording' || status === 'finishing'
 	return (
 		<div className="flex flex-col h-full">
 			<div className="flex-1 flex flex-col">
-				<div className="relative w-full max-w-[320px] mx-auto aspect-video bg-black rounded-md overflow-hidden">
+				<div
+					className={`relative w-full max-w-[320px] mx-auto min-h-[180px] bg-black rounded-md overflow-hidden ${status === 'error' ? '' : 'aspect-video'}`}
+				>
 					<video
 						ref={videoRef}
-						className={`w-full h-full ${isRecording || videoURL ? 'object-cover' : 'hidden'}`}
-						autoPlay={isRecording}
-						muted={isRecording}
+						className={`w-full h-full ${previewVisible ? 'object-cover' : 'hidden'}`}
+						autoPlay={status === 'recording'}
+						muted
 						loop={false}
 						playsInline
-						src={videoURL || undefined}
-						style={{ transform: 'scaleX(-1)' }} // Mirror the video for selfie view
+						style={{ transform: 'scaleX(-1)' }}
 					/>
-					{!isRecording && !videoURL && !errorMessage && (
-						<div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+					{status === 'idle' && (
+						<div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
 							<Video className="h-12 w-12 opacity-50" />
+							<Button type="button" onClick={startRecording} disabled={disabled}>
+								<Video className="h-5 w-5" />
+								Start recording
+							</Button>
 						</div>
 					)}
-					{!isRecording && !videoURL && errorMessage && (
-						<div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-4 text-center">
-							<span className="text-sm text-white/80">{errorMessage}</span>
-							<Button type="button" variant="secondary" size="sm" onClick={startRecording}>
-								<Video className="h-4 w-4" />
-								<span>Try again</span>
-							</Button>
+					{status === 'loading' && (
+						<div className="absolute inset-0 flex items-center justify-center gap-2 text-white/80">
+							<Loader2 className="h-5 w-5 animate-spin" />
+							<span>Initializing camera...</span>
+						</div>
+					)}
+					{status === 'error' && errorKind && (
+						<div className="relative flex min-h-[180px] flex-col items-center justify-center gap-3 p-4 text-center">
+							<span className="text-sm text-white/80">
+								{captureErrorMessage(errorKind, 'camera')}
+							</span>
+							{isRetryableCaptureError(errorKind) && (
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => {
+										reset()
+										void startRecording()
+									}}
+									disabled={disabled}
+								>
+									<Video className="h-5 w-5" />
+									Try again
+								</Button>
+							)}
+							{onUploadInstead && (
+								<Button
+									type="button"
+									variant="ghost"
+									className="text-white/80"
+									onClick={onUploadInstead}
+								>
+									Upload a file instead
+								</Button>
+							)}
 						</div>
 					)}
 				</div>
 			</div>
-
-			{isRecording && (
+			{previewVisible && (
 				<div className="flex flex-col items-center justify-center gap-4 mt-4 pb-4">
 					<div className="flex flex-col items-center justify-center gap-2">
 						<div className="flex items-center gap-2 text-sm text-primary">
-							<div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
-							<span>Recording video...</span>
+							{status === 'finishing' ? (
+								<Loader2 className="h-5 w-5 animate-spin" />
+							) : (
+								<div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
+							)}
+							<span>
+								{status === 'finishing'
+									? 'Finishing recording...'
+									: deviceMuted
+										? 'Camera paused by your device'
+										: 'Recording video...'}
+							</span>
 						</div>
-						<div className="text-2xl font-mono font-bold text-primary">
-							{formatTime(recordingTime)}
+						<div className="text-2xl font-mono font-bold tabular-nums text-primary">
+							{formatRecordingTime(clock.seconds)}
 						</div>
 					</div>
-					<Button
-						type="button"
-						variant="destructive"
-						size="lg"
-						onClick={stopRecording}
-						className="flex items-center gap-2 px-8 animate-pulse-gentle"
-						disabled={disabled}
-					>
-						<Square className="h-5 w-5" />
-						<span>Stop Recording</span>
-					</Button>
+					{status === 'recording' && (
+						<div className="flex justify-center gap-3">
+							<Button
+								type="button"
+								variant="destructive"
+								onClick={() => stopRecording('attach')}
+								disabled={disabled}
+							>
+								<Square className="h-5 w-5" />
+								Stop
+							</Button>
+							<Button type="button" onClick={() => stopRecording('post')} disabled={disabled}>
+								<Send className="h-5 w-5" />
+								Post
+							</Button>
+						</div>
+					)}
 				</div>
 			)}
-
-			{/* Hidden file input for iOS */}
 			<input
 				ref={fileInputRef}
 				type="file"
@@ -343,5 +390,4 @@ const VideoRecorder = ({ onVideoCaptured, disabled, autoStart = false }: VideoRe
 		</div>
 	)
 }
-
 export default VideoRecorder

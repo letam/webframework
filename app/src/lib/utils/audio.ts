@@ -1,12 +1,13 @@
-// webm-duration-fix (and its Node polyfills) is only needed once a recording
-// stops, so it is imported dynamically to keep it out of the initial bundle.
+import { supportedAudioMimeType } from '@/lib/utils/media'
+import { finalizeRecording } from './capture'
 
 /**
- * Converts a WAV audio blob to WebM format with Opus codec
- * @param wavBlob The WAV audio blob to convert
- * @returns Promise resolving to a WebM audio blob
+ * Re-encodes a WAV through the first MediaRecorder type this browser supports
+ * (WebM/Opus on Chromium and Firefox, MP4/AAC on Safari). Returns the WAV unchanged
+ * when there is no encoder — the server accepts WAV.
  */
 export const convertWavToWebM = async (wavBlob: Blob): Promise<Blob> => {
+	if (!supportedAudioMimeType) return wavBlob
 	try {
 		const audioContext = new AudioContext()
 		const arrayBuffer = await wavBlob.arrayBuffer()
@@ -21,7 +22,7 @@ export const convertWavToWebM = async (wavBlob: Blob): Promise<Blob> => {
 
 		// Create a MediaRecorder to capture the stream
 		const mediaRecorder = new MediaRecorder(destination.stream, {
-			mimeType: 'audio/webm;codecs=opus',
+			mimeType: supportedAudioMimeType,
 		})
 		const chunks: Blob[] = []
 
@@ -34,11 +35,7 @@ export const convertWavToWebM = async (wavBlob: Blob): Promise<Blob> => {
 
 			mediaRecorder.onstop = async () => {
 				try {
-					const { default: fixWebmDuration } = await import('webm-duration-fix')
-					const webmBlob = await fixWebmDuration(
-						new Blob(chunks, { type: 'audio/webm;codecs=opus' })
-					)
-					resolve(webmBlob)
+					resolve(await finalizeRecording(new Blob(chunks, { type: supportedAudioMimeType })))
 				} catch (error) {
 					reject(error)
 				}
@@ -68,13 +65,14 @@ export const convertWavToWebM = async (wavBlob: Blob): Promise<Blob> => {
  */
 export const getAudioExtension = (mimeType: string): string => {
 	const baseType = mimeType.split(';')[0] // Remove codec information
-	return baseType === 'audio/webm'
-		? 'webm'
-		: baseType === 'audio/mp4'
-			? 'm4a'
-			: baseType === 'audio/ogg'
-				? 'ogg'
-				: 'webm' // Default to webm as it's most widely supported
+	const extensions: Record<string, string> = {
+		'audio/webm': 'webm',
+		'audio/mp4': 'm4a',
+		'audio/ogg': 'ogg',
+		'audio/wav': 'wav',
+		'audio/mpeg': 'mp3',
+	}
+	return extensions[baseType] ?? 'webm'
 }
 
 /**

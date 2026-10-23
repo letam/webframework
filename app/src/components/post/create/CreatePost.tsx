@@ -30,6 +30,7 @@ import { VideoRecorderModal } from './VideoRecorder'
 import MediaPreview from './MediaPreview'
 import type { CreatePostRequest, PostVisibility } from '@/types/post'
 import { convertWavToWebM, getAudioExtension } from '@/lib/utils/audio'
+import type { CaptureAction } from '@/lib/utils/capture'
 import { getSettings } from '@/lib/utils/settings'
 import { applyMarkdownShortcut, toggleMarker } from '@/lib/utils/richText'
 import { modifierKeyLabel } from '@/lib/utils/browser'
@@ -112,8 +113,12 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [videoFile, setVideoFile] = useState<File | null>(null)
 	const [imageFile, setImageFile] = useState<File | null>(null)
 	const [submitStatus, setSubmitStatus] = useState<SubmitStatus | ''>('')
+	const submitInFlightRef = useRef(false)
 	const [composerLocked, setComposerLocked] = useState(false)
 	const composerLockedRef = useRef(false)
+	// Set when the attached take was stopped with the recorder's Post. Cleared when that
+	// submission starts, when the take is discarded, or when an outbox load rolls back.
+	const postAfterCaptureRef = useRef(false)
 	const [isFocused, setIsFocused] = useState(false)
 	const [isAudioModalOpen, setIsAudioModalOpen] = useState(false)
 	const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
@@ -191,6 +196,12 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 				rollback: () => {
 					composerLockedRef.current = false
 					setComposerLocked(false)
+					if (postAfterCaptureRef.current) {
+						// The outbox kept or already published the loaded post, so sending the composer
+						// now could publish it twice. Keep the take and leave the decision to the user.
+						postAfterCaptureRef.current = false
+						toast("Your recording is attached but wasn't posted.")
+					}
 					const current = composerStateRef.current
 					if (
 						current.text !== entry.text ||
@@ -301,15 +312,24 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 		setPostText(e.target.value)
 	}
 
-	const handleAudioCaptured = (blob: Blob) => {
+	const handleAudioCaptured = (blob: Blob, action: CaptureAction = 'attach') => {
 		setAudioBlob(blob)
+		setAudioFile(null)
 		setMediaType('audio')
+		setIsAudioModalOpen(false)
+		postAfterCaptureRef.current = action === 'post'
 	}
-
-	const handleVideoCaptured = (blob: Blob) => {
+	const handleVideoCaptured = (blob: Blob, action: CaptureAction = 'attach') => {
 		setVideoBlob(blob)
 		setVideoFile(null)
 		setMediaType('video')
+		setIsVideoModalOpen(false)
+		postAfterCaptureRef.current = action === 'post'
+	}
+	const uploadInsteadOfRecording = () => {
+		setIsAudioModalOpen(false)
+		setIsVideoModalOpen(false)
+		uploadInputRef.current?.click()
 	}
 
 	const handleAudioFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -368,6 +388,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	}
 
 	const clearMedia = () => {
+		postAfterCaptureRef.current = false
 		setAudioBlob(null)
 		setVideoBlob(null)
 		setAudioFile(null)
@@ -399,10 +420,12 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					// Only convert to WebM if normalization is enabled (since normalization converts the blob to WAV)
 					if (getSettings().normalizeAudio) {
 						setSubmitStatus('compressing')
-						const webmBlob = await convertWavToWebM(blob)
-						file = new File([webmBlob], `recording_${Date.now()}.webm`, {
-							type: 'audio/webm;codecs=opus',
-						})
+						const encoded = await convertWavToWebM(blob)
+						file = new File(
+							[encoded],
+							`recording_${Date.now()}.${getMediaExtension(encoded.type, 'audio')}`,
+							{ type: encoded.type }
+						)
 					} else {
 						const extension = getMediaExtension(blob.type, 'audio')
 						file = new File([blob], `recording_${Date.now()}.${extension}`, { type: blob.type })
@@ -497,106 +520,121 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			return
 		}
 
-		if (getEffectiveSyncMode() === 'local' || !navigator.onLine) {
-			setSubmitStatus('preparing')
-			try {
-				const prepared = await prepareMediaFile()
-				if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
-					toast.error(MEDIA_CAP_TOAST)
-					return
-				}
-				await queuePost(isDraft, prepared)
-			} catch {
-				toast.error('Failed to create post')
-			} finally {
-				setSubmitStatus('')
-			}
-			return
-		}
-
-		setSubmitStatus('preparing')
-		let prepared: { mediaType: 'audio' | 'video' | 'image'; file: File } | null = null
-		// A TypeError thrown *during* preparation is not a network drop; queueing then
-		// would enqueue the text without its media.
-		let prepareCompleted = false
-
-		// The live request and the fallback queue entry share one client_uuid: if the
-		// create landed but its response was lost, the flush replays instead of
-		// duplicating.
-		const clientUuid = crypto.randomUUID()
-		let expectedAuthor: number | 'anon' = isAuthenticated && userId !== null ? userId : 'anon'
-		let queueAuth = {
-			author: (isAuthenticated && userId !== null
-				? userId
-				: isAuthResolved
-					? 'anon'
-					: 'unknown') as OutboxEntry['author'],
-			isAuthenticated,
-		}
-		let authReady = isAuthResolved
-
+		if (submitInFlightRef.current) return
+		submitInFlightRef.current = true
 		try {
-			if (!isAuthResolved) {
-				if (await refreshAuthStatus()) {
-					const resolvedAuth = getAuthSnapshot()
-					if (resolvedAuth.isAuthResolved) {
-						authReady = true
-						expectedAuthor =
-							resolvedAuth.isAuthenticated && resolvedAuth.userId !== null
-								? resolvedAuth.userId
-								: 'anon'
-						queueAuth = {
-							author: expectedAuthor,
-							isAuthenticated: resolvedAuth.isAuthenticated,
+			if (getEffectiveSyncMode() === 'local' || !navigator.onLine) {
+				setSubmitStatus('preparing')
+				try {
+					const prepared = await prepareMediaFile()
+					if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
+						toast.error(MEDIA_CAP_TOAST)
+						return
+					}
+					await queuePost(isDraft, prepared)
+				} catch {
+					toast.error('Failed to create post')
+				} finally {
+					setSubmitStatus('')
+				}
+				return
+			}
+
+			setSubmitStatus('preparing')
+			let prepared: { mediaType: 'audio' | 'video' | 'image'; file: File } | null = null
+			// A TypeError thrown *during* preparation is not a network drop; queueing then
+			// would enqueue the text without its media.
+			let prepareCompleted = false
+
+			// The live request and the fallback queue entry share one client_uuid: if the
+			// create landed but its response was lost, the flush replays instead of
+			// duplicating.
+			const clientUuid = crypto.randomUUID()
+			let expectedAuthor: number | 'anon' = isAuthenticated && userId !== null ? userId : 'anon'
+			let queueAuth = {
+				author: (isAuthenticated && userId !== null
+					? userId
+					: isAuthResolved
+						? 'anon'
+						: 'unknown') as OutboxEntry['author'],
+				isAuthenticated,
+			}
+			let authReady = isAuthResolved
+
+			try {
+				if (!isAuthResolved) {
+					if (await refreshAuthStatus()) {
+						const resolvedAuth = getAuthSnapshot()
+						if (resolvedAuth.isAuthResolved) {
+							authReady = true
+							expectedAuthor =
+								resolvedAuth.isAuthenticated && resolvedAuth.userId !== null
+									? resolvedAuth.userId
+									: 'anon'
+							queueAuth = {
+								author: expectedAuthor,
+								isAuthenticated: resolvedAuth.isAuthenticated,
+							}
 						}
 					}
 				}
-			}
-			prepared = await prepareMediaFile()
-			prepareCompleted = true
-			// Connectivity may disappear while a recording is converted. Starting the
-			// mutation offline can pause indefinitely instead of rejecting into fallback.
-			// An unresolved identity is queued as unknown for the same fail-safe reason.
-			if (!authReady || getEffectiveSyncMode() === 'local' || !navigator.onLine) {
-				if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
-					toast.error(MEDIA_CAP_TOAST)
+				prepared = await prepareMediaFile()
+				prepareCompleted = true
+				// Connectivity may disappear while a recording is converted. Starting the
+				// mutation offline can pause indefinitely instead of rejecting into fallback.
+				// An unresolved identity is queued as unknown for the same fail-safe reason.
+				if (!authReady || getEffectiveSyncMode() === 'local' || !navigator.onLine) {
+					if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
+						toast.error(MEDIA_CAP_TOAST)
+						return
+					}
+					await queuePost(isDraft, prepared, clientUuid, queueAuth)
 					return
 				}
-				await queuePost(isDraft, prepared, clientUuid, queueAuth)
-				return
-			}
-			setSubmitStatus('submitting')
-			const newPost: CreatePostRequest = {
-				text: postText,
-				client_uuid: clientUuid,
-				expected_author: expectedAuthor,
-				media_type: prepared?.mediaType,
-				media: prepared?.file ?? null,
-				visibility: queueAuth.isAuthenticated ? visibility : undefined,
-				is_draft: isDraft || undefined,
-			}
+				setSubmitStatus('submitting')
+				const newPost: CreatePostRequest = {
+					text: postText,
+					client_uuid: clientUuid,
+					expected_author: expectedAuthor,
+					media_type: prepared?.mediaType,
+					media: prepared?.file ?? null,
+					visibility: queueAuth.isAuthenticated ? visibility : undefined,
+					is_draft: isDraft || undefined,
+				}
 
-			await onPostCreated(newPost)
-			resetComposer()
-			toast.success(isDraft ? 'Saved to drafts.' : 'Post created successfully!')
-		} catch (error) {
-			if (error instanceof TypeError && prepareCompleted) {
-				if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
-					toast.error(MEDIA_CAP_TOAST)
-					return
+				await onPostCreated(newPost)
+				resetComposer()
+				toast.success(isDraft ? 'Saved to drafts.' : 'Post created successfully!')
+			} catch (error) {
+				if (error instanceof TypeError && prepareCompleted) {
+					if (prepared && prepared.file.size > MAX_QUEUED_MEDIA_BYTES) {
+						toast.error(MEDIA_CAP_TOAST)
+						return
+					}
+					await queuePost(isDraft, prepared, clientUuid, queueAuth)
+				} else {
+					toast.error('Failed to create post')
 				}
-				await queuePost(isDraft, prepared, clientUuid, queueAuth)
-			} else {
-				toast.error('Failed to create post')
+			} finally {
+				setSubmitStatus('')
 			}
 		} finally {
-			setSubmitStatus('')
+			submitInFlightRef.current = false
 		}
 	}
 
 	const handleSubmit = (e: React.FormEvent) => {
 		void submitPost(false, e)
 	}
+
+	const submitPostRef = useRef(submitPost)
+	submitPostRef.current = submitPost
+	useEffect(() => {
+		// While an outbox load holds the composer, keep the request until it commits.
+		if (!postAfterCaptureRef.current || composerLocked || (!audioBlob && !videoBlob)) return
+		postAfterCaptureRef.current = false
+		void submitPostRef.current(false)
+	}, [audioBlob, videoBlob, composerLocked])
 
 	const openUploadFileSelector = () => {
 		uploadInputRef.current?.click()
@@ -970,19 +1008,15 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			<AudioRecorderModal
 				open={isAudioModalOpen}
 				onOpenChange={setIsAudioModalOpen}
-				onAudioCaptured={(blob) => {
-					handleAudioCaptured(blob)
-					setIsAudioModalOpen(false)
-				}}
+				onAudioCaptured={handleAudioCaptured}
+				onUploadInstead={uploadInsteadOfRecording}
 			/>
 
 			<VideoRecorderModal
 				open={isVideoModalOpen}
 				onOpenChange={setIsVideoModalOpen}
-				onVideoCaptured={(blob) => {
-					handleVideoCaptured(blob)
-					setIsVideoModalOpen(false)
-				}}
+				onVideoCaptured={handleVideoCaptured}
+				onUploadInstead={uploadInsteadOfRecording}
 			/>
 		</div>
 	)

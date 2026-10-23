@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { Square, Pause, Play, Loader2, Mic } from 'lucide-react'
+import { Square, Pause, Play, Loader2, Mic, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
-// webm-duration-fix (and its Node polyfills) is only needed once a recording
-// stops, so it is imported dynamically to keep it out of the initial bundle.
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/sonner'
 import { isIOS, isSafari } from '@/lib/utils/browser'
@@ -10,139 +8,103 @@ import { supportedAudioMimeType } from '@/lib/utils/media'
 import { getSettings } from '@/lib/utils/settings'
 import { convertToWav } from '@/lib/utils/audio'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-
+import {
+	captureErrorMessage,
+	captureSupportError,
+	classifyCaptureError,
+	finalizeRecording,
+	formatRecordingTime,
+	interruptionToast,
+	isRetryableCaptureError,
+	stopStreamTracks,
+	watchStreamInterruptions,
+	type CaptureAction,
+	type CaptureErrorKind,
+	type RecordingStatus,
+} from '@/lib/utils/capture'
+import { useRecordingClock } from '@/hooks/useRecordingClock'
 interface AudioRecorderModalProps {
-	onAudioCaptured: (audioBlob: Blob) => void
+	onAudioCaptured: (blob: Blob, action: CaptureAction) => void
+	onUploadInstead: () => void
 	open: boolean
 	onOpenChange: (open: boolean) => void
 }
 
 export const AudioRecorderModal: React.FC<AudioRecorderModalProps> = ({
 	onAudioCaptured,
+	onUploadInstead,
 	open,
 	onOpenChange,
-}) => {
-	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[425px] h-[300px] flex flex-col">
-				<DialogHeader className="text-center py-2">
-					<DialogTitle className="flex items-center justify-center gap-2">
-						<Mic className="h-5 w-5" />
-						Record Audio
-					</DialogTitle>
-				</DialogHeader>
-				<div className="flex-1 flex flex-col">
-					<AudioRecorder onAudioCaptured={onAudioCaptured} autoStart={true} />
-				</div>
-			</DialogContent>
-		</Dialog>
-	)
-}
-
-type RecordingStatus =
-	| 'idle'
-	| 'loading'
-	| 'recording'
-	| 'paused'
-	| 'normalizing'
-	| 'ready'
-	| 'error'
+}) => (
+	<Dialog open={open} onOpenChange={onOpenChange}>
+		<DialogContent
+			className="sm:max-w-[425px] min-h-[300px] flex flex-col"
+			onInteractOutside={(e) => e.preventDefault()}
+		>
+			<DialogHeader className="text-center py-2">
+				<DialogTitle className="flex items-center justify-center gap-2">
+					<Mic className="h-5 w-5" />
+					Record Audio
+				</DialogTitle>
+			</DialogHeader>
+			<div className="flex-1 flex flex-col">
+				{/* Radix keeps DialogContent mounted for its exit animation. Unmounting the
+				    recorder with `open` runs its reset at once, so a take that finishes
+				    processing after X/Esc cannot still be attached or posted. */}
+				{open && (
+					<AudioRecorder
+						onAudioCaptured={onAudioCaptured}
+						onUploadInstead={onUploadInstead}
+						autoStart={true}
+					/>
+				)}
+			</div>
+		</DialogContent>
+	</Dialog>
+)
 
 interface StatusMessageProps {
-	status: RecordingStatus
-	showNormalizingMessage: boolean
-	recordingTime?: number
-	errorMessage?: string | null
+	status: RecordingStatus | 'normalizing'
+	seconds: number
+	deviceMuted: boolean
+	errorKind: CaptureErrorKind | null
 }
-
-const formatTime = (seconds: number): string => {
-	const mins = Math.floor(seconds / 60)
-	const secs = seconds % 60
-	return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-}
-
-// Map a getUserMedia rejection to a message that tells the user what to fix.
-const micErrorMessage = (error: unknown): string => {
-	if (error instanceof DOMException) {
-		if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
-			return 'Microphone access was blocked. Allow it in your browser settings, then try again.'
-		}
-		if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-			return 'No microphone was found. Connect one and try again.'
-		}
-		if (error.name === 'NotReadableError') {
-			return 'Your microphone is in use by another app. Close it and try again.'
-		}
-	}
-	return 'Unable to access microphone. Please check permissions and try again.'
-}
-
-const StatusMessage = ({
-	status,
-	showNormalizingMessage,
-	recordingTime,
-	errorMessage,
-}: StatusMessageProps) => {
-	if (status === 'error') {
+const StatusMessage = ({ status, seconds, deviceMuted, errorKind }: StatusMessageProps) => {
+	if (status === 'error' && errorKind)
 		return (
 			<div className="flex items-center justify-center px-4 text-center text-base">
 				<span className="text-muted-foreground">
-					{errorMessage ?? 'Unable to access microphone. Please check permissions and try again.'}
+					{captureErrorMessage(errorKind, 'microphone')}
 				</span>
 			</div>
 		)
-	}
-	if (status === 'loading') {
-		return (
-			<div className="flex items-center justify-center gap-2 text-base">
-				<Loader2 className="h-5 w-5 animate-spin" />
-				<span className="text-muted-foreground">Initializing microphone...</span>
-			</div>
-		)
-	}
-	if (status === 'recording') {
-		return (
-			<div className="flex flex-col items-center justify-center gap-1 text-base">
-				<span className="text-primary font-medium">Recording...</span>
-				{recordingTime !== undefined && (
-					<div className="text-2xl font-mono font-bold text-primary tabular-nums">
-						{formatTime(recordingTime)}
-					</div>
+	if (status === 'idle') return null
+	const showClock = status === 'recording' || status === 'paused' || status === 'finishing'
+	return (
+		<div className="flex flex-col items-center justify-center gap-2 text-base">
+			<div className="flex items-center justify-center gap-2">
+				{(status === 'loading' || status === 'finishing' || status === 'normalizing') && (
+					<Loader2 className="h-5 w-5 animate-spin" />
 				)}
+				{status === 'paused' && <Pause className="h-5 w-5 text-muted-foreground" />}
+				<span
+					className={status === 'recording' ? 'text-primary font-medium' : 'text-muted-foreground'}
+				>
+					{status === 'loading' && 'Initializing microphone...'}
+					{status === 'recording' &&
+						(deviceMuted ? 'Microphone paused by your device' : 'Recording...')}
+					{status === 'paused' && 'Recording paused'}
+					{status === 'finishing' && 'Finishing recording...'}
+					{status === 'normalizing' && 'Normalizing audio...'}
+				</span>
 			</div>
-		)
-	}
-	if (status === 'paused') {
-		return (
-			<div className="flex flex-col items-center justify-center gap-2 text-base">
-				<div className="flex items-center gap-2">
-					<Pause className="h-5 w-5 text-muted-foreground" />
-					<span className="text-muted-foreground font-medium">Recording paused</span>
+			{showClock && (
+				<div className="text-2xl font-mono font-bold text-primary tabular-nums">
+					{formatRecordingTime(seconds)}
 				</div>
-				{recordingTime !== undefined && (
-					<div className="text-2xl font-mono font-bold text-muted-foreground">
-						{formatTime(recordingTime)}
-					</div>
-				)}
-			</div>
-		)
-	}
-	if (status === 'normalizing' && showNormalizingMessage) {
-		return (
-			<div className="flex items-center justify-center gap-2 text-base">
-				<Loader2 className="h-5 w-5 animate-spin" />
-				<span className="text-muted-foreground">Normalizing audio...</span>
-			</div>
-		)
-	}
-	if (status === 'ready') {
-		return (
-			<div className="flex items-center justify-center gap-2 text-base">
-				<span className="text-muted-foreground font-medium">Audio recorded</span>
-			</div>
-		)
-	}
-	return null
+			)}
+		</div>
+	)
 }
 
 const normalizeAudio = async (audioBlob: Blob): Promise<Blob> => {
@@ -194,44 +156,40 @@ const normalizeAudio = async (audioBlob: Blob): Promise<Blob> => {
 		return wavBlob
 	} catch (error) {
 		console.error('Error normalizing audio:', error)
-		return audioBlob // Return original blob if normalization fails
+		return finalizeRecording(audioBlob)
 	}
 }
 
 interface AudioRecorderProps {
-	onAudioCaptured: (audioBlob: Blob) => void
+	onAudioCaptured: (blob: Blob, action: CaptureAction) => void
+	onUploadInstead?: () => void
 	disabled?: boolean
-	submitStatus?: '' | 'preparing' | 'compressing' | 'submitting'
-	isProcessing?: boolean
 	autoStart?: boolean
 }
 
 const AudioRecorder = ({
 	onAudioCaptured,
+	onUploadInstead,
 	disabled,
-	submitStatus = '',
-	isProcessing = false,
 	autoStart = false,
 }: AudioRecorderProps) => {
-	const [status, setStatus] = useState<RecordingStatus>('idle')
-	const [showNormalizingMessage, setShowNormalizingMessage] = useState(false)
-	const [audioURL, setAudioURL] = useState<string | null>(null)
-	const [recordingTime, setRecordingTime] = useState<number>(0)
-	const [errorMessage, setErrorMessage] = useState<string | null>(null)
-	// Guards the auto-start effect so a denied getUserMedia can't spin an infinite
-	// retry loop: startRecording sends status back through 'error', but even a
-	// bounce through 'idle' must not re-fire auto-start after the first attempt.
+	const [status, setStatus] = useState<RecordingStatus | 'normalizing'>('idle')
+	const [errorKind, setErrorKind] = useState<CaptureErrorKind | null>(null)
+	const [deviceMuted, setDeviceMuted] = useState(false)
+	const clock = useRecordingClock()
 	const hasAutoStartedRef = useRef(false)
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-	const audioChunksRef = useRef<Blob[]>([])
-	const normalizingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-	const timerRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
-	// Live input-level meter (AnalyserNode drives the ring around the mic)
+	const streamRef = useRef<MediaStream | null>(null)
+	const unwatchRef = useRef<(() => void) | null>(null)
+	const chunksRef = useRef<Blob[]>([])
+	const stopActionRef = useRef<CaptureAction>('attach')
+	const interruptionRef = useRef<'ended' | 'error' | null>(null)
+	// Invalidate a permission request if the dialog closes before it resolves.
+	const captureAttemptRef = useRef(0)
 	const audioContextRef = useRef<AudioContext | null>(null)
 	const analyserRef = useRef<AnalyserNode | null>(null)
 	const meterRafRef = useRef<number | undefined>(undefined)
 	const meterRef = useRef<HTMLSpanElement | null>(null)
-
 	const startMeter = () => {
 		const analyser = analyserRef.current
 		if (!analyser) return
@@ -274,84 +232,70 @@ const AudioRecorder = ({
 		}
 	}
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: auto-start should only respond to the external trigger and current status
-	useEffect(() => {
-		if (autoStart && status === 'idle' && !hasAutoStartedRef.current) {
-			hasAutoStartedRef.current = true
-			startRecording()
-		}
-	}, [autoStart, status])
-
 	const reset = () => {
-		setStatus('idle')
-		setShowNormalizingMessage(false)
-		setRecordingTime(0)
-		setErrorMessage(null)
-		// Dropping the URL from state is what revokes it; see the effect below.
-		setAudioURL(null)
-		audioChunksRef.current = []
+		captureAttemptRef.current++
+		unwatchRef.current?.()
+		unwatchRef.current = null
 		const recorder = mediaRecorderRef.current
 		if (recorder) {
-			// Detach handlers first so stopping the tracks below can't fire an onstop
-			// that normalizes and calls back after we've torn down (e.g. on unmount).
+			// Detach handlers before stopping so a discarded recording cannot attach.
 			recorder.ondataavailable = null
 			recorder.onstop = null
-			if (recorder.state !== 'inactive') {
-				recorder.stop()
-			}
-			// Release the mic: without this, closing the modal mid-record leaves the
-			// browser's recording indicator on and the microphone hot.
-			for (const track of recorder.stream.getTracks()) {
-				track.stop()
-			}
+			recorder.onerror = null
+			if (recorder.state !== 'inactive') recorder.stop()
 			mediaRecorderRef.current = null
 		}
-		if (normalizingTimeoutRef.current) {
-			clearTimeout(normalizingTimeoutRef.current)
-		}
-		if (timerRef.current) {
-			clearInterval(timerRef.current)
-			timerRef.current = undefined
-		}
+		stopStreamTracks(streamRef.current)
+		streamRef.current = null
+		chunksRef.current = []
+		clock.reset()
 		teardownMeter()
-	}
-
-	const startTimer = (opts: { reset: boolean } = { reset: false }) => {
-		if (timerRef.current) {
-			clearInterval(timerRef.current)
-		}
-		if (opts.reset) {
-			setRecordingTime(0)
-		}
-		timerRef.current = setInterval(() => {
-			setRecordingTime((prev) => prev + 1)
-		}, 1000)
-	}
-
-	const stopTimer = () => {
-		if (timerRef.current) {
-			clearInterval(timerRef.current)
-			timerRef.current = undefined
-		}
+		interruptionRef.current = null
+		setDeviceMuted(false)
+		setErrorKind(null)
+		setStatus('idle')
 	}
 
 	const startRecording = async () => {
 		if (disabled) return
-
+		setErrorKind(null)
+		setDeviceMuted(false)
+		interruptionRef.current = null
+		stopActionRef.current = 'attach'
+		const unsupported = captureSupportError()
+		if (unsupported) {
+			setErrorKind(unsupported)
+			setStatus('error')
+			return
+		}
+		const attempt = ++captureAttemptRef.current
+		setStatus('loading')
 		try {
-			setStatus('loading')
-			setErrorMessage(null)
-			// Clean up previous audio state; clearing it revokes the old take.
-			setAudioURL(null)
-
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-			const mediaRecorder = new MediaRecorder(stream, { mimeType: supportedAudioMimeType })
-			mediaRecorderRef.current = mediaRecorder
-			audioChunksRef.current = []
-
-			// Feed the level meter from the same stream (best-effort; recording works without it)
+			if (captureAttemptRef.current !== attempt) {
+				stopStreamTracks(stream)
+				return
+			}
+			streamRef.current = stream
+			unwatchRef.current = watchStreamInterruptions(stream, (event) => {
+				if (event === 'muted') setDeviceMuted(true)
+				else if (event === 'unmuted') setDeviceMuted(false)
+				else {
+					if (interruptionRef.current === null) interruptionRef.current = 'ended'
+					try {
+						if (recorder.state !== 'inactive') recorder.stop()
+					} catch {
+						// The browser may already have stopped the recorder.
+					}
+				}
+			})
+			const recorder = new MediaRecorder(stream, { mimeType: supportedAudioMimeType })
+			mediaRecorderRef.current = recorder
+			chunksRef.current = []
+			// Feed the level meter from the same stream (best-effort).
 			try {
 				const audioContext = new AudioContext()
+				audioContext.resume().catch(() => {})
 				const source = audioContext.createMediaStreamSource(stream)
 				const analyser = audioContext.createAnalyser()
 				analyser.fftSize = 512
@@ -362,68 +306,72 @@ const AudioRecorder = ({
 			} catch (meterError) {
 				console.error('Could not start level meter:', meterError)
 			}
-
-			mediaRecorder.ondataavailable = (e) => {
-				if (e.data.size > 0) {
-					audioChunksRef.current.push(e.data)
+			recorder.ondataavailable = (e) => {
+				if (e.data.size > 0) chunksRef.current.push(e.data)
+			}
+			recorder.onerror = () => {
+				if (interruptionRef.current === null) interruptionRef.current = 'error'
+				try {
+					if (recorder.state !== 'inactive') recorder.stop()
+				} catch {
+					// The browser may already have stopped the recorder.
 				}
 			}
-
-			mediaRecorder.onstop = () => {
-				stopTimer()
-				;(async () => {
+			recorder.onstop = () => {
+				unwatchRef.current?.()
+				unwatchRef.current = null
+				stopStreamTracks(streamRef.current)
+				streamRef.current = null
+				teardownMeter()
+				clock.pause()
+				setStatus('finishing')
+				const interruption = interruptionRef.current
+				const action = interruption ? 'attach' : stopActionRef.current
+				void (async () => {
+					const raw = new Blob(chunksRef.current, {
+						type: chunksRef.current[0]?.type ?? recorder.mimeType,
+					})
+					if (raw.size === 0) {
+						setErrorKind(interruption === 'ended' ? 'disconnected-empty' : 'empty')
+						setStatus('error')
+						return
+					}
 					try {
-						let audioBlob = new Blob(audioChunksRef.current, {
-							type: audioChunksRef.current[0]?.type,
-						})
-
-						// Only normalize if the setting is enabled
+						let take = raw
 						if (getSettings().normalizeAudio) {
 							setStatus('normalizing')
-							normalizingTimeoutRef.current = setTimeout(() => {
-								setShowNormalizingMessage(true)
-							}, 500)
-							audioBlob = await normalizeAudio(audioBlob)
-							if (normalizingTimeoutRef.current) {
-								clearTimeout(normalizingTimeoutRef.current)
-							}
-							setShowNormalizingMessage(false)
-						} else {
-							const { default: fixWebmDuration } = await import('webm-duration-fix')
-							audioBlob = await fixWebmDuration(audioBlob)
-						}
-
-						const audioUrl = URL.createObjectURL(audioBlob)
-						setAudioURL(audioUrl)
-						onAudioCaptured(audioBlob)
-						setStatus('ready')
-					} catch (error) {
-						console.error('Error processing audio:', error)
-						toast.error('Error processing audio recording')
+							take = await normalizeAudio(raw)
+						} else take = await finalizeRecording(raw)
+						if (mediaRecorderRef.current !== recorder) return
+						if (interruption) toast.info(interruptionToast(interruption, 'microphone'))
+						onAudioCaptured(take, action)
 						setStatus('idle')
-						setShowNormalizingMessage(false)
+					} catch (error) {
+						console.error('Error processing audio recording:', error)
+						if (mediaRecorderRef.current !== recorder) return
+						setErrorKind('processing')
+						setStatus('error')
 					}
 				})()
 			}
-
-			mediaRecorder.start()
-			startTimer({ reset: true })
-
-			// In Safari desktop app, delay recording state update by 500ms since the microphone does not always start recording immediately
+			recorder.start()
+			clock.start()
+			// Safari desktop may need 500 ms before the microphone begins capturing.
 			if (isSafari() && !isIOS()) {
 				setTimeout(() => {
-					setStatus('recording')
+					if (mediaRecorderRef.current === recorder && recorder.state === 'recording')
+						setStatus('recording')
 				}, 500)
-			} else {
-				setStatus('recording')
-			}
+			} else setStatus('recording')
 		} catch (error) {
-			const message = micErrorMessage(error)
+			if (captureAttemptRef.current !== attempt) return
 			console.error('Error accessing microphone:', error)
-			toast.error(message)
-			setErrorMessage(message)
-			// Terminal 'error' (not 'idle') so the auto-start effect can't retry in a
-			// loop; the user retries explicitly via the button below.
+			unwatchRef.current?.()
+			unwatchRef.current = null
+			stopStreamTracks(streamRef.current)
+			streamRef.current = null
+			teardownMeter()
+			setErrorKind(classifyCaptureError(error))
 			setStatus('error')
 		}
 	}
@@ -431,49 +379,48 @@ const AudioRecorder = ({
 	const pauseRecording = () => {
 		if (mediaRecorderRef.current && status === 'recording') {
 			mediaRecorderRef.current.pause()
-			stopTimer()
+			clock.pause()
 			stopMeter()
 			setStatus('paused')
 		} else if (mediaRecorderRef.current && status === 'paused') {
 			mediaRecorderRef.current.resume()
-			startTimer()
+			clock.resume()
 			startMeter()
 			setStatus('recording')
 		}
 	}
-
-	const stopRecording = () => {
+	const stopRecording = (action: CaptureAction) => {
 		if (mediaRecorderRef.current && (status === 'recording' || status === 'paused')) {
+			stopActionRef.current = action
+			clock.pause()
+			stopMeter()
+			setStatus('finishing')
 			mediaRecorderRef.current.stop()
-			stopTimer()
-			teardownMeter()
-			// Stop all audio tracks
-			for (const track of mediaRecorderRef.current.stream.getTracks()) {
-				track.stop()
-			}
 		}
 	}
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: cleanup should only run when this recorder unmounts
+	const startRecordingRef = useRef(startRecording)
+	startRecordingRef.current = startRecording
+	const resetRef = useRef(reset)
+	resetRef.current = reset
 	useEffect(() => {
-		return () => {
-			reset()
+		if (autoStart && status === 'idle' && !hasAutoStartedRef.current) {
+			hasAutoStartedRef.current = true
+			void startRecordingRef.current()
 		}
-	}, [])
-
-	// Revoking the object URL lives here, not in `reset`. The unmount cleanup above
-	// captures render 1's `reset`, whose `audioURL` is still null, so a revoke from
-	// there never ran and the recorded take stayed pinned for the tab's lifetime.
-	// Everything else `reset` touches is a ref, which is always current.
-	useEffect(() => {
-		if (!audioURL) return
-		return () => URL.revokeObjectURL(audioURL)
-	}, [audioURL])
+	}, [autoStart, status])
+	useEffect(
+		() => () => {
+			// Re-arm auto-start so a remount of the same instance (StrictMode) starts again.
+			hasAutoStartedRef.current = false
+			resetRef.current()
+		},
+		[]
+	)
 
 	return (
 		<div className="flex flex-col h-full">
 			<div className="flex-1 flex flex-col items-center justify-center gap-3">
-				{(status === 'recording' || status === 'paused') && (
+				{(status === 'recording' || status === 'paused' || status === 'finishing') && (
 					<div className="relative flex h-20 w-20 items-center justify-center">
 						<span
 							ref={meterRef}
@@ -493,59 +440,65 @@ const AudioRecorder = ({
 				)}
 				<StatusMessage
 					status={status}
-					showNormalizingMessage={showNormalizingMessage}
-					recordingTime={recordingTime}
-					errorMessage={errorMessage}
+					seconds={clock.seconds}
+					deviceMuted={deviceMuted}
+					errorKind={errorKind}
 				/>
 			</div>
-
-			<div className="flex justify-center gap-4 mt-auto">
-				{status === 'error' && (
-					<Button
-						type="button"
-						variant="outline"
-						size="lg"
-						onClick={startRecording}
-						disabled={isProcessing || !!submitStatus}
-						className="flex items-center gap-2 px-8"
-					>
-						<Mic className="h-5 w-5" />
-						<span>Try again</span>
-					</Button>
+			<div className="flex flex-wrap justify-center gap-3 mt-auto">
+				{status === 'error' && errorKind && (
+					<>
+						{isRetryableCaptureError(errorKind) && (
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => {
+									reset()
+									void startRecording()
+								}}
+								disabled={disabled}
+							>
+								<Mic className="h-5 w-5" />
+								Try again
+							</Button>
+						)}
+						{onUploadInstead && (
+							<Button type="button" variant="ghost" onClick={onUploadInstead}>
+								Upload a file instead
+							</Button>
+						)}
+					</>
 				)}
 				{(status === 'recording' || status === 'paused') && (
 					<>
 						<Button
 							type="button"
 							variant="outline"
-							size="lg"
+							size="icon"
 							onClick={pauseRecording}
-							disabled={isProcessing || !!submitStatus}
-							className="flex items-center gap-2 px-8"
+							disabled={disabled}
 							autoFocus={status === 'recording'}
+							aria-label={status === 'recording' ? 'Pause' : 'Resume'}
+							title={status === 'recording' ? 'Pause' : 'Resume'}
 						>
 							{status === 'recording' ? (
-								<>
-									<Pause className="h-5 w-5" />
-									<span>Pause</span>
-								</>
+								<Pause className="h-5 w-5" />
 							) : (
-								<>
-									<Play className="h-5 w-5" />
-									<span>Resume</span>
-								</>
+								<Play className="h-5 w-5" />
 							)}
 						</Button>
 						<Button
 							type="button"
 							variant="destructive"
-							size="lg"
-							onClick={stopRecording}
-							disabled={isProcessing || !!submitStatus}
-							className="flex items-center gap-2 px-8"
+							onClick={() => stopRecording('attach')}
+							disabled={disabled}
 						>
 							<Square className="h-5 w-5" />
-							<span>Stop Recording</span>
+							Stop
+						</Button>
+						<Button type="button" onClick={() => stopRecording('post')} disabled={disabled}>
+							<Send className="h-5 w-5" />
+							Post
 						</Button>
 					</>
 				)}
@@ -553,5 +506,4 @@ const AudioRecorder = ({
 		</div>
 	)
 }
-
 export default AudioRecorder

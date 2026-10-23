@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/sonner'
 import { saveComposerDraft } from '@/lib/utils/composerDraft'
 import { requestComposerLoad } from '@/lib/composerBridge'
 import { MAX_QUEUED_MEDIA_BYTES } from '@/lib/outbox'
+import type { CaptureAction } from '@/lib/utils/capture'
 import type { OutboxEntry } from '@/lib/utils/outboxDb'
 
 const mockUseAuth = vi.hoisted(() => vi.fn())
@@ -56,9 +57,9 @@ vi.mock('@/components/ui/sonner', () => ({
 	toast: mockToast,
 }))
 
-vi.mock('@/lib/utils/audio', () => ({
+vi.mock('@/lib/utils/audio', async (importOriginal) => ({
+	...(await importOriginal<typeof import('@/lib/utils/audio')>()),
 	convertWavToWebM: mockConvertWavToWebM,
-	getAudioExtension: () => 'wav',
 }))
 
 vi.mock('@/components/post/create/AudioRecorder', () => ({
@@ -67,15 +68,24 @@ vi.mock('@/components/post/create/AudioRecorder', () => ({
 		onAudioCaptured,
 	}: {
 		open: boolean
-		onAudioCaptured: (blob: Blob) => void
+		onAudioCaptured: (blob: Blob, action?: CaptureAction) => void
+		onUploadInstead?: () => void
 	}) =>
 		open ? (
-			<button
-				type="button"
-				onClick={() => onAudioCaptured(new Blob(['recording'], { type: 'audio/wav' }))}
-			>
-				Use recording
-			</button>
+			<>
+				<button
+					type="button"
+					onClick={() => onAudioCaptured(new Blob(['recording'], { type: 'audio/wav' }))}
+				>
+					Use recording
+				</button>
+				<button
+					type="button"
+					onClick={() => onAudioCaptured(new Blob(['recording'], { type: 'audio/wav' }), 'post')}
+				>
+					Post recording
+				</button>
+			</>
 		) : null,
 }))
 
@@ -228,6 +238,7 @@ describe('CreatePost', () => {
 
 		act(() => loadHandle?.rollback())
 
+		expect(mockToast).not.toHaveBeenCalled()
 		expect(screen.getByPlaceholderText("What's on your mind?")).toHaveValue('')
 		expect(screen.queryByText('queued.png')).not.toBeInTheDocument()
 	})
@@ -312,6 +323,24 @@ describe('CreatePost', () => {
 
 		await waitFor(() => expect(onPostCreated).toHaveBeenCalled())
 		expect(onPostCreated.mock.calls[0][0].visibility).toBeUndefined()
+	})
+
+	it('creates only one post for two synchronous submit triggers', async () => {
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		const input = screen.getByPlaceholderText("What's on your mind?")
+		const form = input.closest('form')
+		if (!form) throw new Error('composer form not found')
+		fireEvent.change(input, { target: { value: 'Post once' } })
+
+		await act(async () => {
+			fireEvent.keyDown(input, { key: 'Enter', metaKey: true })
+			fireEvent.submit(form)
+		})
+
+		expect(onPostCreated).toHaveBeenCalledExactlyOnceWith(
+			expect.objectContaining({ text: 'Post once' })
+		)
 	})
 
 	it('submits the selected visibility', async () => {
@@ -811,5 +840,158 @@ describe('CreatePost', () => {
 			expect(toast.error).toHaveBeenCalledWith("Couldn't queue this post — device storage is full.")
 		)
 		expect(screen.getByText('only-copy.png')).toBeInTheDocument()
+	})
+	it('posts straight from the recorder', async () => {
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await waitFor(() =>
+			expect(onPostCreated).toHaveBeenCalledExactlyOnceWith(
+				expect.objectContaining({ media_type: 'audio' })
+			)
+		)
+		expect(toast.error).not.toHaveBeenCalled()
+		expect(screen.queryByRole('button', { name: 'Post recording' })).not.toBeInTheDocument()
+	})
+	it('posting from the recorder with text includes the text', async () => {
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		await user.type(screen.getByPlaceholderText("What's on your mind?"), 'Caption')
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await waitFor(() =>
+			expect(onPostCreated).toHaveBeenCalledExactlyOnceWith(
+				expect.objectContaining({ text: 'Caption', media_type: 'audio' })
+			)
+		)
+	})
+	it('a failed recorder post keeps the take', async () => {
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockRejectedValue(new Error('upload failed'))
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to create post'))
+		expect(screen.getByText('Voice recording')).toBeVisible()
+	})
+	it('a recorder Post waits for an outbox load to commit, then posts once', async () => {
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		let loadHandle: ReturnType<typeof requestComposerLoad> = null
+		act(() => {
+			loadHandle = requestComposerLoad(makeEntry())
+		})
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		expect(screen.getByText('Voice recording')).toBeVisible()
+		fireEvent.keyDown(screen.getByPlaceholderText("What's on your mind?"), {
+			key: 'Enter',
+			metaKey: true,
+		})
+		await act(async () => {})
+		expect(onPostCreated).not.toHaveBeenCalled()
+		act(() => loadHandle?.commit())
+		await waitFor(() =>
+			expect(onPostCreated).toHaveBeenCalledExactlyOnceWith(
+				expect.objectContaining({
+					text: 'Restored from the outbox',
+					visibility: 'private',
+					media_type: 'audio',
+				})
+			)
+		)
+		await act(async () => {})
+		expect(onPostCreated).toHaveBeenCalledOnce()
+		expect(toast.error).not.toHaveBeenCalled()
+	})
+	it('a recorder Post is dropped with a note when the outbox load rolls back', async () => {
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		let loadHandle: ReturnType<typeof requestComposerLoad> = null
+		act(() => {
+			loadHandle = requestComposerLoad(makeEntry())
+		})
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		let rolledBack = true
+		act(() => {
+			rolledBack = loadHandle?.rollback() ?? false
+		})
+		expect(rolledBack).toBe(false)
+		expect(mockToast).toHaveBeenCalledWith("Your recording is attached but wasn't posted.")
+		expect(screen.getByText('Voice recording')).toBeVisible()
+		expect(screen.getByPlaceholderText("What's on your mind?")).toHaveValue(
+			'Restored from the outbox'
+		)
+		await act(async () => {})
+		expect(onPostCreated).not.toHaveBeenCalled()
+		expect(screen.getByRole('button', { name: 'Post' })).toBeEnabled()
+	})
+	it('removing the take while locked cancels the pending recorder Post', async () => {
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		let loadHandle: ReturnType<typeof requestComposerLoad> = null
+		act(() => {
+			loadHandle = requestComposerLoad(makeEntry())
+		})
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await user.click(screen.getByRole('button', { name: 'Remove attachment' }))
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Use recording' }))
+		act(() => loadHandle?.commit())
+		await act(async () => {})
+		expect(onPostCreated).not.toHaveBeenCalled()
+		expect(screen.getByText('Voice recording')).toBeVisible()
+	})
+	it('removing the take while locked cancels the rollback note', async () => {
+		const user = userEvent.setup()
+		render(<CreatePost onPostCreated={vi.fn().mockResolvedValue(undefined)} />)
+		let loadHandle: ReturnType<typeof requestComposerLoad> = null
+		act(() => {
+			loadHandle = requestComposerLoad(makeEntry())
+		})
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await user.click(screen.getByRole('button', { name: 'Remove attachment' }))
+		act(() => loadHandle?.rollback())
+		expect(mockToast).not.toHaveBeenCalled()
+	})
+	it("normalize path names the file from the encoder's type", async () => {
+		localStorage.setItem('app-settings', JSON.stringify({ normalizeAudio: true }))
+		mockConvertWavToWebM.mockResolvedValueOnce(
+			new Blob(['encoded'], { type: 'audio/mp4;codecs=mp4a.40.2' })
+		)
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await waitFor(() => expect(onPostCreated).toHaveBeenCalledOnce())
+		expect(onPostCreated.mock.calls[0][0].media).toEqual(
+			expect.objectContaining({
+				name: expect.stringMatching(/^recording_\d+\.m4a$/),
+				type: 'audio/mp4;codecs=mp4a.40.2',
+			})
+		)
+	})
+	it('normalize path uploads WAV when the encoder is absent', async () => {
+		localStorage.setItem('app-settings', JSON.stringify({ normalizeAudio: true }))
+		mockConvertWavToWebM.mockImplementationOnce(async (blob) => blob)
+		const user = userEvent.setup()
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		await waitFor(() => expect(onPostCreated).toHaveBeenCalledOnce())
+		expect(onPostCreated.mock.calls[0][0].media).toEqual(
+			expect.objectContaining({ name: expect.stringMatching(/\.wav$/), type: 'audio/wav' })
+		)
 	})
 })
