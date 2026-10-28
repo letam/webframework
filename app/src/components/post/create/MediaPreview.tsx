@@ -189,6 +189,8 @@ const MediaPreview: React.FC<MediaPreviewProps> = ({
 				variant="ghost"
 				size="icon"
 				className="absolute top-2 right-2 h-6 w-6"
+				aria-label="Remove attachment"
+				data-composer-keep-focus
 				onClick={onClearMedia}
 			>
 				<X className="h-4 w-4" />

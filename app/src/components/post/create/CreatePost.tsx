@@ -11,6 +11,7 @@ import {
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
 	Mic,
 	Video,
@@ -97,6 +98,21 @@ const getMediaExtension = (mimeType: string, mediaType: 'audio' | 'video'): stri
 				: 'webm' // Default to webm as it's most widely supported
 }
 
+// When the keyboard opens, iOS Safari scrolls only the focused textarea into view. On an
+// iPhone SE (iOS 26 simulator) that left the expanded toolbar's bottom row, Post and Draft,
+// ending in the roughly 16px above the visual viewport's bottom edge, where Safari ignores
+// taps: the first tap there only closed the keyboard. So while the keyboard is up, the
+// toolbar is kept this far above that edge: the strip plus a little room. (SE landscape is
+// not covered: there the textarea already sits at the header, so there is no room to scroll.)
+const KEYBOARD_EDGE_CLEARANCE = 24
+// How much shorter than the layout viewport the visual viewport must be before we treat it
+// as a software keyboard rather than browser chrome or a window resize.
+const KEYBOARD_MIN_HEIGHT = 100
+// How long after the keyboard opens Safari may still be scrolling the textarea into view.
+const KEYBOARD_SETTLE_MS = 500
+
+const SIGNED_OUT_VISIBILITY_NOTE = 'Posts made while signed out are always public'
+
 const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const { isAuthenticated, isAuthResolved, userId, refreshAuthStatus, getAuthSnapshot } = useAuth()
 	const { syncMode } = useOutbox()
@@ -114,7 +130,13 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const [submitStatus, setSubmitStatus] = useState<SubmitStatus | ''>('')
 	const [composerLocked, setComposerLocked] = useState(false)
 	const composerLockedRef = useRef(false)
-	const [isFocused, setIsFocused] = useState(false)
+	// Set when the textarea takes focus, and kept while focus stays anywhere in the
+	// composer's React tree, which includes its portaled menus and dialogs. See
+	// handleRootFocus/handleRootBlur below.
+	const [isActive, setIsActive] = useState(false)
+	const rootRef = useRef<HTMLDivElement>(null)
+	const toolbarRef = useRef<HTMLDivElement>(null)
+	const collapseTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 	const [isAudioModalOpen, setIsAudioModalOpen] = useState(false)
 	const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -131,7 +153,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const hasNoMedia = !audioBlob && !audioFile && !videoBlob && !videoFile && !imageFile
 	const canPost = !!postText.trim() || !hasNoMedia
 	// The composer rests as a single quiet line and grows once it has attention or content
-	const expanded = isFocused || canPost || !!submitStatus
+	const expanded = isActive || canPost || !!submitStatus
 	const VisibilityIcon =
 		VISIBILITY_OPTIONS.find((option) => option.value === visibility)?.icon ?? Globe
 	const SyncModeIcon = syncMode === 'auto' ? Cloud : CloudOff
@@ -222,6 +244,126 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	)
 
 	useEffect(() => registerComposerLoader(loadOutboxEntry), [loadOutboxEntry])
+
+	useEffect(() => () => clearTimeout(collapseTimerRef.current), [])
+
+	// Keep the textarea focused through toolbar presses. Otherwise the blur collapses the
+	// toolbar and slides the buttons out from under the pointer before the click, and
+	// Safari, which never focuses a clicked button, would see focus leave the composer.
+	// The whole toolbar counts, not only its buttons, so a press on a gap or a wrapper
+	// doesn't drop the keyboard either. Outside the toolbar only buttons that remove
+	// themselves opt in (data-composer-keep-focus), so writing carries on after them;
+	// the attachment's player controls take focus normally, for their arrow keys.
+	const handleRootMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+		const target = e.target as Element
+		// React events bubble out of portals; leave the recorder dialogs' buttons alone.
+		if (!e.currentTarget.contains(target)) return
+		if (target.closest('[data-composer-toolbar], [data-composer-keep-focus]')) {
+			e.preventDefault()
+		}
+	}
+
+	// Only the textarea expands the composer. A toolbar menu opened from the collapsed
+	// composer takes focus too, and must not expand it.
+	const handleTextareaFocus = () => setIsActive(true)
+
+	// Focus and blur bubble through portals in React, so focus moving into a menu or
+	// dialog blurs and refocuses the root in one go, cancelling the collapse.
+	const handleRootFocus = () => clearTimeout(collapseTimerRef.current)
+
+	// How the last menu or popover interaction happened. Its events bubble through the
+	// portal to the root; a press outside it, which dismisses it, is reported separately.
+	const lastInputRef = useRef<'pointer' | 'keyboard'>('pointer')
+	const notePointerInput = () => {
+		lastInputRef.current = 'pointer'
+	}
+	const noteKeyboardInput = () => {
+		lastInputRef.current = 'keyboard'
+	}
+
+	// A toolbar menu closing returns focus to its trigger, which shows the trigger's
+	// tooltip: right for a keyboard, but after a tap or click it just lingers over the
+	// toolbar. So after a pointer, hand focus back to the textarea instead, or let it go
+	// if the composer was collapsed.
+	const handleMenuCloseAutoFocus = (e: Event) => {
+		if (lastInputRef.current !== 'pointer') return
+		e.preventDefault()
+		if (isActive) textareaRef.current?.focus({ preventScroll: true })
+	}
+
+	const handleRootBlur = () => {
+		clearTimeout(collapseTimerRef.current)
+		// A timeout, not a microtask: microtasks run between focusout and focusin.
+		collapseTimerRef.current = setTimeout(() => {
+			// Losing the window (a file picker, another app) keeps focus in place.
+			if (!document.hasFocus()) return
+			if (rootRef.current?.contains(document.activeElement)) return
+			setIsActive(false)
+		})
+	}
+
+	// Scroll the toolbar clear of the keyboard edge (see KEYBOARD_EDGE_CLEARANCE), but never so
+	// far that the textarea goes under the sticky header (its scroll-margin-top).
+	const revealToolbar = useCallback(() => {
+		const viewport = window.visualViewport
+		const toolbar = toolbarRef.current
+		const textarea = textareaRef.current
+		if (!viewport || !toolbar || !textarea) return
+		// Only with a software keyboard up: not while pinch-zoomed, and not for a shorter
+		// window, devtools or browser zoom, which shrink both viewports alike.
+		if (Math.abs(viewport.scale - 1) > 0.01) return
+		if (document.documentElement.clientHeight - viewport.height < KEYBOARD_MIN_HEIGHT) return
+		// pageTop - scrollY is the visual viewport's top in client coordinates. pageTop can
+		// update a beat after scrollY, and the negative difference meanwhile would repeat a
+		// scroll we just made, hence the floor.
+		const visibleTop = Math.max(0, viewport.pageTop - window.scrollY)
+		const visibleBottom = visibleTop + viewport.height - KEYBOARD_EDGE_CLEARANCE
+		const overlap = toolbar.getBoundingClientRect().bottom - visibleBottom
+		const headroom =
+			textarea.getBoundingClientRect().top -
+			visibleTop -
+			(Number.parseFloat(getComputedStyle(textarea).scrollMarginTop) || 0)
+		const distance = Math.min(overlap, headroom)
+		if (distance > 0) window.scrollBy(0, distance)
+	}, [])
+
+	// The keyboard opening resizes the visual viewport. Safari then scrolls the textarea
+	// into view, which can undo our scroll, so check again on the scrolls that follow for a
+	// moment; not for longer, or once the reader starts scrolling, so we never fight them.
+	// The same pass runs when the composer becomes active, for a keyboard that is already
+	// up (focus coming back from the feed's filter input): no resize follows then. When the
+	// keyboard is still opening that first pass finds no keyboard and does nothing, and the
+	// resize restarts it; each pass scrolls only by the remaining overlap, so none add up.
+	// The textarea's growth on focus can finish later still: see handleTextareaTransitionEnd.
+	useEffect(() => {
+		const viewport = window.visualViewport
+		if (!isActive || !viewport) return
+		let settleTimer: ReturnType<typeof setTimeout> | undefined
+		const stopFollowing = () => {
+			clearTimeout(settleTimer)
+			viewport.removeEventListener('scroll', revealToolbar)
+			window.removeEventListener('touchstart', stopFollowing)
+			window.removeEventListener('wheel', stopFollowing)
+		}
+		const follow = () => {
+			stopFollowing()
+			revealToolbar()
+			viewport.addEventListener('scroll', revealToolbar)
+			window.addEventListener('touchstart', stopFollowing, { passive: true })
+			window.addEventListener('wheel', stopFollowing, { passive: true })
+			settleTimer = setTimeout(stopFollowing, KEYBOARD_SETTLE_MS)
+		}
+		viewport.addEventListener('resize', follow)
+		follow()
+		return () => {
+			viewport.removeEventListener('resize', follow)
+			stopFollowing()
+		}
+	}, [isActive, revealToolbar])
+
+	const handleTextareaTransitionEnd = (e: React.TransitionEvent<HTMLTextAreaElement>) => {
+		if (isActive && e.propertyName === 'min-height') revealToolbar()
+	}
 
 	const restoreDraft = useCallback((stored: ComposerDraft) => {
 		setPostText(stored.text)
@@ -497,6 +639,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			return
 		}
 
+		// The textarea is disabled while posting, so it loses focus; settle back to the
+		// resting composer afterwards instead of staying expanded and empty.
+		setIsActive(false)
+
 		if (getEffectiveSyncMode() === 'local' || !navigator.onLine) {
 			setSubmitStatus('preparing')
 			try {
@@ -607,7 +753,16 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	}
 
 	return (
-		<div className="bg-card rounded-lg shadow-xs border max-w-lg mx-auto px-4 py-3">
+		// biome-ignore lint/a11y/noStaticElementInteractions: delegated focus tracking for the controls inside, which stay keyboard reachable
+		<div
+			className="bg-card rounded-lg shadow-xs border max-w-lg mx-auto px-4 py-3"
+			ref={rootRef}
+			onMouseDown={handleRootMouseDown}
+			onPointerDownCapture={notePointerInput}
+			onKeyDownCapture={noteKeyboardInput}
+			onFocus={handleRootFocus}
+			onBlur={handleRootBlur}
+		>
 			<form onSubmit={handleSubmit} className="flex flex-col w-full">
 				<div className="-mx-2">
 					<Textarea
@@ -617,8 +772,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						value={postText}
 						onChange={handlePostTextChange}
 						onKeyDown={handleKeyDown}
-						onFocus={() => setIsFocused(true)}
-						onBlur={() => setIsFocused(false)}
+						onFocus={handleTextareaFocus}
+						onTransitionEnd={handleTextareaTransitionEnd}
 						className={`w-full resize-none border-none focus-visible:ring-0 py-1 px-2 text-base max-w-lg scroll-mt-20 transition-[min-height] duration-200 ease-out ${
 							expanded ? 'min-h-24' : 'min-h-10'
 						}`}
@@ -652,6 +807,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 								variant="ghost"
 								size="sm"
 								className="h-6 px-2 text-xs"
+								data-composer-keep-focus
 								onClick={discardRestoredDraft}
 							>
 								Discard
@@ -661,6 +817,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 								variant="ghost"
 								size="sm"
 								className="h-6 px-2 text-xs"
+								data-composer-keep-focus
 								onClick={acknowledgeRestore}
 							>
 								Keep
@@ -669,7 +826,16 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 					</div>
 				)}
 
-				<div className="mt-2 flex items-center justify-between gap-2 border-t pt-2">
+				{/* Focusing the composer adds formatting, visibility and Draft controls, which
+				    don't fit one row at phone width. Wrapping drops the send controls onto a
+				    second row (ml-auto keeps them right-aligned) instead of pushing Post off
+				    the card's edge. The send group wraps too: while posting, its status label
+				    plus the send controls are wider than a 320px card on their own. */}
+				<div
+					ref={toolbarRef}
+					data-composer-toolbar
+					className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t pt-2"
+				>
 					<TooltipProvider delayDuration={300}>
 						<div className="flex items-center gap-0.5">
 							{expanded && (
@@ -681,7 +847,6 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 												variant="ghost"
 												size="icon"
 												className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground"
-												onMouseDown={(e) => e.preventDefault()}
 												onClick={() => formatSelection('**')}
 												disabled={!!submitStatus}
 												aria-label="Bold"
@@ -698,7 +863,6 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 												variant="ghost"
 												size="icon"
 												className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground"
-												onMouseDown={(e) => e.preventDefault()}
 												onClick={() => formatSelection('*')}
 												disabled={!!submitStatus}
 												aria-label="Italic"
@@ -782,7 +946,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 						</div>
 					</TooltipProvider>
 
-					<div className="flex items-center gap-3">
+					<div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
 						{submitStatus && (
 							<span className="flex items-center gap-1.5 text-xs text-muted-foreground">
 								<Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -793,51 +957,9 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 										: 'Posting...'}
 							</span>
 						)}
-						<TooltipProvider delayDuration={300}>
-							<Tooltip>
-								<DropdownMenu>
-									<DropdownMenuTrigger asChild>
-										<TooltipTrigger asChild>
-											<Button
-												type="button"
-												variant="ghost"
-												size="icon"
-												className="h-8 w-8 rounded-full text-muted-foreground"
-												disabled={!!submitStatus}
-												aria-label="Auto-sync"
-											>
-												<SyncModeIcon className="h-4 w-4" />
-											</Button>
-										</TooltipTrigger>
-									</DropdownMenuTrigger>
-									<DropdownMenuContent align="end" className="w-72">
-										<DropdownMenuRadioGroup
-											value={syncMode}
-											onValueChange={(value) => setSyncMode(value as SyncMode)}
-										>
-											<DropdownMenuRadioItem value="auto" className="items-start gap-2">
-												<span className="grid gap-0.5">
-													<span>Sync automatically</span>
-													<span className="text-xs text-muted-foreground">
-														Posts go online as soon as possible.
-													</span>
-												</span>
-											</DropdownMenuRadioItem>
-											<DropdownMenuRadioItem value="local" className="items-start gap-2">
-												<span className="grid gap-0.5">
-													<span>Stay on this device</span>
-													<span className="text-xs text-muted-foreground">
-														Posts wait here until you send them.
-													</span>
-												</span>
-											</DropdownMenuRadioItem>
-										</DropdownMenuRadioGroup>
-									</DropdownMenuContent>
-								</DropdownMenu>
-								<TooltipContent>Auto-sync</TooltipContent>
-							</Tooltip>
-						</TooltipProvider>
-						{isAuthenticated && expanded && (
+						{/* One unit, so when the group wraps the status label takes its own row
+						    and the send controls stay together under it. */}
+						<div className="flex items-center gap-3">
 							<TooltipProvider delayDuration={300}>
 								<Tooltip>
 									<DropdownMenu>
@@ -849,91 +971,158 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 													size="icon"
 													className="h-8 w-8 rounded-full text-muted-foreground"
 													disabled={!!submitStatus}
-													aria-label="Visibility"
+													aria-label="Auto-sync"
 												>
-													<VisibilityIcon className="h-4 w-4" />
+													<SyncModeIcon className="h-4 w-4" />
 												</Button>
 											</TooltipTrigger>
 										</DropdownMenuTrigger>
-										<DropdownMenuContent align="end" className="w-72">
+										<DropdownMenuContent
+											align="end"
+											className="w-72"
+											onPointerDownOutside={notePointerInput}
+											onCloseAutoFocus={handleMenuCloseAutoFocus}
+										>
 											<DropdownMenuRadioGroup
-												value={visibility}
-												onValueChange={(value) => setVisibility(value as PostVisibility)}
+												value={syncMode}
+												onValueChange={(value) => setSyncMode(value as SyncMode)}
 											>
-												{VISIBILITY_OPTIONS.map((option) => {
-													const Icon = option.icon
-													return (
-														<DropdownMenuRadioItem
-															key={option.value}
-															value={option.value}
-															className="items-start gap-2"
-														>
-															<Icon className="mt-0.5 h-4 w-4" />
-															<span className="grid gap-0.5">
-																<span>{option.label}</span>
-																<span className="text-xs text-muted-foreground">
-																	{option.description}
-																</span>
-															</span>
-														</DropdownMenuRadioItem>
-													)
-												})}
+												<DropdownMenuRadioItem value="auto" className="items-start gap-2">
+													<span className="grid gap-0.5">
+														<span>Sync automatically</span>
+														<span className="text-xs text-muted-foreground">
+															Posts go online as soon as possible.
+														</span>
+													</span>
+												</DropdownMenuRadioItem>
+												<DropdownMenuRadioItem value="local" className="items-start gap-2">
+													<span className="grid gap-0.5">
+														<span>Stay on this device</span>
+														<span className="text-xs text-muted-foreground">
+															Posts wait here until you send them.
+														</span>
+													</span>
+												</DropdownMenuRadioItem>
 											</DropdownMenuRadioGroup>
 										</DropdownMenuContent>
 									</DropdownMenu>
-									<TooltipContent>Visibility</TooltipContent>
+									<TooltipContent>Auto-sync</TooltipContent>
 								</Tooltip>
 							</TooltipProvider>
-						)}
-						{!isAuthenticated && isAuthResolved && expanded && (
-							<TooltipProvider delayDuration={300}>
-								<Tooltip>
-									<TooltipTrigger asChild>
-										{/* A disabled button swallows pointer events, so the tooltip needs a
-										    wrapper of its own to stay reachable. */}
-										<span className="inline-flex">
+							{isAuthenticated && expanded && (
+								<TooltipProvider delayDuration={300}>
+									<Tooltip>
+										<DropdownMenu>
+											<DropdownMenuTrigger asChild>
+												<TooltipTrigger asChild>
+													<Button
+														type="button"
+														variant="ghost"
+														size="icon"
+														className="h-8 w-8 rounded-full text-muted-foreground"
+														disabled={!!submitStatus}
+														aria-label="Visibility"
+													>
+														<VisibilityIcon className="h-4 w-4" />
+													</Button>
+												</TooltipTrigger>
+											</DropdownMenuTrigger>
+											<DropdownMenuContent
+												align="end"
+												className="w-72"
+												onPointerDownOutside={notePointerInput}
+												onCloseAutoFocus={handleMenuCloseAutoFocus}
+											>
+												<DropdownMenuRadioGroup
+													value={visibility}
+													onValueChange={(value) => setVisibility(value as PostVisibility)}
+												>
+													{VISIBILITY_OPTIONS.map((option) => {
+														const Icon = option.icon
+														return (
+															<DropdownMenuRadioItem
+																key={option.value}
+																value={option.value}
+																className="items-start gap-2"
+															>
+																<Icon className="mt-0.5 h-4 w-4" />
+																<span className="grid gap-0.5">
+																	<span>{option.label}</span>
+																	<span className="text-xs text-muted-foreground">
+																		{option.description}
+																	</span>
+																</span>
+															</DropdownMenuRadioItem>
+														)
+													})}
+												</DropdownMenuRadioGroup>
+											</DropdownMenuContent>
+										</DropdownMenu>
+										<TooltipContent>Visibility</TooltipContent>
+									</Tooltip>
+								</TooltipProvider>
+							)}
+							{!isAuthenticated && isAuthResolved && expanded && (
+								// Signed out, visibility can't change, so the control explains why
+								// instead. A popover rather than only a tooltip, which touch never
+								// shows; it leaves focus in the textarea, so the keyboard stays up.
+								<TooltipProvider delayDuration={300}>
+									<Tooltip>
+										<Popover>
+											<PopoverTrigger asChild>
+												<TooltipTrigger asChild>
+													<Button
+														type="button"
+														variant="ghost"
+														size="icon"
+														className="h-8 w-8 rounded-full text-muted-foreground opacity-50"
+														aria-label="Visibility"
+													>
+														<Globe className="h-4 w-4" />
+													</Button>
+												</TooltipTrigger>
+											</PopoverTrigger>
+											<PopoverContent
+												align="end"
+												className="w-64 px-3 py-2 text-sm"
+												onOpenAutoFocus={(e) => e.preventDefault()}
+												onPointerDownOutside={notePointerInput}
+												onCloseAutoFocus={handleMenuCloseAutoFocus}
+											>
+												{SIGNED_OUT_VISIBILITY_NOTE}
+											</PopoverContent>
+										</Popover>
+										<TooltipContent>{SIGNED_OUT_VISIBILITY_NOTE}</TooltipContent>
+									</Tooltip>
+								</TooltipProvider>
+							)}
+							{isAuthenticated && expanded && canPost && (
+								<TooltipProvider delayDuration={300}>
+									<Tooltip>
+										<TooltipTrigger asChild>
 											<Button
 												type="button"
 												variant="ghost"
-												size="icon"
-												className="h-8 w-8 rounded-full text-muted-foreground"
-												disabled
-												aria-label="Visibility"
+												size="sm"
+												disabled={!!submitStatus || composerLocked}
+												onClick={() => void submitPost(true)}
 											>
-												<Globe className="h-4 w-4" />
+												Draft
 											</Button>
-										</span>
-									</TooltipTrigger>
-									<TooltipContent>Posts made while signed out are always public</TooltipContent>
-								</Tooltip>
-							</TooltipProvider>
-						)}
-						{isAuthenticated && expanded && canPost && (
-							<TooltipProvider delayDuration={300}>
-								<Tooltip>
-									<TooltipTrigger asChild>
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											disabled={!!submitStatus || composerLocked}
-											onClick={() => void submitPost(true)}
-										>
-											Draft
-										</Button>
-									</TooltipTrigger>
-									<TooltipContent>Save as draft</TooltipContent>
-								</Tooltip>
-							</TooltipProvider>
-						)}
-						<Button
-							type="submit"
-							size="sm"
-							disabled={!canPost || !!submitStatus || composerLocked}
-							className="rounded-full px-5 font-medium"
-						>
-							Post
-						</Button>
+										</TooltipTrigger>
+										<TooltipContent>Save as draft</TooltipContent>
+									</Tooltip>
+								</TooltipProvider>
+							)}
+							<Button
+								type="submit"
+								size="sm"
+								disabled={!canPost || !!submitStatus || composerLocked}
+								className="rounded-full px-5 font-medium"
+							>
+								Post
+							</Button>
+						</div>
 					</div>
 				</div>
 
