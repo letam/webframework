@@ -94,7 +94,9 @@ export const GroundRulesModal = () => {
 
 	return (
 		<Dialog open={isOpen} onOpenChange={handleOpenChange}>
-			<DialogContent className="sm:max-w-[500px]">
+			{/* Capped to the viewport so phones can reach the footer: the rules scroll
+			    and the Accept action stays pinned below them. */}
+			<DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-[500px]">
 				<DialogHeader>
 					<DialogTitle className="flex items-center gap-2 text-xl">
 						<AlertTriangle className="h-6 w-6 text-amber-500" />
@@ -105,31 +107,34 @@ export const GroundRulesModal = () => {
 					</DialogDescription>
 				</DialogHeader>
 
-				<div className="space-y-6">
-					<div className="space-y-4">
-						{groundRules.map((rule) => (
-							<label
-								key={rule.id}
-								htmlFor={rule.id}
-								className="w-full p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer block ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
-							>
-								<div className="flex items-start space-x-3">
-									<Checkbox
-										id={rule.id}
-										checked={acceptedRules.has(rule.id)}
-										onCheckedChange={(checked) => handleRuleToggle(rule.id, checked as boolean)}
-										className="mt-0.5"
-									/>
-									<div className="flex items-center gap-2 min-w-0 flex-1">
-										{rule.icon}
-										<span className="font-medium whitespace-nowrap">{rule.title}</span>
-									</div>
+				{/* The negative margins run the scroll area out to the dialog's edges, so the
+				    scrollbar sits at the border and the labels' focus rings aren't clipped,
+				    without moving the content. */}
+				<div className="-mx-6 -my-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-1">
+					{groundRules.map((rule) => (
+						<label
+							key={rule.id}
+							htmlFor={rule.id}
+							className="w-full p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer block ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2"
+						>
+							<div className="flex items-start space-x-3">
+								<Checkbox
+									id={rule.id}
+									checked={acceptedRules.has(rule.id)}
+									onCheckedChange={(checked) => handleRuleToggle(rule.id, checked as boolean)}
+									className="mt-0.5"
+								/>
+								<div className="flex items-center gap-2 min-w-0 flex-1">
+									{rule.icon}
+									<span className="font-medium whitespace-nowrap">{rule.title}</span>
 								</div>
-								<p className="text-sm text-muted-foreground ml-6 mt-2">{rule.description}</p>
-							</label>
-						))}
-					</div>
+							</div>
+							<p className="text-sm text-muted-foreground ml-6 mt-2">{rule.description}</p>
+						</label>
+					))}
+				</div>
 
+				<div className="space-y-6 pt-2">
 					<div className="flex justify-end space-x-2">
 						<Button
 							onClick={handleAccept}

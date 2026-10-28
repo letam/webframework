@@ -92,7 +92,7 @@ const WaveformSeekBar: React.FC<WaveformSeekBarProps> = ({
 	return (
 		<div
 			className={cn(
-				'flex h-12 flex-1 items-center gap-px rounded-md px-1',
+				'flex h-12 min-w-0 flex-1 items-center gap-[0.5px] rounded-md px-1 sm:gap-px',
 				disabled ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'
 			)}
 			onPointerDown={handlePointerDown}
@@ -130,7 +130,7 @@ const WaveformSeekBar: React.FC<WaveformSeekBarProps> = ({
 					<div
 						key={`${index}-${peak}`}
 						className={cn(
-							'pointer-events-none min-w-[1.5px] flex-1 rounded-[1.5px] motion-safe:transition-colors motion-safe:duration-100',
+							'pointer-events-none min-w-0 flex-1 rounded-[1.5px] motion-safe:transition-colors motion-safe:duration-100',
 							isPlayed ? 'bg-gradient-to-t from-brand-1 to-brand-2' : 'bg-muted-foreground/30'
 						)}
 						style={{ height: `${height}px` }}
