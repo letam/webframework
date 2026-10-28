@@ -340,6 +340,14 @@ ActivityPub only if the node idea gets serious.
   managed backups) would have to trade away first. `admin/configs/fly-postgres.toml` is ready.
 - Email: `tam@wut.sh`, `tam@webframework.dev`.
 
+## Test suite gaps
+
+- **Frontend test quality — ranked handoff in `docs/plans/2026-10-17-test-suite-quality.md`.**
+  A 2026-10-17 review fixed four tests that could never fail and made coverage count every
+  file (real figure: ~53% of lines). Still open: the CreatePost prep-failure guard, Post's
+  transcription polling, the request layer's CSRF/body contract, auth modals and recorders,
+  none of which have tests. Prove every new test can fail by breaking the code it guards.
+
 ## Tech debt & pins to unwind
 
 Each of these is waiting on someone else to ship; the work is a few lines once it lands.
