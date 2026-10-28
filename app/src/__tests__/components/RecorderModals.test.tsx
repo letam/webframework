@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AudioRecorderModal } from '@/components/post/create/AudioRecorder'
 import { VideoRecorderModal } from '@/components/post/create/VideoRecorder'
 import { isIOS } from '@/lib/utils/browser'
+import { makeFakeStream } from '../helpers/mediaCapture'
 
 vi.mock('@/lib/utils/browser', async (importOriginal) => ({
 	...(await importOriginal<typeof import('@/lib/utils/browser')>()),
@@ -29,12 +30,14 @@ class FakeMediaRecorder {
 	}
 }
 
-const fakeStream = () => ({ getTracks: () => [{ stop: () => {} }] }) as unknown as MediaStream
+const fakeStream = () => makeFakeStream()
 
+const originalSecureContext = Object.getOwnPropertyDescriptor(window, 'isSecureContext')
 const originalMediaRecorder = globalThis.MediaRecorder
 const originalMediaDevices = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices')
 
 beforeEach(() => {
+	Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true })
 	vi.mocked(isIOS).mockReturnValue(false)
 	// vitest.setup.ts defines MediaRecorder as writable but non-configurable, so it is
 	// assigned rather than stubbed with vi.stubGlobal.
@@ -49,6 +52,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+	if (originalSecureContext) Object.defineProperty(window, 'isSecureContext', originalSecureContext)
+	else Reflect.deleteProperty(window, 'isSecureContext')
 	globalThis.MediaRecorder = originalMediaRecorder
 	if (originalMediaDevices) {
 		Object.defineProperty(navigator, 'mediaDevices', originalMediaDevices)
@@ -60,12 +65,26 @@ afterEach(() => {
 
 const AudioHarness = () => {
 	const [open, setOpen] = useState(true)
-	return <AudioRecorderModal open={open} onOpenChange={setOpen} onAudioCaptured={() => {}} />
+	return (
+		<AudioRecorderModal
+			open={open}
+			onOpenChange={setOpen}
+			onAudioCaptured={() => {}}
+			onUploadInstead={() => {}}
+		/>
+	)
 }
 
 const VideoHarness = () => {
 	const [open, setOpen] = useState(true)
-	return <VideoRecorderModal open={open} onOpenChange={setOpen} onVideoCaptured={() => {}} />
+	return (
+		<VideoRecorderModal
+			open={open}
+			onOpenChange={setOpen}
+			onVideoCaptured={() => {}}
+			onUploadInstead={() => {}}
+		/>
+	)
 }
 
 // A tap outside the dialog lands on its overlay. Radix arms its outside-press
@@ -88,7 +107,7 @@ const pressOutside = async () => {
 describe('AudioRecorderModal', () => {
 	it('stays open on an outside press while recording', async () => {
 		render(<AudioHarness />)
-		await screen.findByRole('button', { name: /stop recording/i })
+		await screen.findByRole('button', { name: 'Stop' })
 
 		await pressOutside()
 
@@ -97,7 +116,7 @@ describe('AudioRecorderModal', () => {
 
 	it('still closes on Escape while recording', async () => {
 		render(<AudioHarness />)
-		await screen.findByRole('button', { name: /stop recording/i })
+		await screen.findByRole('button', { name: 'Stop' })
 
 		fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
 
@@ -126,7 +145,7 @@ describe('AudioRecorderModal', () => {
 describe('VideoRecorderModal', () => {
 	it('stays open on an outside press while recording', async () => {
 		render(<VideoHarness />)
-		await screen.findByRole('button', { name: /stop recording/i })
+		await screen.findByRole('button', { name: 'Stop' })
 
 		await pressOutside()
 
@@ -153,7 +172,7 @@ describe('VideoRecorderModal', () => {
 	it('stays open on an outside press while a stopped take is still finalizing', async () => {
 		// FakeMediaRecorder.stop never fires onstop, so the take stays mid-finalization.
 		render(<VideoHarness />)
-		fireEvent.click(await screen.findByRole('button', { name: /stop recording/i }))
+		fireEvent.click(await screen.findByRole('button', { name: 'Stop' }))
 
 		await pressOutside()
 

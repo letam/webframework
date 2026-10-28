@@ -37,7 +37,8 @@ export const assembleRecording = (chunks: Blob[], type = chunks[0]?.type): Blob 
 	return blob
 }
 
-const isWebm = (type: string): boolean => /^(audio|video)\/webm\b/i.test(type)
+const isWebm = (type: string): boolean =>
+	/^(audio|video)\/(webm|x-matroska)(;|$)/i.test(type.trim())
 
 /**
  * Makes a MediaRecorder WebM seekable by writing its duration into the header.
