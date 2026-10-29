@@ -4,9 +4,10 @@ import userEvent from '@testing-library/user-event'
 import { BrowserRouter, Route, Routes } from 'react-router'
 import { afterEach, expect, it, vi } from 'vitest'
 import { LoginModal } from '@/components/LoginModal'
+import { SignupModal } from '@/components/SignupModal'
 import { AuthProvider, useAuth } from '@/hooks/useAuth'
 import { createPracticeRoom, joinPracticeRoom, type PracticeSnapshot } from '@/lib/api/practice'
-import { forgetInvitation } from '@/lib/practice/invitation'
+import { captureInvitation, forgetInvitation } from '@/lib/practice/invitation'
 import { clearCsrfTokenCache, getCsrfToken } from '@/lib/utils/fetch'
 import PracticeRoomRoute from '@/pages/PracticeRoomPage'
 
@@ -229,6 +230,143 @@ it.each([
 		await user.click(dialog.getByRole('button', { name: 'Sign In' }))
 		await waitFor(() => expect(success).toHaveBeenCalledTimes(1))
 		expect(loginTokens).toEqual(['T0', 'T1'])
+	} finally {
+		view.unmount()
+		client.clear()
+	}
+})
+
+it.each([
+	'HTTP',
+	'network',
+	'JSON',
+])('keeps signup open after a failed status check and retries without creating another account (%s)', async (failure) => {
+	let signupCount = 0
+	let failStatus = true
+	let statusCount = 0
+	const success = vi.fn()
+	const openChange = vi.fn()
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async (url: string) => {
+			if (url === '/auth/status/') {
+				statusCount++
+				if (signupCount && failStatus) {
+					if (failure === 'HTTP') return new Response('Unavailable', { status: 503 })
+					if (failure === 'JSON') return new Response('invalid JSON')
+					throw new TypeError('Network failed')
+				}
+				return Response.json({ is_authenticated: signupCount > 0, user_id: signupCount ? 7 : null })
+			}
+			if (url === '/auth/csrf/') return Response.json({ token: 'token' })
+			if (url === '/auth/signup/') {
+				signupCount++
+				if (signupCount > 1) return Response.json({ username: ['Already exists'] }, { status: 400 })
+				return Response.json({ user_id: 7, username: 'new-guest', message: 'Created' })
+			}
+			throw new Error(`Unexpected request: ${url}`)
+		})
+	)
+	const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+	const user = userEvent.setup()
+	const view = render(
+		<QueryClientProvider client={client}>
+			<AuthProvider>
+				<SignupModal onSignupSuccess={success} onOpenChange={openChange} />
+				<AuthProbe />
+			</AuthProvider>
+		</QueryClientProvider>
+	)
+	try {
+		await screen.findByRole('button', { name: 'Refresh user' })
+		await user.click(screen.getByRole('button', { name: 'Sign Up' }))
+		const dialog = within(screen.getByRole('dialog'))
+		await user.type(dialog.getByLabelText('Username'), 'new-guest')
+		await user.type(dialog.getByLabelText('Password', { exact: true }), 'NewPass123!')
+		await user.type(dialog.getByLabelText('Confirm Password'), 'NewPass123!')
+		await user.click(dialog.getByRole('button', { name: 'Create Account' }))
+		const error =
+			'Your account was created, but we are unable to confirm your sign-in. Please try again.'
+		await screen.findByText(error)
+		expect(screen.getByRole('dialog')).toBeInTheDocument()
+		expect(success).not.toHaveBeenCalled()
+		expect(openChange).not.toHaveBeenCalledWith(false)
+		// Repeated failures must leave a working retry without another signup.
+		await user.click(dialog.getByRole('button', { name: 'Try again' }))
+		await screen.findByText(error)
+		expect(success).not.toHaveBeenCalled()
+		expect(signupCount).toBe(1)
+		failStatus = false
+		await user.click(dialog.getByRole('button', { name: 'Try again' }))
+		await waitFor(() => expect(success).toHaveBeenCalledTimes(1))
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+		expect(openChange).toHaveBeenLastCalledWith(false)
+		expect(signupCount).toBe(1)
+		expect(statusCount).toBe(4)
+	} finally {
+		view.unmount()
+		client.clear()
+	}
+})
+
+it('preserves the fragment invitation across a failed signup status check and successful retry', async () => {
+	window.history.replaceState(null, '', `/practice/rooms/${roomId}#invite=secret%2Ffor-guest`)
+	let signupCount = 0
+	let signedInChecks = 0
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async (url: string) => {
+			if (url === '/auth/status/') {
+				if (signupCount && ++signedInChecks === 1)
+					return new Response('Unavailable', { status: 503 })
+				return Response.json({ is_authenticated: signupCount > 0, user_id: signupCount ? 7 : null })
+			}
+			if (url === '/auth/csrf/') return Response.json({ token: 'token' })
+			if (url === '/auth/signup/') {
+				signupCount++
+				return Response.json({ user_id: 7, username: 'new-guest', message: 'Created' })
+			}
+			if (url === `/api/practice/rooms/${roomId}/`) {
+				return Response.json({ code: 'forbidden' }, { status: 403 })
+			}
+			throw new Error(`Unexpected request: ${url}`)
+		})
+	)
+	const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+	const user = userEvent.setup()
+	const view = render(
+		<QueryClientProvider client={client}>
+			<AuthProvider>
+				<BrowserRouter>
+					<Routes>
+						<Route path="/practice/rooms/:id" element={<PracticeRoomRoute />} />
+					</Routes>
+				</BrowserRouter>
+			</AuthProvider>
+		</QueryClientProvider>
+	)
+	try {
+		await screen.findByRole('heading', { name: 'Sign in to join this room' })
+		expect(window.location.hash).toBe('')
+		await user.click(screen.getByRole('button', { name: 'Sign Up' }))
+		const dialog = within(screen.getByRole('dialog'))
+		await user.type(dialog.getByLabelText('Username'), 'new-guest')
+		await user.type(dialog.getByLabelText('Password', { exact: true }), 'NewPass123!')
+		await user.type(dialog.getByLabelText('Confirm Password'), 'NewPass123!')
+		await user.click(dialog.getByRole('button', { name: 'Create Account' }))
+		await screen.findByText(
+			'Your account was created, but we are unable to confirm your sign-in. Please try again.'
+		)
+		expect(screen.getByRole('dialog')).toBeInTheDocument()
+		expect(captureInvitation(roomId)).toBe('secret/for-guest')
+		await user.click(dialog.getByRole('button', { name: 'Try again' }))
+		await screen.findByRole('button', { name: 'Join room' })
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+		expect(window.location.pathname).toBe(`/practice/rooms/${roomId}`)
+		expect(window.location.hash).toBe('')
+		expect(captureInvitation(roomId)).toBe('secret/for-guest')
+		expect(signupCount).toBe(1)
+		expect(signedInChecks).toBe(2)
 	} finally {
 		view.unmount()
 		client.clear()
