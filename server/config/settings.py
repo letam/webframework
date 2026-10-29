@@ -17,6 +17,7 @@ import logging
 import logging.config
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from csp.constants import SELF
 from django.core.exceptions import ImproperlyConfigured
@@ -743,6 +744,29 @@ if USE_LOCAL_FILE_STORAGE and not os.path.exists(MEDIA_ROOT):
 # CSP settings
 # Reference: https://django-csp.readthedocs.io/en/latest/configuration.html
 
+
+def realtime_connect_sources(sources, *, debug, realtime_enabled, allowed_hosts, server_host=''):
+    """Allow explicit WebSocket origins only for production realtime instances."""
+    if debug or not realtime_enabled:
+        return sources
+
+    # CSP 'self' does not cover WebSocket schemes consistently across browsers.
+    sources = list(sources)
+    for host in allowed_hosts:
+        if host == '*':
+            continue
+        if host.startswith('.'):
+            sources.extend([f'wss://{host[1:]}', f'wss://*{host}'])
+        else:
+            sources.append(f'wss://{host}')
+    # usePracticeRoom uses VITE_SERVER_HOST when set, otherwise the page's host.
+    target = urlsplit(server_host)
+    if target.netloc:
+        scheme = 'ws' if target.scheme == 'http' else 'wss'
+        sources.append(f'{scheme}://{target.netloc}')
+    return list(dict.fromkeys(sources))
+
+
 CONTENT_SECURITY_POLICY_DIRECTIVES = {
     'default-src': [SELF],
     'frame-ancestors': [SELF],
@@ -844,6 +868,16 @@ if SENTRY_FRONTEND_INGEST_FOR_CSP:
         *CONTENT_SECURITY_POLICY_DIRECTIVES.get('connect-src', []),
         SENTRY_FRONTEND_INGEST_FOR_CSP,
     ]
+
+if not DEBUG and REALTIME_ENABLED:
+    CONTENT_SECURITY_POLICY_DIRECTIVES['connect-src'] = realtime_connect_sources(
+        CONTENT_SECURITY_POLICY_DIRECTIVES['connect-src'],
+        debug=DEBUG,
+        realtime_enabled=REALTIME_ENABLED,
+        allowed_hosts=ALLOWED_HOSTS,
+        # Mirror any frontend VITE_SERVER_HOST override in the backend environment.
+        server_host=env.str('VITE_SERVER_HOST', default=''),
+    )
 
 CONTENT_SECURITY_POLICY = {
     # 'EXCLUDE_URL_PREFIXES': ['/excluded-path/'],
