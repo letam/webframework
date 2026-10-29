@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter, Route, Routes } from 'react-router'
 import { afterEach, expect, it, vi } from 'vitest'
-import { AuthProvider } from '@/hooks/useAuth'
-import type { PracticeSnapshot } from '@/lib/api/practice'
+import { LoginModal } from '@/components/LoginModal'
+import { AuthProvider, useAuth } from '@/hooks/useAuth'
+import { createPracticeRoom, joinPracticeRoom, type PracticeSnapshot } from '@/lib/api/practice'
 import { forgetInvitation } from '@/lib/practice/invitation'
-import { clearCsrfTokenCache } from '@/lib/utils/fetch'
+import { clearCsrfTokenCache, getCsrfToken } from '@/lib/utils/fetch'
 import PracticeRoomRoute from '@/pages/PracticeRoomPage'
 
 // Navigation is unrelated to the sign-in/join flow; keep the route, modal,
@@ -33,6 +34,10 @@ it('renews CSRF after an existing user logs in and joins with the invitation acr
 	window.history.replaceState(null, '', `/practice/rooms/${roomId}#invite=secret%2Ffor-guest`)
 	vi.stubGlobal('WebSocket', PendingSocket)
 	let signedIn = false
+	let finishStatus: (response: Response) => void
+	const pendingStatus = new Promise<Response>((resolve) => {
+		finishStatus = resolve
+	})
 	const requests: { url: string; options?: RequestInit }[] = []
 	const snapshot: PracticeSnapshot = {
 		v: 1,
@@ -62,6 +67,7 @@ it('renews CSRF after an existing user logs in and joins with the invitation acr
 			requests.push({ url, options })
 			switch (url) {
 				case '/auth/status/':
+					if (signedIn) return pendingStatus
 					return Response.json({
 						is_authenticated: signedIn,
 						user_id: signedIn ? 7 : null,
@@ -72,6 +78,8 @@ it('renews CSRF after an existing user logs in and joins with the invitation acr
 				case '/auth/login/':
 					signedIn = true
 					return Response.json({ message: 'Logged in' })
+				case '/api/practice/rooms/':
+					return Response.json({ snapshot, invitation_secret: 'new' })
 				case `/api/practice/rooms/${roomId}/`:
 					return Response.json({ code: 'forbidden' }, { status: 403 })
 				case `/api/practice/rooms/${roomId}/join/`:
@@ -103,12 +111,25 @@ it('renews CSRF after an existing user logs in and joins with the invitation acr
 		const dialog = within(screen.getByRole('dialog'))
 		await user.type(dialog.getByLabelText('Username'), 'existing-guest')
 		await user.type(dialog.getByLabelText('Password'), 'ExistingPass123!')
+		await getCsrfToken() // Prime T0 before login rotates the cookie.
 		await user.click(dialog.getByRole('button', { name: 'Sign In' }))
+		await waitFor(() =>
+			expect(requests.filter(({ url }) => url === '/auth/status/')).toHaveLength(2)
+		)
+		await createPracticeRoom('During status refresh', 10)
+		const immediate = requests.find(({ url }) => url === '/api/practice/rooms/')?.options
+		expect(new Headers(immediate?.headers).get('X-CSRFToken')).toBe('session-token')
+		await act(async () => {
+			finishStatus(
+				Response.json({ is_authenticated: true, user_id: 7, username: 'existing-guest' })
+			)
+		})
 
 		const join = await screen.findByRole('button', { name: 'Join room' })
 		expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 		expect(window.location.pathname).toBe(`/practice/rooms/${roomId}`)
 		expect(window.location.hash).toBe('')
+		expect(requests.filter(({ url }) => url.endsWith('/join/'))).toHaveLength(0)
 		await user.click(join)
 		await screen.findByRole('heading', { name: 'Morning session' })
 		expect(screen.getByText('You are a participant')).toBeInTheDocument()
@@ -117,6 +138,8 @@ it('renews CSRF after an existing user logs in and joins with the invitation acr
 			'/auth/csrf/',
 			'/auth/login/',
 			'/auth/status/',
+			'/auth/csrf/',
+			'/api/practice/rooms/',
 			`/api/practice/rooms/${roomId}/`,
 			'/auth/csrf/',
 			`/api/practice/rooms/${roomId}/join/`,
@@ -129,11 +152,129 @@ it('renews CSRF after an existing user logs in and joins with the invitation acr
 			username: 'existing-guest',
 			password: 'ExistingPass123!',
 		})
-		const mutation = requests[6].options
+		const mutation = requests[8].options
 		expect(mutation?.method).toBe('POST')
 		expect(mutation?.credentials).toBe('same-origin')
 		expect(new Headers(mutation?.headers).get('X-CSRFToken')).toBe('session-token')
 		expect(JSON.parse(String(mutation?.body))).toEqual({ invitation_secret: 'secret/for-guest' })
+	} finally {
+		view.unmount()
+		client.clear()
+	}
+})
+
+function AuthProbe() {
+	const { refreshAuthStatus, userId } = useAuth()
+	return (
+		<button type="button" onClick={() => refreshAuthStatus()}>
+			Refresh user {userId}
+		</button>
+	)
+}
+
+it.each([
+	'HTTP',
+	'network',
+	'JSON',
+])('keeps the fresh token and login dialog when status refresh fails (%s)', async (failure) => {
+	let token = 'T0'
+	let loginCount = 0
+	const loginTokens: string[] = []
+	const success = vi.fn()
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async (url: string, options?: RequestInit) => {
+			if (url === '/auth/csrf/') return Response.json({ token })
+			if (url === '/auth/login/') {
+				loginTokens.push(new Headers(options?.headers).get('X-CSRFToken'))
+				loginCount++
+				token = `T${loginCount}`
+				return Response.json({ message: 'Logged in' })
+			}
+			if (url === '/auth/status/') {
+				if (loginCount === 1) {
+					if (failure === 'HTTP') return new Response('Unavailable', { status: 503 })
+					if (failure === 'JSON') return new Response('invalid JSON')
+					throw new TypeError('Network failed')
+				}
+				return Response.json({
+					is_authenticated: loginCount > 0,
+					user_id: loginCount > 0 ? 7 : null,
+				})
+			}
+			throw new Error(`Unexpected request: ${url}`)
+		})
+	)
+	const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+	const user = userEvent.setup()
+	const view = render(
+		<QueryClientProvider client={client}>
+			<AuthProvider>
+				<LoginModal onLoginSuccess={success} />
+				<AuthProbe />
+			</AuthProvider>
+		</QueryClientProvider>
+	)
+	try {
+		await screen.findByRole('button', { name: 'Refresh user' })
+		await getCsrfToken()
+		await user.click(screen.getByRole('button', { name: 'Login' }))
+		const dialog = within(screen.getByRole('dialog'))
+		await user.type(dialog.getByLabelText('Username'), 'existing-guest')
+		await user.type(dialog.getByLabelText('Password'), 'ExistingPass123!')
+		await user.click(dialog.getByRole('button', { name: 'Sign In' }))
+		await screen.findByText('Unable to confirm your sign-in. Please try again.')
+		expect(success).not.toHaveBeenCalled()
+		expect(screen.getByRole('dialog')).toBeInTheDocument()
+		await user.click(dialog.getByRole('button', { name: 'Sign In' }))
+		await waitFor(() => expect(success).toHaveBeenCalledTimes(1))
+		expect(loginTokens).toEqual(['T0', 'T1'])
+	} finally {
+		view.unmount()
+		client.clear()
+	}
+})
+
+it('retries a practice mutation after another tab rotates the cookie for the same user', async () => {
+	let token = 'T0'
+	let csrfCalls = 0
+	const mutationTokens: string[] = []
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async (url: string, options?: RequestInit) => {
+			if (url === '/auth/status/') return Response.json({ is_authenticated: true, user_id: 7 })
+			if (url === '/auth/csrf/') {
+				csrfCalls++
+				return Response.json({ token })
+			}
+			if (url === `/api/practice/rooms/${roomId}/join/`) {
+				const sent = new Headers(options?.headers).get('X-CSRFToken')
+				mutationTokens.push(sent)
+				return sent === token
+					? Response.json({ room_id: roomId })
+					: Response.json({ detail: 'CSRF Failed: token incorrect' }, { status: 403 })
+			}
+			throw new Error(`Unexpected request: ${url}`)
+		})
+	)
+	const client = new QueryClient()
+	const user = userEvent.setup()
+	const view = render(
+		<QueryClientProvider client={client}>
+			<AuthProvider>
+				<AuthProbe />
+			</AuthProvider>
+		</QueryClientProvider>
+	)
+	try {
+		await screen.findByRole('button', { name: 'Refresh user 7' })
+		await getCsrfToken()
+		token = 'T1' // Another tab logs out and back in as user 7.
+		await user.click(screen.getByRole('button', { name: 'Refresh user 7' }))
+		expect(csrfCalls).toBe(1)
+		expect(await joinPracticeRoom(roomId, 'secret')).toMatchObject({ room_id: roomId })
+		expect(mutationTokens).toEqual(['T0', 'T1'])
+		expect(csrfCalls).toBe(2)
 	} finally {
 		view.unmount()
 		client.clear()

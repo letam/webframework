@@ -8,36 +8,74 @@ interface CsrfTokenCache {
 }
 
 let csrfTokenCache: CsrfTokenCache | null = null
+let csrfGeneration = 0
+let csrfRequest: { generation: number; promise: Promise<string> } | null = null
 
-// Helper function to clear CSRF token cache
+// Invalidated requests must neither cache nor return their stale token.
 export const clearCsrfTokenCache = () => {
 	csrfTokenCache = null
+	csrfGeneration++
+	csrfRequest = null
 }
 
-// Helper function to get CSRF token with caching
-export const getCsrfToken = async () => {
-	// Check if we have a valid cached token (valid for 1 hour)
-	const now = Date.now()
-	if (csrfTokenCache && csrfTokenCache.expiresAt > now) {
-		return csrfTokenCache.token
-	}
+export const getCsrfToken = async (): Promise<string> => {
+	while (true) {
+		if (csrfTokenCache && csrfTokenCache.expiresAt > Date.now()) {
+			return csrfTokenCache.token
+		}
 
-	// Fetch new token. Throw a status-carrying error rather than letting
-	// response.json() choke on an error page: callers that classify failures
-	// by HTTP status (the outbox retry taxonomy) need to see the real status.
-	const response = await fetch(`${SERVER_HOST}/auth/csrf/`)
-	if (!response.ok) {
-		throw new ApiError('Failed to fetch CSRF token', response.status)
+		const generation = csrfGeneration
+		if (!csrfRequest || csrfRequest.generation !== generation) {
+			csrfRequest = {
+				generation,
+				promise: (async () => {
+					const response = await fetch(`${SERVER_HOST}/auth/csrf/`)
+					if (!response.ok) {
+						throw new ApiError('Failed to fetch CSRF token', response.status)
+					}
+					const data = await response.json()
+					return data.token
+				})(),
+			}
+		}
+		const request = csrfRequest
+		let token: string
+		try {
+			token = await request.promise
+		} finally {
+			if (csrfRequest === request) csrfRequest = null
+		}
+		if (generation !== csrfGeneration) continue
+		csrfTokenCache = { token, expiresAt: Date.now() + 60 * 60 * 1000 }
+		return token
 	}
-	const data = await response.json()
+}
 
-	// Cache the token with 1 hour expiration
-	csrfTokenCache = {
-		token: data.token,
-		expiresAt: now + 60 * 60 * 1000, // 1 hour in milliseconds
+const isUnsafeMethod = (method: string) =>
+	['POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase())
+
+// Retry only an explicit CSRF rejection, whose operation was not applied.
+export const csrfFetch = async (url: string, options: RequestInit = {}): Promise<Response> => {
+	const response = await fetch(url, options)
+	const body = options.body
+	const replayable =
+		body === undefined ||
+		typeof body === 'string' ||
+		body instanceof FormData ||
+		body instanceof URLSearchParams ||
+		body instanceof Blob
+	if (response.status !== 403 || !isUnsafeMethod(options.method ?? 'GET') || !replayable) {
+		return response
 	}
-
-	return data.token
+	try {
+		if (!(await response.clone().text()).includes('CSRF')) return response
+	} catch {
+		return response
+	}
+	clearCsrfTokenCache()
+	const headers = new Headers(options.headers)
+	headers.set('X-CSRFToken', await getCsrfToken())
+	return fetch(url, { ...options, headers })
 }
 
 // Helper function to build fetch options (credentials mode + CSRF token).
@@ -59,7 +97,7 @@ export const getFetchOptions = async (
 	}
 
 	// Add CSRF token for destructive methods
-	if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+	if (isUnsafeMethod(method)) {
 		const csrfToken = await getCsrfToken()
 		options.headers = {
 			...options.headers,

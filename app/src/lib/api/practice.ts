@@ -1,5 +1,5 @@
 import { SERVER_API_URL } from '@/lib/constants'
-import { getFetchOptions } from '@/lib/utils/fetch'
+import { csrfFetch, getFetchOptions } from '@/lib/utils/fetch'
 
 export type PracticeStatus = 'ready' | 'running' | 'paused' | 'completed'
 export type PracticeAction = 'start' | 'pause' | 'resume' | 'reset' | 'close'
@@ -48,7 +48,7 @@ async function request<T>(
 	body?: Record<string, unknown>,
 	signal?: AbortSignal
 ) {
-	const response = await fetch(`${base}${path}`, {
+	const response = await csrfFetch(`${base}${path}`, {
 		...(await getFetchOptions(method, body)),
 		signal,
 	})
