@@ -89,6 +89,24 @@ vi.mock('@/components/post/create/AudioRecorder', () => ({
 		) : null,
 }))
 
+vi.mock('@/components/post/create/VideoRecorder', () => ({
+	VideoRecorderModal: ({
+		open,
+		onVideoCaptured,
+	}: {
+		open: boolean
+		onVideoCaptured: (blob: Blob, action?: CaptureAction) => void
+	}) =>
+		open ? (
+			<button
+				type="button"
+				onClick={() => onVideoCaptured(new Blob(['recording'], { type: 'video/webm' }), 'post')}
+			>
+				Post recording
+			</button>
+		) : null,
+}))
+
 const setOnline = (online: boolean) => {
 	Object.defineProperty(navigator, 'onLine', { configurable: true, value: online })
 }
@@ -1215,17 +1233,21 @@ describe('CreatePost', () => {
 		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to create post'))
 		expect(screen.getByText('Voice recording')).toBeVisible()
 	})
-	it('a recorder Post waits for an outbox load to commit, then posts once', async () => {
+	it.each([
+		['audio', 'Record Audio', 'Voice recording'],
+		['video', 'Record Video', 'Video recording'],
+	] as const)('%s recorder Post during an outbox load requires an explicit Post after commit', async (mediaType, recordButton, previewLabel) => {
 		const user = userEvent.setup()
 		const onPostCreated = vi.fn().mockResolvedValue(undefined)
 		render(<CreatePost onPostCreated={onPostCreated} />)
+		await user.click(screen.getByRole('button', { name: recordButton }))
 		let loadHandle: ReturnType<typeof requestComposerLoad> = null
 		act(() => {
 			loadHandle = requestComposerLoad(makeEntry())
 		})
-		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		expect(loadHandle).not.toBeNull()
 		await user.click(screen.getByRole('button', { name: 'Post recording' }))
-		expect(screen.getByText('Voice recording')).toBeVisible()
+		expect(screen.getByText(previewLabel)).toBeVisible()
 		fireEvent.keyDown(screen.getByPlaceholderText("What's on your mind?"), {
 			key: 'Enter',
 			metaKey: true,
@@ -1233,12 +1255,21 @@ describe('CreatePost', () => {
 		await act(async () => {})
 		expect(onPostCreated).not.toHaveBeenCalled()
 		act(() => loadHandle?.commit())
+		await act(async () => {})
+		expect(onPostCreated).not.toHaveBeenCalled()
+		expect(mockEnqueuePost).not.toHaveBeenCalled()
+		expect(screen.getByText(previewLabel)).toBeVisible()
+		expect(screen.getByPlaceholderText("What's on your mind?")).toHaveValue(
+			'Restored from the outbox'
+		)
+		await user.click(screen.getByRole('button', { name: 'Post' }))
 		await waitFor(() =>
 			expect(onPostCreated).toHaveBeenCalledExactlyOnceWith(
 				expect.objectContaining({
 					text: 'Restored from the outbox',
 					visibility: 'private',
-					media_type: 'audio',
+					media_type: mediaType,
+					media: expect.any(File),
 				})
 			)
 		)
