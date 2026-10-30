@@ -65,6 +65,17 @@ def fly_config(path):
 class DeployConfigTests(SimpleTestCase):
     """The checked-in files that have to agree about where the volume is."""
 
+    def test_postgres_config_documents_required_remote_media_storage(self):
+        """The volume-free Postgres alternative requires R2 for uploads."""
+        postgres = REPO_ROOT / 'admin' / 'configs' / 'fly-postgres.toml'
+        config_text = postgres.read_text(encoding='utf-8')
+        self.assertIn('Requires R2', config_text)
+        self.assertIn('USE_LOCAL_FILE_STORAGE=False', config_text)
+        self.assertIn('USE_LOCAL_FILE_STORAGE=False', RUNBOOK.read_text(encoding='utf-8'))
+        mounts, statics = fly_config(postgres)
+        self.assertEqual(mounts, [])
+        self.assertNotIn(AVATAR_URL_PREFIX, statics)
+
     def test_the_runbook_media_root_is_where_the_configs_serve_avatars(self):
         """A mismatch here 404s every avatar and nothing else, which reads as a UI bug.
 

@@ -20,7 +20,10 @@ way — this doc exists so nobody re-derives it under pressure.
 The **canonical deploy configs** live in `admin/configs/`:
 
 - `fly-sqlite.toml` — production (SQLite on the mounted volume).
-- `fly-postgres.toml` — alternative (managed Postgres).
+- `fly-postgres.toml` — alternative (managed Postgres). Requires R2 media storage:
+  set `USE_LOCAL_FILE_STORAGE=False` and configure `R2_ACCESS_KEY_ID`,
+  `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID` and `R2_BUCKET_NAME`. It has no volume
+  or avatar statics; local uploads would be lost on container restart.
 - `fly-preview.toml` — preview apps. Same as `fly-sqlite.toml` but the machine
   suspends when idle. See [Preview apps](#preview-apps).
 
@@ -29,6 +32,14 @@ the live SQLite setup. Do not deploy with it directly.
 
 Every `fly` command needs an explicit `--app webframework`, or it falls back to
 the root `fly.toml`.
+
+At startup with `DEBUG=False`, the app logs a WARNING if `MEDIA_ROOT` (with local
+file storage) or the SQLite database directory shares the root filesystem's
+device. A mistyped path can otherwise boot healthy and lose data on restart.
+Check `fly logs` after deploying and verify that these paths use the mounted
+volume. Stat errors also produce a warning and never block startup. This check
+is advisory: persistent storage can legitimately share the root device on other
+hosts, and a separate device alone does not prove that a path is correct.
 
 ## Normal deploy
 
