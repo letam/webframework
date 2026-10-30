@@ -140,8 +140,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const toolbarRef = useRef<HTMLDivElement>(null)
 	const collapseTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 	// Set when the attached take was stopped with the recorder's Post. Cleared when that
-	// submission starts, when the take is discarded, or when an outbox load rolls back.
+	// submission starts, when the take is discarded, or when an outbox load finishes.
 	const postAfterCaptureRef = useRef(false)
+	// Keep the overlap through delayed capture callbacks, even after the load unlocks.
+	const captureOverlappedOutboxRef = useRef(false)
 	const [isAudioModalOpen, setIsAudioModalOpen] = useState(false)
 	const [isVideoModalOpen, setIsVideoModalOpen] = useState(false)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -183,6 +185,7 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const loadOutboxEntry = useCallback(
 		(entry: OutboxEntry) => {
 			if (postText.length > 0 || !hasNoMedia || composerLockedRef.current) return null
+			captureOverlappedOutboxRef.current = true
 			composerLockedRef.current = true
 			setComposerLocked(true)
 
@@ -212,6 +215,8 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 			textareaRef.current?.focus()
 			return {
 				commit: () => {
+					// Keep an overlapping recorder Post from submitting content loaded for editing.
+					postAfterCaptureRef.current = false
 					composerLockedRef.current = false
 					setComposerLocked(false)
 				},
@@ -776,9 +781,14 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 	const submitPostRef = useRef(submitPost)
 	submitPostRef.current = submitPost
 	useEffect(() => {
-		// While an outbox load holds the composer, keep the request until it commits.
+		// An outbox load cancels the request on commit or rollback before unlocking.
 		if (!postAfterCaptureRef.current || composerLocked || (!audioBlob && !videoBlob)) return
 		postAfterCaptureRef.current = false
+		// Capture can finish after commit or rollback has already cleared the request.
+		if (captureOverlappedOutboxRef.current) {
+			toast("Your recording is attached but wasn't posted.")
+			return
+		}
 		void submitPostRef.current(false)
 	}, [audioBlob, videoBlob, composerLocked])
 
@@ -922,7 +932,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 												variant="ghost"
 												size="icon"
 												className="h-9 w-9 rounded-full hover:bg-red-500/10"
-												onClick={() => setIsAudioModalOpen(true)}
+												onClick={() => {
+													captureOverlappedOutboxRef.current = composerLockedRef.current
+													setIsAudioModalOpen(true)
+												}}
 												disabled={!!submitStatus}
 												aria-label="Record Audio"
 											>
@@ -938,7 +951,10 @@ const CreatePost: React.FC<CreatePostProps> = ({ onPostCreated }) => {
 												variant="ghost"
 												size="icon"
 												className="h-9 w-9 rounded-full hover:bg-blue-500/10"
-												onClick={() => setIsVideoModalOpen(true)}
+												onClick={() => {
+													captureOverlappedOutboxRef.current = composerLockedRef.current
+													setIsVideoModalOpen(true)
+												}}
 												disabled={!!submitStatus}
 												aria-label="Record Video"
 											>
