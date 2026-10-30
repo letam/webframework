@@ -15,6 +15,7 @@ const mockEnqueuePost = vi.hoisted(() => vi.fn())
 const mockSetSyncMode = vi.hoisted(() => vi.fn())
 const mockGetEffectiveSyncMode = vi.hoisted(() => vi.fn())
 const mockConvertWavToWebM = vi.hoisted(() => vi.fn())
+const mockCompleteCapture = vi.hoisted(() => vi.fn((complete: () => void) => complete()))
 const mockToast = vi.hoisted(() =>
 	Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn(), info: vi.fn() })
 )
@@ -81,7 +82,11 @@ vi.mock('@/components/post/create/AudioRecorder', () => ({
 				</button>
 				<button
 					type="button"
-					onClick={() => onAudioCaptured(new Blob(['recording'], { type: 'audio/wav' }), 'post')}
+					onClick={() =>
+						mockCompleteCapture(() =>
+							onAudioCaptured(new Blob(['recording'], { type: 'audio/wav' }), 'post')
+						)
+					}
 				>
 					Post recording
 				</button>
@@ -100,7 +105,11 @@ vi.mock('@/components/post/create/VideoRecorder', () => ({
 		open ? (
 			<button
 				type="button"
-				onClick={() => onVideoCaptured(new Blob(['recording'], { type: 'video/webm' }), 'post')}
+				onClick={() =>
+					mockCompleteCapture(() =>
+						onVideoCaptured(new Blob(['recording'], { type: 'video/webm' }), 'post')
+					)
+				}
 			>
 				Post recording
 			</button>
@@ -1197,15 +1206,28 @@ describe('CreatePost', () => {
 			expect(scrollBy).not.toHaveBeenCalled()
 		})
 	})
-	it('posts straight from the recorder', async () => {
+	it.each([
+		['audio', false, 'Record Audio'],
+		['video', false, 'Record Video'],
+		['audio', true, 'Record Audio'],
+		['video', true, 'Record Video'],
+	] as const)('posts straight from the %s recorder (previous outbox edit: %s)', async (mediaType, loadFirst, recordButton) => {
 		const user = userEvent.setup()
 		const onPostCreated = vi.fn().mockResolvedValue(undefined)
 		render(<CreatePost onPostCreated={onPostCreated} />)
-		await user.click(screen.getByRole('button', { name: 'Record Audio' }))
+		if (loadFirst) {
+			let loadHandle: ReturnType<typeof requestComposerLoad> = null
+			act(() => {
+				loadHandle = requestComposerLoad(makeEntry())
+			})
+			expect(loadHandle).not.toBeNull()
+			act(() => loadHandle?.commit())
+		}
+		await user.click(screen.getByRole('button', { name: recordButton }))
 		await user.click(screen.getByRole('button', { name: 'Post recording' }))
 		await waitFor(() =>
 			expect(onPostCreated).toHaveBeenCalledExactlyOnceWith(
-				expect.objectContaining({ media_type: 'audio' })
+				expect.objectContaining({ media_type: mediaType, media: expect.any(File) })
 			)
 		)
 		expect(toast.error).not.toHaveBeenCalled()
@@ -1238,15 +1260,22 @@ describe('CreatePost', () => {
 		['video', 'Record Video', 'Video recording'],
 	] as const)('%s recorder Post during an outbox load requires an explicit Post after commit', async (mediaType, recordButton, previewLabel) => {
 		const user = userEvent.setup()
+		let completeCapture: (() => void) | undefined
+		mockCompleteCapture.mockImplementationOnce((complete) => {
+			completeCapture = complete
+		})
 		const onPostCreated = vi.fn().mockResolvedValue(undefined)
 		render(<CreatePost onPostCreated={onPostCreated} />)
 		await user.click(screen.getByRole('button', { name: recordButton }))
+		// Retain the callback from before the load, as MediaRecorder.onstop does.
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		expect(completeCapture).toBeDefined()
 		let loadHandle: ReturnType<typeof requestComposerLoad> = null
 		act(() => {
 			loadHandle = requestComposerLoad(makeEntry())
 		})
 		expect(loadHandle).not.toBeNull()
-		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		act(() => completeCapture?.())
 		expect(screen.getByText(previewLabel)).toBeVisible()
 		fireEvent.keyDown(screen.getByPlaceholderText("What's on your mind?"), {
 			key: 'Enter',
@@ -1268,6 +1297,55 @@ describe('CreatePost', () => {
 				expect.objectContaining({
 					text: 'Restored from the outbox',
 					visibility: 'private',
+					media_type: mediaType,
+					media: expect.any(File),
+				})
+			)
+		)
+		await act(async () => {})
+		expect(onPostCreated).toHaveBeenCalledOnce()
+		expect(toast.error).not.toHaveBeenCalled()
+	})
+	it.each([
+		['audio', 'commit', 'Record Audio', 'Voice recording'],
+		['video', 'commit', 'Record Video', 'Video recording'],
+		['audio', 'rollback', 'Record Audio', 'Voice recording'],
+		['video', 'rollback', 'Record Video', 'Video recording'],
+	] as const)('deferred %s recorder Post after outbox %s requires an explicit Post', async (mediaType, outcome, recordButton, previewLabel) => {
+		const user = userEvent.setup()
+		let completeCapture: (() => void) | undefined
+		mockCompleteCapture.mockImplementationOnce((complete) => {
+			completeCapture = complete
+		})
+		const onPostCreated = vi.fn().mockResolvedValue(undefined)
+		render(<CreatePost onPostCreated={onPostCreated} />)
+		await user.click(screen.getByRole('button', { name: recordButton }))
+		await user.click(screen.getByRole('button', { name: 'Post recording' }))
+		expect(completeCapture).toBeDefined()
+		let loadHandle: ReturnType<typeof requestComposerLoad> = null
+		act(() => {
+			loadHandle = requestComposerLoad(makeEntry())
+		})
+		expect(loadHandle).not.toBeNull()
+		act(() => {
+			if (outcome === 'commit') loadHandle?.commit()
+			else expect(loadHandle?.rollback()).toBe(true)
+		})
+		act(() => completeCapture?.())
+		await act(async () => {})
+		expect(onPostCreated).not.toHaveBeenCalled()
+		expect(mockEnqueuePost).not.toHaveBeenCalled()
+		expect(screen.getByText(previewLabel)).toBeVisible()
+		const expectedText = outcome === 'commit' ? 'Restored from the outbox' : ''
+		expect(screen.getByPlaceholderText("What's on your mind?")).toHaveValue(expectedText)
+		if (outcome === 'rollback') {
+			expect(mockToast).toHaveBeenCalledWith("Your recording is attached but wasn't posted.")
+		}
+		await user.click(screen.getByRole('button', { name: 'Post' }))
+		await waitFor(() =>
+			expect(onPostCreated).toHaveBeenCalledExactlyOnceWith(
+				expect.objectContaining({
+					text: expectedText,
 					media_type: mediaType,
 					media: expect.any(File),
 				})
