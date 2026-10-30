@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { SERVER_HOST } from '@/lib/constants'
-import { getFetchOptions } from '@/lib/utils/fetch'
+import { login } from '@/lib/api/auth'
 import { useAuth } from '@/hooks/useAuth'
 import {
 	Dialog,
@@ -43,8 +42,7 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess, onOpenChange }: L
 
 	const onSubmit = async (data: LoginFormData) => {
 		try {
-			const options = await getFetchOptions('POST', data)
-			const response = await fetch(`${SERVER_HOST}/auth/login/`, options)
+			const response = await login(data)
 
 			if (!response.ok) {
 				let errors: { form?: string[] } | null = null
@@ -63,7 +61,12 @@ export const LoginModal = ({ triggerClassName, onLoginSuccess, onOpenChange }: L
 				return
 			}
 
-			await refreshAuthStatus()
+			if (!(await refreshAuthStatus())) {
+				form.setError('root', {
+					message: 'Unable to confirm your sign-in. Please try again.',
+				})
+				return
+			}
 			handleOpenChange(false)
 			if (onLoginSuccess) {
 				onLoginSuccess()

@@ -33,12 +33,17 @@ from django.contrib import admin
 from django.urls import include, path, re_path
 from rest_framework import routers
 
+from config.readiness import readiness
+
 router = routers.DefaultRouter()
 router.register(r'posts', PostViewSet)
 
 
 # Order matters! More specific patterns should come before catch-all patterns
 urlpatterns = [
+    path('readyz/', readiness, name='readiness'),
+    path('presence/', include('apps.presence.urls')),
+    path('api/practice/', include('apps.practice.urls')),
     path('admin/', admin.site.urls),
     #
     path('auth/csrf/', auth_views.csrf),

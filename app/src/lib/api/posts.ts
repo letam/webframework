@@ -6,7 +6,7 @@ import type {
 	LikeResponse,
 } from '../../types/post'
 import { SERVER_API_URL, UPLOAD_FILES_TO_S3 } from '../constants'
-import { getFetchOptions } from '../utils/fetch'
+import { csrfFetch, getFetchOptions } from '../utils/fetch'
 import { ApiError } from './errors'
 
 export interface PostsPage {
@@ -61,7 +61,7 @@ export const findPostByClientUuid = async (
 		client_uuid: clientUuid,
 		...(expectedAuthor === undefined ? {} : { expected_author: expectedAuthor }),
 	})
-	const response = await fetch(`${SERVER_API_URL}/posts/idempotency-check/`, options)
+	const response = await csrfFetch(`${SERVER_API_URL}/posts/idempotency-check/`, options)
 	if (response.status === 204) return null
 	if (!response.ok) {
 		throw new ApiError('Failed to check for an existing post', response.status)
@@ -77,7 +77,7 @@ export const cancelPostByClientUuid = async (
 		client_uuid: clientUuid,
 		expected_author: expectedAuthor,
 	})
-	const response = await fetch(`${SERVER_API_URL}/posts/idempotency-cancel/`, options)
+	const response = await csrfFetch(`${SERVER_API_URL}/posts/idempotency-cancel/`, options)
 	if (response.status === 204) return null
 	if (!response.ok) {
 		throw new ApiError('Failed to cancel the queued post', response.status)
@@ -190,7 +190,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 				content_length: data.media.size,
 				...(data.expected_author === undefined ? {} : { expected_author: data.expected_author }),
 			})
-			response = await fetch(`${SERVER_API_URL}/uploads/presign/`, options)
+			response = await csrfFetch(`${SERVER_API_URL}/uploads/presign/`, options)
 			if (!response.ok) {
 				throw new ApiError('Failed to get an upload URL', response.status)
 			}
@@ -215,7 +215,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 			formData.append('s3_file_key', presignedUrl.file_path)
 			const postOptions = await getFetchOptions('POST', formData)
 
-			response = await fetch(`${SERVER_API_URL}/posts/`, postOptions)
+			response = await csrfFetch(`${SERVER_API_URL}/posts/`, postOptions)
 		} else {
 			if (data.media) {
 				formData.append('media_type', data.media_type || 'audio')
@@ -224,7 +224,7 @@ export const createPost = async (data: CreatePostRequest): Promise<Post> => {
 
 			const postOptions = await getFetchOptions('POST', formData)
 
-			response = await fetch(`${SERVER_API_URL}/posts/`, postOptions)
+			response = await csrfFetch(`${SERVER_API_URL}/posts/`, postOptions)
 		}
 
 		if (!response.ok) {
@@ -266,7 +266,7 @@ export const getMediaUrl = (post: Post): string => {
 
 export const publishPost = async (id: number): Promise<Post> => {
 	const options = await getFetchOptions('POST')
-	const response = await fetch(`${SERVER_API_URL}/posts/${id}/publish/`, options)
+	const response = await csrfFetch(`${SERVER_API_URL}/posts/${id}/publish/`, options)
 
 	if (!response.ok) {
 		throw new Error('Failed to publish post')
@@ -278,7 +278,7 @@ export const publishPost = async (id: number): Promise<Post> => {
 
 export const regenerateShareToken = async (id: number): Promise<Post> => {
 	const options = await getFetchOptions('POST')
-	const response = await fetch(`${SERVER_API_URL}/posts/${id}/share-token/`, options)
+	const response = await csrfFetch(`${SERVER_API_URL}/posts/${id}/share-token/`, options)
 
 	if (!response.ok) {
 		throw new Error('Failed to reset share link')
@@ -291,7 +291,7 @@ export const regenerateShareToken = async (id: number): Promise<Post> => {
 export const transcribePost = async (id: number): Promise<Post> => {
 	try {
 		const options = await getFetchOptions('POST')
-		const response = await fetch(`${SERVER_API_URL}/posts/${id}/transcribe/`, options)
+		const response = await csrfFetch(`${SERVER_API_URL}/posts/${id}/transcribe/`, options)
 
 		if (!response.ok) {
 			throw new Error('Failed to transcribe media')
@@ -312,7 +312,7 @@ export const recordPostViews = async (ids: number[]): Promise<void> => {
 
 	try {
 		const options = await getFetchOptions('POST', { post_ids: ids })
-		const response = await fetch(`${SERVER_API_URL}/posts/views/`, {
+		const response = await csrfFetch(`${SERVER_API_URL}/posts/views/`, {
 			...options,
 			keepalive: true,
 		})
@@ -328,7 +328,7 @@ export const recordPostViews = async (ids: number[]): Promise<void> => {
 export const deletePost = async (id: number): Promise<void> => {
 	try {
 		const options = await getFetchOptions('DELETE')
-		const response = await fetch(`${SERVER_API_URL}/posts/${id}/`, options)
+		const response = await csrfFetch(`${SERVER_API_URL}/posts/${id}/`, options)
 
 		if (!response.ok) {
 			throw new Error('Failed to delete post')
@@ -341,7 +341,7 @@ export const deletePost = async (id: number): Promise<void> => {
 
 const setPostLike = async (id: number, liked: boolean): Promise<LikeResponse> => {
 	const options = await getFetchOptions(liked ? 'POST' : 'DELETE')
-	const response = await fetch(`${SERVER_API_URL}/posts/${id}/like/`, options)
+	const response = await csrfFetch(`${SERVER_API_URL}/posts/${id}/like/`, options)
 
 	if (!response.ok) {
 		throw new Error(liked ? 'Failed to like post' : 'Failed to unlike post')
@@ -364,7 +364,7 @@ const parsePostActionError = async (response: Response, fallback: string) => {
 
 const setPostPinned = async (id: number, pinned: boolean): Promise<Post> => {
 	const options = await getFetchOptions(pinned ? 'POST' : 'DELETE')
-	const response = await fetch(`${SERVER_API_URL}/posts/${id}/pin/`, options)
+	const response = await csrfFetch(`${SERVER_API_URL}/posts/${id}/pin/`, options)
 
 	if (!response.ok) {
 		throw new Error(
@@ -392,7 +392,7 @@ export const getComments = async (postId: number): Promise<Comment[]> => {
 
 export const createComment = async (postId: number, body: string): Promise<Comment> => {
 	const options = await getFetchOptions('POST', { body })
-	const response = await fetch(`${SERVER_API_URL}/posts/${postId}/comments/`, options)
+	const response = await csrfFetch(`${SERVER_API_URL}/posts/${postId}/comments/`, options)
 
 	if (!response.ok) {
 		throw new Error('Failed to add comment')
@@ -403,7 +403,10 @@ export const createComment = async (postId: number, body: string): Promise<Comme
 
 export const deleteComment = async (postId: number, commentId: number): Promise<void> => {
 	const options = await getFetchOptions('DELETE')
-	const response = await fetch(`${SERVER_API_URL}/posts/${postId}/comments/${commentId}/`, options)
+	const response = await csrfFetch(
+		`${SERVER_API_URL}/posts/${postId}/comments/${commentId}/`,
+		options
+	)
 
 	if (!response.ok) {
 		throw new Error('Failed to delete comment')
@@ -435,7 +438,7 @@ export const updatePost = async (id: number, data: UpdatePostRequest): Promise<P
 		}
 
 		const options = await getFetchOptions('PATCH', body)
-		const response = await fetch(`${SERVER_API_URL}/posts/${id}/`, options)
+		const response = await csrfFetch(`${SERVER_API_URL}/posts/${id}/`, options)
 
 		if (!response.ok) {
 			throw new Error('Failed to update post')

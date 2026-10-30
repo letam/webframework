@@ -9,6 +9,7 @@ import {
 import type { LinkPreview, Post } from '@/types/post'
 
 vi.mock('@/lib/utils/fetch', () => ({
+	csrfFetch: (url: string, options?: RequestInit) => fetch(url, options),
 	getFetchOptions: vi.fn(async (method: string, body?: BodyInit | Record<string, unknown>) => ({
 		method,
 		body,

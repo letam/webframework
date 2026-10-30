@@ -343,7 +343,7 @@ See `app/.env.development.local.sample` for template:
   is a reference snapshot; do not deploy with it.
 - **Migrations**: run on boot via `server/start-prod.sh`, not via `release_command` (a release
   VM has no access to the storage volume)
-- **Server**: Gunicorn on port 8000
+- **Server**: Gunicorn on port 8000 by default; opt-in realtime uses Daphne ASGI on the same port
 - **Static files**: Served by WhiteNoise at `/static/`
 - **VM**: 512MB RAM, 1 shared CPU, Toronto (`yyz`)
 - **Runbook**: `docs/deploy-fly.md`
@@ -401,3 +401,20 @@ Multi-stage Dockerfile:
 - **Sentry**: Env-gated error monitoring (`SENTRY_DSN` backend, `VITE_SENTRY_DSN` + `SENTRY_FRONTEND_INGEST_FOR_CSP` frontend)
 - **Media streaming**: Supports HTTP range requests for Safari audio/video compatibility
 - **Open Graph**: Post detail pages (`/p/<id>/`) render OG metadata for social sharing
+
+## Optional realtime presence and practice
+
+Channels/Redis capabilities are implemented behind `REALTIME_ENABLED`, `PRESENCE_ENABLED`
+and `PRACTICE_ENABLED`. HTTP-only instances still boot without Redis. Practice requires
+Postgres, explicit `PRACTICE_ORIGINS` and authenticated same-origin sessions. See
+`docs/plans/2026-10-13-presence-and-practice.md` for the authoritative protocol, privacy
+semantics, local Compose setup, trusted reverse-proxy boundary, real-service tests and
+retention command. Use `just asgi` for Daphne development and `just realtime-up` for
+loopback Postgres/Redis. The lazy `/practice` and `/practice/rooms/:id` routes use the
+existing auth/CSRF helpers; `VITE_PRACTICE_ENABLED=true` opts into the navigation link.
+For local session flows, leave `VITE_SERVER_HOST` empty and use Vite's same-origin
+`/auth/`, `/api/` and `/ws/` proxies (`VITE_WS_PROXY_TARGET` defaults to port 8000).
+Run `just test-practice` with real Postgres and `TEST_REDIS_URL`; `just pilot-practice`
+records a local measurement. The gated browser test needs `PRACTICE_E2E=1` and an enabled
+backend. Its optional `PLAYWRIGHT_CHROME_EXECUTABLE` selects an installed Chrome when
+bundled Chromium is unavailable. The public reading-page client remains a separate phase.

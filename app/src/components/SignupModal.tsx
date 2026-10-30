@@ -41,15 +41,26 @@ export const SignupModal = ({
 	onOpenChange,
 }: SignupModalProps) => {
 	const [open, setOpen] = useState(false)
+	const [accountCreated, setAccountCreated] = useState(false)
 	const { refreshAuthStatus } = useAuth()
 	const form = useForm<SignupFormData>()
 	const isMobile = useIsMobile()
 
 	const onSubmit = async (data: SignupFormData) => {
 		try {
-			await signup(data)
+			if (!accountCreated) {
+				await signup(data)
+				setAccountCreated(true)
+			}
 
-			await refreshAuthStatus()
+			if (!(await refreshAuthStatus())) {
+				form.setError('root', {
+					message:
+						'Your account was created, but we are unable to confirm your sign-in. Please try again.',
+				})
+				return
+			}
+			setAccountCreated(false)
 			handleOpenChange(false)
 			if (onSignupSuccess) {
 				onSignupSuccess()
@@ -171,8 +182,10 @@ export const SignupModal = ({
 							{form.formState.isSubmitting ? (
 								<>
 									<Loader2 className="animate-spin" />
-									Creating account...
+									{accountCreated ? 'Confirming sign-in...' : 'Creating account...'}
 								</>
+							) : accountCreated ? (
+								'Try again'
 							) : (
 								'Create Account'
 							)}
