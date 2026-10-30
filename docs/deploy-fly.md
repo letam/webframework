@@ -151,6 +151,133 @@ GNU `sed`, and never sets `SECRET_KEY`.
 - `CMD ["bash", "start-prod.sh"]`; the volume is mounted at boot.
 - Health check hits `/healthz/`; `grace_period` is 40s to cover migrate + cold-start.
 
+## Manual orphaned-media cleanup requires maintenance for deletion
+
+Start with a report. Use the deployed database and its configured default storage;
+a checkout is useful for local reports but does not inventory production.
+
+```bash
+# Repository checkout: report only
+uv run python server/manage.py cleanup_orphaned_media
+
+# Production: report against the deployed database and storage
+fly ssh console --app webframework \
+  -C 'python /code/manage.py cleanup_orphaned_media'
+```
+
+The command emits JSON lines: backend/root or bucket identity, database identity,
+UTC cutoff, unattached row IDs, object decisions, and a final summary. Save stdout
+and stderr to access-controlled log files and review the exit status. Keys are
+escaped; signed URLs and credentials are not logged. A dry-run does not change
+storage or database rows. Files from unattached `Media` rows, drafts, private posts,
+avatars and previews remain protected by modeled references. Unattached rows are
+always report-only, including with `--delete`.
+
+Only `post/<numeric-id>/media/<file>` and
+`post/audio/<numeric-user-id>/<filename>` can be reclaimed. Avatars, preview and
+legacy prefixes, malformed paths, directory markers and local symlinks are excluded.
+The command does not repair missing files or change upload/deletion hooks.
+
+| Option | Default | Bound / meaning |
+| --- | --- | --- |
+| `--min-age-hours` | `168` | At least 168, even in reports; storage mtime must be strictly older |
+| `--batch-size` | `100` | 1–1000; inventory and reference-query batches |
+| `--max-scan` | `10000` | Positive finite entry budget |
+| `--max-delete` | `100` | 1–1000 object deletion attempts |
+| `--max-row-report` | `1000` | Positive finite unattached-row report budget |
+| `--prefix` | `post/` | Repeatable narrowing, e.g. `post/audio/42/` or `post/123/media/` |
+
+Local inventory counts visited directory, symlink and excluded entries toward the
+scan budget as well as files. Prefix filtering can therefore consume budget on
+sibling entries without reporting candidates. R2 lists storage-relative prefixes
+with bounded pages through the configured guarded backend. Unsupported backends or
+ambiguous reference mappings refuse the run. Unknown, naive or future mtimes and
+unknown sizes preserve the object.
+
+Reaching any cap marks `incomplete=true`, even if it happens to coincide with the
+end of inventory. A partial report does not establish that there are no orphans.
+Review the `caps` list, narrow prefixes or deliberately raise the finite scan/report
+budgets, then repeat. A dry-run repeated without changing scope starts at the same
+place; there is no persistent cursor. During maintenance, successful bounded
+removals let subsequent runs progress. Storage-delete, database or listing failures
+abort with nonzero status; inspect the last error and summary before continuing.
+
+### Establish and retain a volume-mounted maintenance machine
+
+`--writers-quiesced` acknowledges an operator-verified precondition; it acquires no
+lock. Do not use it while uploads, attachments, admin edits, workers or external
+writers can run. Database locks cannot make an absent future reference or an object
+store write atomic with deletion.
+
+1. Record the current machine ID, volume ID, deployed image and machine command.
+   Verify there are no other machines, admin jobs, scheduled invocations or external
+   services writing to this database or bucket. Arrange an outage and stop those
+   writers. Disable deployment automation for the window.
+2. Block new upload/attachment/admin traffic, drain active app requests and stop
+   upload clients. Allow every outstanding
+   presigned PUT authorization to expire (currently 300 seconds after issuance),
+   and independently confirm that already-started transfers have completed or
+   stopped. Expiry alone cannot establish this. If transfers or external writers
+   cannot be accounted for, keep using dry-run.
+3. Park the **existing volume-owning machine** on the idle command below. This
+   replaces `start-prod.sh` and stops both its web server and worker supervisor;
+   killing only `db_worker` would let the supervisor restart it. Keep the machine
+   running so `/data` remains mounted and SSH/exec remain available. Do not use the
+   volume-less Fly release VM, scale to zero, or create a second SQLite writer.
+
+   ```bash
+   MACHINE=<recorded-volume-owning-machine-id>
+   fly machine update "$MACHINE" --app webframework \
+     --command "sleep infinity" --skip-health-checks --yes
+   fly machine start "$MACHINE" --app webframework
+   ```
+
+4. Inspect the parked machine's process list and confirm there is no Gunicorn,
+   Daphne, `db_worker`, worker supervisor or other writer. Confirm the `/data` mount
+   and rerun the report on this machine. Confirm that the `default` database alias
+   points to the authoritative primary, not a read replica. Match its engine/name,
+   filesystem root or R2 bucket/location against the recorded deployment. For
+   SQLite, expect `/data/db.sqlite3`; local storage normally uses `/data/uploads`.
+   Never redirect cleanup to an inactive bucket or an unmounted local directory.
+5. Back up affected durable data while writers remain stopped. Create a volume
+   snapshot and retain an off-machine, restorable database/media backup. For R2,
+   also back up the candidate objects in the identified bucket to a separate
+   destination; a Fly volume snapshot does not include R2. Verify restore access
+   and the candidate key list before deleting. Database backups alone cannot
+   restore removed object bytes.
+6. Review the maintenance report and its candidate bytes, ages, references and
+   caps. Run deletion only if quiescence and identity are still verified:
+
+   ```bash
+   # Inside the parked, volume-mounted production machine
+   python /code/manage.py cleanup_orphaned_media \
+     --delete --writers-quiesced --min-age-hours 168 --max-delete 100
+   ```
+
+   Capture each run's logs. Metadata and authoritative default-database references
+   are reread immediately before each removal, but these checks do not eliminate
+   races. Keep all writers stopped for the entire series of bounded runs. Review
+   each summary and any errors before repeating. Stop on unexpected candidates,
+   identity changes or failed checks.
+7. Restore the recorded image through the canonical deployment config to restore
+   `start-prod.sh` as the machine command, as in the recovery procedure above:
+
+   ```bash
+   fly deploy --config admin/configs/fly-sqlite.toml --app webframework \
+     --image <recorded-registry.fly.io/webframework:deployment-image>
+   ```
+
+   Verify the mounted database/media, web and worker processes, `/healthz/`, and
+   representative protected media. Restore external writers and deployment
+   automation after service checks pass. If bytes need recovery, restore the
+   backed-up objects while writers are still stopped, then restore service.
+
+Do not schedule this command or add it to startup/`db_worker`. Scheduling requires
+an approved retention policy and enforceable coordination with uploads, plus one
+executor, bounded runs, failure alerts and overlap prevention. `django-tasks` alone
+cannot coordinate uploads. Online cleanup and unattached-row pruning require a
+separate design and owner approval; this command never deletes those rows.
+
 ## Before enabling realtime / practice in production
 
 Realtime and practice ship disabled. Production currently uses SQLite on one
