@@ -151,6 +151,32 @@ GNU `sed`, and never sets `SECRET_KEY`.
 - `CMD ["bash", "start-prod.sh"]`; the volume is mounted at boot.
 - Health check hits `/healthz/`; `grace_period` is 40s to cover migrate + cold-start.
 
+## Before enabling realtime / practice in production
+
+Realtime and practice ship disabled. Production currently uses SQLite on one
+512 MB Fly VM. Enabling practice requires a deployment decision, not just flags.
+
+- **Database:** provision PostgreSQL and plan migration or a separate practice
+  instance before enabling `PRACTICE_ENABLED`; practice does not support SQLite.
+- **Redis:** choose colocated or managed Redis for channel layers, leases and
+  shared rate limits. Keep it private, use `noeviction`, disable persistence
+  (`save ""`, `appendonly no`), and set a bounded `maxmemory`.
+- **Server and memory:** `REALTIME_ENABLED` switches startup from Gunicorn to
+  Daphne. Measure total memory headroom on the intended Fly configuration,
+  including the background worker and colocated services. The
+  [local pilot](reports/2026-10-13-practice-pilot.md) measured about 2 MiB of Redis
+  used memory versus 253 MiB summed RSS for two Daphne processes; those different
+  measurements do not establish that the production workload fits in 512 MB.
+  Choose VM size and Redis placement from production-like measurements.
+- **Enablement:** configure `REALTIME_ENABLED`, `PRACTICE_ENABLED`,
+  `REALTIME_REDIS_URL` and exact HTTPS `PRACTICE_ORIGINS`. Enable
+  `PRESENCE_ENABLED` separately if wanted. Rebuild with
+  `--build-arg VITE_PRACTICE_ENABLED=true`; runtime secrets cannot enable the
+  compiled navigation link.
+
+Complete the dependency, proxy, backup/restore and device checks below before
+opening the instance to users.
+
 ## Post-deploy verification
 
 For an optional practice instance, enable `REALTIME_ENABLED` and `PRACTICE_ENABLED`,

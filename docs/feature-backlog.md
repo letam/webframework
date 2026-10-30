@@ -349,6 +349,16 @@ ActivityPub only if the node idea gets serious.
   file (real figure: ~53% of lines). Still open: the CreatePost prep-failure guard, Post's
   transcription polling, the request layer's CSRF/body contract, auth modals and recorders,
   none of which have tests. Prove every new test can fail by breaking the code it guards.
+- **CSRF retry with an attached file** — non-blocking follow-up from review of
+  `223c5d0` (`app/src/lib/utils/fetch.ts`). The retry tests cover empty `FormData`;
+  the posts API suite replaces `csrfFetch`, so neither proves a real media post
+  survives a CSRF rejection. Test `createPost` with the real request helpers and
+  populated `FormData` containing a `File`: reject the first post with an explicit
+  CSRF 403, refresh the token, and accept the retry. Assert all fields and the file's
+  name, type and bytes survive, no multipart `Content-Type` is supplied, and there
+  are exactly two post attempts. Separately assert S3 direct PUTs still use plain
+  `fetch`, receive no CSRF header and are not retried on a CSRF-looking 403.
+  Prove the new tests fail when their guarded behavior is broken.
 
 ## Tech debt & pins to unwind
 
