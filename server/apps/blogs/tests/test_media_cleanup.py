@@ -2,6 +2,7 @@
 
 import json
 import os
+import unicodedata
 from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime, timedelta
 from io import StringIO
@@ -290,6 +291,69 @@ class MediaCleanupTests(TransactionTestCase):
                 self.assertTrue(Media.objects.filter(pk=row.pk, file=alias).exists())
                 self.assertEqual(self.summary()['protected_references'], 1)
                 self.assertEqual(self.summary()['deleted'], 1)
+
+    def test_local_case_and_unicode_aliases_protect_physical_files(self):
+        """A reference spelled LIVE.bin or in NFD reads live.bin or NFC; neither is deleted.
+
+        Case-insensitive, normalization-insensitive hosts open the alias directly.
+        Elsewhere a hard link simulates that, so the regression always runs.
+        """
+        cafe = unicodedata.normalize('NFC', 'caf\u00e9.bin')
+        row = self.media('')
+        for name, alias in (
+            ('live.bin', 'LIVE.bin'),
+            (cafe, unicodedata.normalize('NFD', cafe)),
+        ):
+            with self.subTest(alias=alias):
+                key = self.write(f'post/1/media/{name}')
+                target = Path(self.root, key)
+                if not Path(self.root, 'post/1/media', alias).exists():
+                    os.link(target, Path(self.root, 'post/1/media', alias))
+                Media.objects.filter(pk=row.pk).update(file=f'post/1/media/{alias}')
+                orphan = self.write('post/1/media/orphan.bin')
+                self.run_cleanup(delete=True, batch_size=1)
+                self.assertTrue(target.exists())
+                self.assertFalse(self.storage.exists(orphan))
+                self.assertEqual(self.summary()['deleted'], 1)
+                for path in (target, Path(self.root, 'post/1/media', alias)):
+                    path.unlink(missing_ok=True)
+
+    def test_local_folded_spelling_protects_without_filesystem_alias(self):
+        """Fail closed on case-sensitive hosts too, even if the alias opens nothing."""
+        key = self.write('post/1/media/live.bin')
+        with mock.patch('apps.blogs.media_cleanup.local_reference_path', return_value=None):
+            self.media('post/1/media/LIVE.bin')
+            self.run_cleanup(delete=True)
+        self.assertTrue(self.storage.exists(key))
+        self.assertEqual(self.summary()['protected_references'], 1)
+        self.assertEqual(self.summary()['deletion_attempts'], 0)
+
+    def test_local_hard_link_reference_protects_shared_file(self):
+        """File identity protects an alias with no spelling relationship to the target."""
+        key = self.write('post/1/media/live.bin')
+        Path(self.root, 'legacy').mkdir()
+        os.link(Path(self.root, key), Path(self.root, 'legacy/alias.bin'))
+        self.media('legacy/alias.bin')
+        self.run_cleanup(delete=True)
+        self.assertTrue(self.storage.exists(key))
+        self.assertEqual(self.summary()['protected_references'], 1)
+        self.assertEqual(self.summary()['deletion_attempts'], 0)
+
+    def test_alias_protection_still_removes_unreferenced_files(self):
+        """Control: a genuinely unreferenced old object is removed on both backends."""
+        live = self.write('post/1/media/live.bin')
+        orphan = self.write('post/1/media/orphan.bin')
+        self.media(live)
+        self.run_cleanup(delete=True)
+        self.assertTrue(self.storage.exists(live))
+        self.assertFalse(self.storage.exists(orphan))
+        self.assertEqual(self.summary()['deleted'], 1)
+        with self.remote('uploads') as storage:
+            storage.objects['uploads/post/1/media/live.bin'] = (OLD, 5)
+            storage.objects['uploads/post/1/media/orphan.bin'] = (OLD, 5)
+            self.run_cleanup(delete=True)
+            self.assertEqual(storage.deleted, ['post/1/media/orphan.bin'])
+            self.assertIn('uploads/post/1/media/live.bin', storage.objects)
 
     def test_unresolvable_local_references_abort_before_deletion(self):
         """Escapes, ambiguous separators and symlink loops cannot authorize removal."""
@@ -582,6 +646,24 @@ class MediaCleanupTests(TransactionTestCase):
                         self.assertTrue(Media.objects.filter(pk=row.pk, file=alias).exists())
                         self.assertEqual(storage.deleted, [])
                         self.assertEqual(self.summary()['protected_references'], 1)
+
+    def test_r2_bucket_root_reference_names_are_protected(self):
+        """Protect keys read through storage and the raw keys the streaming view presigns."""
+        with self.remote('uploads') as storage:
+            live = 'uploads/post/1/media/live.bin'
+            keyed = 'uploads/post/1/media/keyed.bin'
+            orphan = 'uploads/post/1/media/orphan.bin'
+            for key in (live, keyed, orphan):
+                storage.objects[key] = (OLD, 5)
+            media = self.media(live)
+            self.media('', s3_file_key='post/1/media/keyed.bin')
+            Post.objects.create(author=self.user, media=media)
+            self.run_cleanup(delete=True)
+            # stream_post_media presigns this exact string as a bucket key.
+            self.assertIn(media.file.name, storage.objects)
+            self.assertIn(keyed, storage.objects)
+            self.assertEqual(storage.deleted, ['post/1/media/orphan.bin'])
+            self.assertEqual(self.summary()['protected_references'], 2)
 
     def test_ambiguous_remote_references_abort_before_deletion(self):
         """Storage escapes and noncanonical raw bucket keys fail closed."""

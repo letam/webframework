@@ -191,7 +191,11 @@ Local inventory counts visited directory, symlink and excluded entries toward th
 scan budget as well as files. Prefix filtering can therefore consume budget on
 sibling entries without reporting candidates. R2 lists storage-relative prefixes
 with bounded pages through the configured guarded backend. Unsupported backends or
-ambiguous reference mappings refuse the run. Unknown, naive or future mtimes and
+ambiguous reference mappings refuse the run. Local references also protect files
+they alias by case, Unicode normalization or hard link (compared by file identity
+and by case-folded, normalized spelling, which deliberately over-protects on
+case-sensitive filesystems). R2 references protect both the storage-relative key
+and the raw value read as a bucket-root key, as the streaming endpoint does. Unknown, naive or future mtimes and
 unknown sizes preserve the object.
 
 Reaching any cap marks `incomplete=true`, even if it happens to coincide with the
