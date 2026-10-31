@@ -253,6 +253,62 @@ class MediaCleanupTests(TransactionTestCase):
             self.run_cleanup(delete=True)
         self.assertTrue(self.storage.exists(name))
 
+    def test_local_equivalent_reference_paths_protect_physical_files(self):
+        """Dot segments, repeated separators and absolute in-root names survive."""
+        aliases = [
+            'post/1/media/./live.bin',
+            'post/1/media/nested/../live.bin',
+            'post//1/media/live.bin',
+            str(Path(self.root, 'post/1/media/live.bin')),
+        ]
+        key = self.write('post/1/media/live.bin')
+        row = self.media(key)
+        for alias in aliases:
+            with self.subTest(alias=alias):
+                Media.objects.filter(pk=row.pk).update(file=alias)
+                self.run_cleanup(delete=True, batch_size=1)
+                self.assertTrue(self.storage.exists(key))
+                row.refresh_from_db()
+                self.assertEqual(row.file.name, alias)
+                self.assertEqual(self.summary()['protected_references'], 1)
+                self.assertEqual(self.summary()['deletion_attempts'], 0)
+
+    def test_local_symlink_references_protect_targets_outside_scan_prefix(self):
+        """File and ancestor symlink references protect old, eligible targets."""
+        target = Path(self.root, 'post/1/media')
+        self.write('post/1/media/live.bin')
+        Path(self.root, 'post/1/media/link').symlink_to(target / 'live.bin')
+        Path(self.root, 'post/2').symlink_to(target.parent, target_is_directory=True)
+        row = self.media('')
+        for alias in ('post/1/media/link', 'post/2/media/live.bin'):
+            with self.subTest(alias=alias):
+                Media.objects.filter(pk=row.pk).update(file=alias)
+                orphan = self.write('post/1/media/orphan.bin')
+                self.run_cleanup(delete=True, prefix=['post/1/media/'], batch_size=1)
+                self.assertTrue((target / 'live.bin').exists())
+                self.assertFalse(self.storage.exists(orphan))
+                self.assertTrue(Media.objects.filter(pk=row.pk, file=alias).exists())
+                self.assertEqual(self.summary()['protected_references'], 1)
+                self.assertEqual(self.summary()['deleted'], 1)
+
+    def test_unresolvable_local_references_abort_before_deletion(self):
+        """Escapes, ambiguous separators and symlink loops cannot authorize removal."""
+        key = self.write('post/1/media/live.bin')
+        Path(self.root, 'post/1/media/loop').symlink_to('loop')
+        row = self.media('')
+        for alias in (
+            '../post/1/media/live.bin',
+            'post\\1\\media\\live.bin',
+            'post/1/media/loop',
+        ):
+            with self.subTest(alias=alias):
+                Media.objects.filter(pk=row.pk).update(file=alias)
+                with self.assertRaises(CommandError):
+                    self.run_cleanup(delete=True, batch_size=1)
+                self.assertTrue(self.storage.exists(key))
+                self.assertEqual(self.summary()['deletion_attempts'], 0)
+                self.assertTrue(self.summary()['incomplete'])
+
     def test_unsafe_names_and_excluded_namespaces(self):
         """Only the two audited shapes qualify, without normalization or traversal."""
         excluded = [
@@ -313,19 +369,32 @@ class MediaCleanupTests(TransactionTestCase):
         self.assertEqual(self.summary()['deleted'], 1)
 
     def test_reference_appearing_after_batch_check_is_preserved(self):
-        """A fresh reference wins over an earlier inventory snapshot."""
-        key = self.write('post/1/media/race')
+        """Fresh dot-segment and symlink references win over the batch snapshot."""
         original = find_referenced_names
 
         def snapshot(*args, **kwargs):
             result = original(*args, **kwargs)
-            self.media(key)
+            self.media(alias)
             return result
 
-        with mock.patch(f'{COMMAND}.find_referenced_names', side_effect=snapshot):
-            self.run_cleanup(delete=True)
-        self.assertTrue(self.storage.exists(key))
-        self.assertEqual(self.summary()['deleted'], 0)
+        for kind in ('dot', 'symlink'):
+            key = self.write(f'post/1/media/race-{kind}')
+            alias = f'post/1/media/./race-{kind}'
+            if kind == 'symlink':
+                alias = 'post/1/media/race-link'
+                Path(self.root, alias).symlink_to(Path(self.root, key))
+            with (
+                self.subTest(kind=kind),
+                mock.patch(f'{COMMAND}.find_referenced_names', side_effect=snapshot),
+                mock.patch(
+                    f'{COMMAND}.iter_storage_batches',
+                    return_value=(batch for batch in [[InventoryEntry(key)]]),
+                ),
+            ):
+                records = self.run_cleanup(delete=True)
+                self.assertTrue(self.storage.exists(key))
+                self.assertEqual(self.summary()['deletion_attempts'], 0)
+                self.assertIn('reference_recheck', [record.get('reason') for record in records])
 
     def test_changed_metadata_and_disappearing_object_are_skipped(self):
         """Neither an overwritten object nor a vanished candidate is reported deleted."""
@@ -492,6 +561,47 @@ class MediaCleanupTests(TransactionTestCase):
                 self.run_cleanup(delete=True)
             self.assertEqual(storage.deleted, [])
             self.assertEqual(self.summary()['protected_references'], 1)
+
+    def test_r2_equivalent_references_protect_physical_keys(self):
+        """Use the same normalization as real django-storages reads."""
+        row = self.media('')
+        for location in ('', 'uploads'):
+            with self.subTest(location=location), self.remote(location) as storage:
+                key = storage._normalize_name('post/1/media/live.bin')
+                storage.objects[key] = (OLD, 5)
+                for alias in (
+                    'post/1/media/./live.bin',
+                    'post/1/media/nested/../live.bin',
+                    'post//1/media/live.bin',
+                    'post\\1\\media\\live.bin',
+                ):
+                    with self.subTest(alias=alias):
+                        Media.objects.filter(pk=row.pk).update(file=alias)
+                        self.run_cleanup(delete=True, batch_size=1)
+                        self.assertIn(key, storage.objects)
+                        self.assertTrue(Media.objects.filter(pk=row.pk, file=alias).exists())
+                        self.assertEqual(storage.deleted, [])
+                        self.assertEqual(self.summary()['protected_references'], 1)
+
+    def test_ambiguous_remote_references_abort_before_deletion(self):
+        """Storage escapes and noncanonical raw bucket keys fail closed."""
+        row = self.media('')
+        with self.remote('uploads') as storage:
+            key = 'uploads/post/1/media/live.bin'
+            storage.objects[key] = (OLD, 5)
+            for values in (
+                {'file': '../post/1/media/live.bin', 's3_file_key': ''},
+                {'file': '/post/1/media/live.bin', 's3_file_key': ''},
+                {'file': '', 's3_file_key': 'uploads/post/1/media/./live.bin'},
+            ):
+                with self.subTest(values=values):
+                    Media.objects.filter(pk=row.pk).update(**values)
+                    with self.assertRaises(CommandError):
+                        self.run_cleanup(delete=True)
+                    self.assertIn(key, storage.objects)
+                    self.assertEqual(storage.deleted, [])
+                    self.assertEqual(self.summary()['deletion_attempts'], 0)
+                    self.assertTrue(self.summary()['incomplete'])
 
     def test_r2_missing_metadata_is_skipped(self):
         """A guarded backend's NoSuchKey response is a harmless vanished candidate."""

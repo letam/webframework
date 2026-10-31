@@ -9,15 +9,23 @@ from django.apps import apps
 from django.core.files.storage import FileSystemStorage
 from django.db import DEFAULT_DB_ALIAS, connections, models
 from django.utils import timezone
+from storages.utils import clean_name
+from storages.utils import safe_join as s3_safe_join
 
-from apps.uploads.inventory import eligible_name, local_name_safe, storage_identity
+from apps.uploads.inventory import (
+    eligible_name,
+    local_name_safe,
+    local_reference_path,
+    safe_segments,
+    storage_identity,
+)
 
 from .models import Media
 
 
 @dataclass(frozen=True)
 class ReferenceField:
-    """One modeled reference and the mapping from inventory names to field values."""
+    """One modeled reference and its physical storage root."""
 
     model: type
     field_name: str
@@ -52,39 +60,48 @@ def collect_reference_fields(storage):
     return fields
 
 
-def _reference_value(storage, reference, name):
-    identity = storage_identity(storage)
+def _reference_key(identity, reference, value):
+    """Map a stored value to the object it reads, or refuse ambiguous values."""
+    if reference.bucket_key:
+        # These are literal boto3 keys, not storage-relative FileField names.
+        if not safe_segments(value) or value.endswith('/'):
+            raise ValueError('Ambiguous bucket-key reference')
+        if identity['backend'] == 'filesystem':
+            # Preserve the conservative protection for same-named local files.
+            return os.path.join(identity['root'], value)
+        return value
     if identity['backend'] == 'filesystem':
-        # Raw bucket keys cannot authorize deletion of a same-named local file.
-        if reference.bucket_key:
-            return name
-        absolute = os.path.join(identity['root'], name)
-        relative = os.path.relpath(absolute, reference.root)
-        return None if relative == '..' or relative.startswith('../') else relative
-    key = '/'.join(filter(None, (identity['location'], name)))
-    prefix = reference.root + '/' if reference.root else ''
-    return key[len(prefix) :] if key.startswith(prefix) else None
+        return local_reference_path(reference.root, value)
+    # Match django-storages reads, including Windows separators and dot segments.
+    return s3_safe_join(reference.root, clean_name(value))
 
 
 def find_referenced_names(storage, names, fields, *, database=DEFAULT_DB_ALIAS):
-    """Query the primary explicitly, including base-manager and unattached rows."""
+    """Resolve all primary references, including aliases and unattached rows.
+
+    A literal __in lookup misses aliases of candidate keys. Stream every modeled
+    value instead, both for batch classification and the fresh deletion check.
+    """
+    identity = storage_identity(storage)
+    mapped = {}
+    for name in names:
+        key = (
+            os.path.join(identity['root'], name)
+            if identity['backend'] == 'filesystem'
+            else '/'.join(filter(None, (identity['location'], name)))
+        )
+        mapped.setdefault(key, []).append(name)
     protected = set()
     for reference in fields:
-        mapped = {}
-        for name in names:
-            value = _reference_value(storage, reference, name)
-            if value is not None:
-                mapped.setdefault(value, []).append(name)
-        if not mapped:
-            continue
         values = (
             reference.model._base_manager.using(database)
-            .filter(**{f'{reference.field_name}__in': list(mapped)})
             .values_list(reference.field_name, flat=True)
-            .distinct()
+            .iterator(chunk_size=1000)
         )
         for value in values:
-            protected.update(mapped[value])
+            if value:
+                key = _reference_key(identity, reference, value)
+                protected.update(mapped.get(key, ()))
     return protected
 
 

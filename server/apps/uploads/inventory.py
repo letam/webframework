@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 from django.core.files.storage import FileSystemStorage
+from django.utils._os import safe_join
 
 from .storage import GuardedS3Boto3Storage
 
@@ -100,6 +101,22 @@ def local_name_safe(storage, name, *, file_only=False):
             # Let the storage metadata API classify a disappeared object as missing.
             return True
     return True
+
+
+def local_reference_path(root, name):
+    """Resolve a FileField like FileSystemStorage, following reference symlinks.
+
+    Missing references cannot currently point to an inventoried file. Other
+    resolution errors (including symlink loops) must abort reference checking.
+    Backslashes are refused because their meaning varies across platforms.
+    """
+    if '\\' in name or any(ord(char) < 32 or ord(char) == 127 for char in name):
+        raise ValueError('Ambiguous filesystem reference')
+    path = safe_join(root, name)
+    try:
+        return os.path.realpath(path, strict=True)
+    except FileNotFoundError:
+        return None
 
 
 def _local_entries(storage, prefixes):
