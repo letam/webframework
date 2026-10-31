@@ -90,6 +90,11 @@ uv run python server/manage.py createsuperuser
 # Initialize users (superuser + anonymous user for anonymous posts)
 uv run python server/manage.py init_users
 
+# Report orphaned media (manual, dry-run; unattached Media rows are never deleted)
+uv run python server/manage.py cleanup_orphaned_media
+# Deletion requires verified maintenance: see docs/deploy-fly.md.
+# The 168-hour floor cannot be lowered; do not schedule this command.
+
 # Python linting/formatting (ruff is the sole formatter and import sorter;
 # ruff format is Black-compatible and the [tool.ruff.format] quote-style =
 # "preserve" keeps Black's skip-string-normalization behavior)
